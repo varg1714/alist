@@ -35,7 +35,7 @@ func convertToModel(films []string, images []string, urls []string, results []mo
 	return results
 }
 
-func findPage(url string) (*resty.Response, error) {
+func (d *MIssAV) findPage(url string) (*resty.Response, error) {
 
 	//log.Infof("开始查询:%s", url)
 
@@ -47,12 +47,12 @@ func findPage(url string) (*resty.Response, error) {
 				"Host": "https://missav.com/",
 			},
 		}).
-		Post("http://103.140.9.114:7856/transfer")
+		Post(d.Addition.SpiderServer)
 
 	return res, err
 }
 
-func getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
+func (d *MIssAV) getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 
 	results := make([]model.Obj, 0)
 
@@ -61,13 +61,13 @@ func getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 	urls := make([]string, 0)
 	var err error
 
-	films, images, urls, err = getPageInfo(urlFunc, 1, films, images, urls)
+	films, images, urls, err = d.getPageInfo(urlFunc, 1, films, images, urls)
 	if err != nil {
 		return results, err
 	}
 
 	for index := 2; index <= 20; index++ {
-		films, images, urls, err = getPageInfo(urlFunc, index, films, images, urls)
+		films, images, urls, err = d.getPageInfo(urlFunc, index, films, images, urls)
 		if err != nil {
 			return results, err
 		}
@@ -77,11 +77,11 @@ func getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 
 }
 
-func getLink(file model.Obj) (string, error) {
+func (d *MIssAV) getLink(file model.Obj) (string, error) {
 
 	pageUrl := file.GetID()
 
-	res, err := findPage(pageUrl)
+	res, err := d.findPage(pageUrl)
 	if err != nil {
 		return "", err
 	}
@@ -104,11 +104,11 @@ func getLink(file model.Obj) (string, error) {
 	realUrl := runString.Export().(string)
 	//log.Infof("js计算访问地址:%s", realUrl)
 
-	return strings.ReplaceAll(realUrl, "https://k-3325-bbg.thisiscdn.com", "http://103.140.9.114"), nil
+	return strings.ReplaceAll(realUrl, "https://k-3325-bbg.thisiscdn.com", d.Addition.PlayProxyServer), nil
 
 }
 
-func getPageInfo(urlFunc func(index int) string, index int, films []string, images []string, urls []string) ([]string, []string, []string, error) {
+func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []string, images []string, urls []string) ([]string, []string, []string, error) {
 
 	filmsRegexp, _ := regexp.Compile("<a class=\"text-secondary group-hover:text-primary\" href=\"(.*)\">\\s?(.*)\\s?</a>")
 	imageRegexp, _ := regexp.Compile("<img x-cloak :class=\".*\" class=\".*\" data-src=\"(.*)\" src=\".*\" alt=\".*\">")
@@ -116,7 +116,7 @@ func getPageInfo(urlFunc func(index int) string, index int, films []string, imag
 	pageUrl := urlFunc(index)
 	//log.Infof("开始查询%s", pageUrl)
 
-	res, err := findPage(pageUrl)
+	res, err := d.findPage(pageUrl)
 	if err != nil {
 		return films, images, urls, nil
 	}

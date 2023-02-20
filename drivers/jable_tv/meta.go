@@ -6,8 +6,9 @@ import (
 )
 
 type Addition struct {
-	Actors     string `json:"actors" required:"true"`
-	Categories string `json:"categories" required:"true"`
+	Actors       string `json:"actors" required:"true"`
+	Categories   string `json:"categories" required:"true"`
+	SpiderServer string `json:"spider_server" required:"true"`
 	driver.RootID
 	OrderBy        string `json:"order_by" type:"select" options:"name,size,updated_at,created_at"`
 	OrderDirection string `json:"order_direction" type:"select" options:"ASC,DESC"`

@@ -34,7 +34,7 @@ func convertToModel(films []string, images []string, urls []string, results []mo
 	return results
 }
 
-func findPage(url string) (*resty.Response, error) {
+func (d *MaDouClub) findPage(url string) (*resty.Response, error) {
 
 	//log.Infof("开始查询:%s", url)
 
@@ -46,12 +46,12 @@ func findPage(url string) (*resty.Response, error) {
 				"Host": "https://madou.club",
 			},
 		}).
-		Post("http://103.140.9.114:7856/transfer")
+		Post(d.Addition.SpiderServer)
 
 	return res, err
 }
 
-func getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
+func (d *MaDouClub) getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 
 	results := make([]model.Obj, 0)
 
@@ -61,13 +61,13 @@ func getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 	nextPage := false
 	var err error
 
-	films, images, urls, nextPage, err = getPageInfo(urlFunc, 1, films, images, urls)
+	films, images, urls, nextPage, err = d.getPageInfo(urlFunc, 1, films, images, urls)
 	if err != nil {
 		return results, err
 	}
 
 	for index := 2; nextPage; index++ {
-		films, images, urls, nextPage, err = getPageInfo(urlFunc, index, films, images, urls)
+		films, images, urls, nextPage, err = d.getPageInfo(urlFunc, index, films, images, urls)
 		if err != nil {
 			return results, err
 		}
@@ -77,11 +77,11 @@ func getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 
 }
 
-func getLink(file model.Obj) (string, error) {
+func (d *MaDouClub) getLink(file model.Obj) (string, error) {
 
 	pageUrl := file.GetID()
 
-	res, err := findPage(pageUrl)
+	res, err := d.findPage(pageUrl)
 	if err != nil {
 		return "", err
 	}
@@ -94,7 +94,7 @@ func getLink(file model.Obj) (string, error) {
 		return "", nil
 	}
 
-	res, err = findPage(jumpUrlRegexp.ReplaceAllString(jumpUrl[0], "$1"))
+	res, err = d.findPage(jumpUrlRegexp.ReplaceAllString(jumpUrl[0], "$1"))
 	if err != nil {
 		return "", err
 	}
@@ -120,7 +120,7 @@ func getLink(file model.Obj) (string, error) {
 
 }
 
-func getPageInfo(urlFunc func(index int) string, pageNo int, films []string, images []string, urls []string) ([]string, []string, []string, bool, error) {
+func (d *MaDouClub) getPageInfo(urlFunc func(index int) string, pageNo int, films []string, images []string, urls []string) ([]string, []string, []string, bool, error) {
 
 	filmsRegexp, _ := regexp.Compile("<a target=\"_blank\" href=\".*?\">(.*?)</a>")
 	imagesRegexp, _ := regexp.Compile("<img src=\".*?\" data-src=\"(.*?)\" class=\"thumb\">")
@@ -129,7 +129,7 @@ func getPageInfo(urlFunc func(index int) string, pageNo int, films []string, ima
 	pageUrl := urlFunc(pageNo)
 	//fmt.Printf("开始查询%s\n", pageUrl)
 
-	res, err := findPage(pageUrl)
+	res, err := d.findPage(pageUrl)
 	if err != nil {
 		return films, images, urls, false, nil
 	}

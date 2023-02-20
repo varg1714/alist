@@ -106,12 +106,12 @@ func (d *JableTV) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 
 		actor, exist := actorsMap[dirName]
 		if exist {
-			return getActorFilms(actor, results)
+			return d.getActorFilms(actor, results)
 		}
 
 		category, exist := categoriesMap[dirName]
 		if exist {
-			return getFilms(func(index int) string {
+			return d.getFilms(func(index int) string {
 				return fmt.Sprintf(category, strconv.Itoa(index))
 			})
 		}
@@ -133,7 +133,7 @@ func (d *JableTV) Link(ctx context.Context, file model.Obj, args model.LinkArgs)
 			"url":        url,
 			"httpMethod": "GET",
 		}).
-		Post("http://103.140.9.114:7856/transfer")
+		Post(d.Addition.SpiderServer)
 	if err != nil {
 		log.Errorf("出错了：%s,%s\n", err, res)
 		return nil, err

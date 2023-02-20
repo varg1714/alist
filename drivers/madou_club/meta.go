@@ -6,9 +6,10 @@ import (
 )
 
 type Addition struct {
-	Tags       string `json:"tags" required:"false"`
-	Categories string `json:"categories" required:"false"`
-	Searchers  string `json:"searchers" required:"false"`
+	Tags         string `json:"tags" required:"false"`
+	Categories   string `json:"categories" required:"false"`
+	Searchers    string `json:"searchers" required:"false"`
+	SpiderServer string `json:"spider_server" required:"true"`
 	driver.RootID
 	OrderBy        string `json:"order_by" type:"select" options:"name,size,updated_at,created_at"`
 	OrderDirection string `json:"order_direction" type:"select" options:"ASC,DESC"`

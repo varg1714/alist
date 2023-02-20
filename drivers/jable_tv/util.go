@@ -52,7 +52,7 @@ func findFilms(pageResponse string) ([]string, []string, int) {
 	return films, images, pages
 }
 
-func findPage(url string) (*resty.Response, error) {
+func (d *JableTV) findPage(url string) (*resty.Response, error) {
 
 	//log.Infof("开始查询:%s", url)
 
@@ -64,16 +64,16 @@ func findPage(url string) (*resty.Response, error) {
 				"Host": "jable.tv",
 			},
 		}).
-		Post("http://103.140.9.114:7856/transfer")
+		Post(d.Addition.SpiderServer)
 
 	return res, err
 }
 
-func getActorFilms(actorName string, results []model.Obj) ([]model.Obj, error) {
+func (d *JableTV) getActorFilms(actorName string, results []model.Obj) ([]model.Obj, error) {
 
 	url := fmt.Sprintf("https://jable.tv/models/%s/?mode=async&function=get_block&block_id="+
 		"list_videos_common_videos_list&sort_by=post_date&from=%d", actorName, 1)
-	res, err := findPage(url)
+	res, err := d.findPage(url)
 
 	if err != nil {
 		log.Errorf("出错了：%s,%s\n", err, res)
@@ -88,7 +88,7 @@ func getActorFilms(actorName string, results []model.Obj) ([]model.Obj, error) {
 
 		url = fmt.Sprintf("https://jable.tv/models/%s/?mode=async&function=get_block&block_id="+
 			"list_videos_common_videos_list&sort_by=post_date&from=%d", actorName, index)
-		res, err := findPage(url)
+		res, err := d.findPage(url)
 		if err != nil {
 			log.Errorf("出错了：%s,%s\n", err, res)
 			return results, err
@@ -107,7 +107,7 @@ func getActorFilms(actorName string, results []model.Obj) ([]model.Obj, error) {
 	return results, nil
 }
 
-func getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
+func (d *JableTV) getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 
 	results := make([]model.Obj, 0)
 
@@ -119,7 +119,7 @@ func getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 		url := urlFunc(index)
 
 		//log.Infof("获取地址:%s", url)
-		page, err := findPage(url)
+		page, err := d.findPage(url)
 		if err != nil {
 			return results, err
 		}

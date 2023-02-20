@@ -79,19 +79,19 @@ func (d *MaDouClub) List(ctx context.Context, dir model.Obj, args model.ListArgs
 
 	if utils.Contains(tags, dirName) {
 		// 标签列表
-		return getFilms(func(index int) string {
+		return d.getFilms(func(index int) string {
 			return fmt.Sprintf("https://madou.club/tag/%s/page/%s", dirName, strconv.Itoa(index))
 
 		})
 	} else if utils.Contains(categories, dirName) {
 		// 分类列表
-		return getFilms(func(index int) string {
+		return d.getFilms(func(index int) string {
 			return fmt.Sprintf("https://madou.club/category/%s/page/%s", dirName, strconv.Itoa(index))
 
 		})
 	} else if utils.Contains(searchers, dirName) {
 		// 搜索列表
-		return getFilms(func(index int) string {
+		return d.getFilms(func(index int) string {
 			return fmt.Sprintf("https://madou.club/page/%s?s=%s", strconv.Itoa(index), dirName)
 		})
 	}
@@ -101,7 +101,7 @@ func (d *MaDouClub) List(ctx context.Context, dir model.Obj, args model.ListArgs
 
 func (d *MaDouClub) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
-	link, err := getLink(file)
+	link, err := d.getLink(file)
 	if err != nil {
 		return nil, err
 	}

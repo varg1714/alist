@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-type MaDouClub struct {
+type MIssAV struct {
 	model.Storage
 	Addition
 	AccessToken string
@@ -20,26 +20,26 @@ type MaDouClub struct {
 	cron        *cron.Cron
 }
 
-func (d *MaDouClub) Config() driver.Config {
+func (d *MIssAV) Config() driver.Config {
 	return config
 }
 
-func (d *MaDouClub) GetAddition() driver.Additional {
+func (d *MIssAV) GetAddition() driver.Additional {
 	return &d.Addition
 }
 
-func (d *MaDouClub) Init(ctx context.Context) error {
+func (d *MIssAV) Init(ctx context.Context) error {
 	return nil
 }
 
-func (d *MaDouClub) Drop(ctx context.Context) error {
+func (d *MIssAV) Drop(ctx context.Context) error {
 	if d.cron != nil {
 		d.cron.Stop()
 	}
 	return nil
 }
 
-func (d *MaDouClub) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
+func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 
 	results := make([]model.Obj, 0)
 	m := make(map[string]string)
@@ -71,7 +71,7 @@ func (d *MaDouClub) List(ctx context.Context, dir model.Obj, args model.ListArgs
 			return results, nil
 		}
 
-		return getFilms(func(index int) string {
+		return d.getFilms(func(index int) string {
 			return fmt.Sprintf(url, index)
 		})
 
@@ -79,9 +79,9 @@ func (d *MaDouClub) List(ctx context.Context, dir model.Obj, args model.ListArgs
 
 }
 
-func (d *MaDouClub) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
+func (d *MIssAV) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
-	link, err := getLink(file)
+	link, err := d.getLink(file)
 	if err != nil {
 		return nil, err
 	}
@@ -96,4 +96,4 @@ func (d *MaDouClub) Link(ctx context.Context, file model.Obj, args model.LinkArg
 
 }
 
-var _ driver.Driver = (*MaDouClub)(nil)
+var _ driver.Driver = (*MIssAV)(nil)

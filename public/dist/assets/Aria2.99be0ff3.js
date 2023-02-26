@@ -1,0 +1,1 @@
+import{f as a,W as t}from"./index.c80796af.js";import{b as r}from"./useTitle.9d617d25.js";import{T as e}from"./Tasks.ea02dc55.js";const i=()=>(r("manage.sidemenu.aria2"),a(t,{w:"$full",alignItems:"start",spacing:"$4",get children(){return[a(e,{type:"down"}),a(e,{type:"transfer"})]}}));export{i as default};

@@ -8,6 +8,7 @@ import (
 type Addition struct {
 	Categories      string `json:"tags" required:"true"`
 	SpiderServer    string `json:"spider_server" required:"true"`
+	PlayServer      string `json:"play_server" required:"true"`
 	PlayProxyServer string `json:"play_proxy_server" required:"true"`
 	driver.RootID
 	OrderBy        string `json:"order_by" type:"select" options:"name,size,updated_at,created_at"`

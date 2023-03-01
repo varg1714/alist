@@ -104,7 +104,7 @@ func (d *MIssAV) getLink(file model.Obj) (string, error) {
 	realUrl := runString.Export().(string)
 	//log.Infof("js计算访问地址:%s", realUrl)
 
-	return strings.ReplaceAll(realUrl, "https://k-3325-bbg.thisiscdn.com", d.Addition.PlayProxyServer), nil
+	return strings.ReplaceAll(realUrl, d.Addition.PlayServer, d.Addition.PlayProxyServer), nil
 
 }
 

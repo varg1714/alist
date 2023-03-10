@@ -7,8 +7,8 @@ require (
 	github.com/Xhofe/go-cache v0.0.0-20220723083548-714439c8af9a
 	github.com/aws/aws-sdk-go v1.44.194
 	github.com/blevesearch/bleve/v2 v2.3.6
-	github.com/caarlos0/env/v7 v7.0.0
-	github.com/deckarep/golang-set/v2 v2.1.0
+	github.com/caarlos0/env/v7 v7.1.0
+	github.com/deckarep/golang-set/v2 v2.2.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/dop251/goja v0.0.0-20230203172422-5460598cfa32
 	github.com/dustinxie/ecc v0.0.0-20210511000915-959544187564
@@ -28,13 +28,13 @@ require (
 	github.com/pquerna/otp v1.4.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.6.1
-	github.com/t3rm1n4l/go-mega v0.0.0-20230220145126-b87ebf5801d8
+	github.com/t3rm1n4l/go-mega v0.0.0-20230228171823-a01a2cda13ca
 	github.com/u2takey/ffmpeg-go v0.4.1
 	github.com/upyun/go-sdk/v3 v3.0.3
 	github.com/winfsp/cgofuse v1.5.0
-	golang.org/x/crypto v0.6.0
-	golang.org/x/image v0.5.0
-	golang.org/x/net v0.7.0
+	golang.org/x/crypto v0.7.0
+	golang.org/x/image v0.6.0
+	golang.org/x/net v0.8.0
 	gorm.io/driver/mysql v1.4.7
 	gorm.io/driver/postgres v1.4.8
 	gorm.io/driver/sqlite v1.4.4
@@ -107,12 +107,11 @@ require (
 	github.com/ugorji/go/codec v1.2.9 // indirect
 	go.etcd.io/bbolt v1.3.5 // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

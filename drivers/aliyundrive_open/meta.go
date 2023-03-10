@@ -13,17 +13,20 @@ type Addition struct {
 	OauthTokenURL  string `json:"oauth_token_url" default:"https://api.nn.ci/alist/ali_open/token"`
 	ClientID       string `json:"client_id" required:"false" help:"Keep it empty if you don't have one"`
 	ClientSecret   string `json:"client_secret" required:"false" help:"Keep it empty if you don't have one"`
+	RemoveWay      string `json:"remove_way" required:"true" type:"select" options:"trash,delete"`
+	InternalUpload bool   `json:"internal_upload" help:"If you are using Aliyun ECS in Beijing, you can turn it on to boost the upload speed"`
 }
 
 var config = driver.Config{
-	Name:        "AliyundriveOpen",
-	LocalSort:   false,
-	OnlyLocal:   false,
-	OnlyProxy:   false,
-	NoCache:     false,
-	NoUpload:    false,
-	NeedMs:      false,
-	DefaultRoot: "root",
+	Name:              "AliyundriveOpen",
+	LocalSort:         false,
+	OnlyLocal:         false,
+	OnlyProxy:         false,
+	NoCache:           false,
+	NoUpload:          false,
+	NeedMs:            false,
+	DefaultRoot:       "root",
+	NoOverwriteUpload: true,
 }
 
 func init() {

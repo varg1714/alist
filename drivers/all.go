@@ -30,6 +30,7 @@ import (
 	_ "github.com/alist-org/alist/v3/drivers/quark"
 	_ "github.com/alist-org/alist/v3/drivers/s3"
 	_ "github.com/alist-org/alist/v3/drivers/seafile"
+	_ "github.com/alist-org/alist/v3/drivers/sexbjcam"
 	_ "github.com/alist-org/alist/v3/drivers/sftp"
 	_ "github.com/alist-org/alist/v3/drivers/smb"
 	_ "github.com/alist-org/alist/v3/drivers/teambition"

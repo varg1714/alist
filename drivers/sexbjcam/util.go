@@ -83,7 +83,7 @@ func (d *SexBjCam) findRealUrl(url string) (string, error) {
 
 func (d *SexBjCam) spider(url string) (string, error) {
 
-	realUrl := fmt.Sprintf("%s?pageUrl=%s&matchUrl=.*/sources.*", d.SpiderServer, url)
+	realUrl := fmt.Sprintf("%s?pageUrl=%s&matchUrl=.*.mp4.*&matchUrl=.*/sources.*", d.SpiderServer, url)
 	log.Infof("realUrl:%s", realUrl)
 
 	res, err := base.RestyClient.R().Get(realUrl)
@@ -94,7 +94,7 @@ func (d *SexBjCam) spider(url string) (string, error) {
 	return string(res.Body()), err
 }
 
-func (d *SexBjCam) getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
+func (d *SexBjCam) getActorFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 
 	results := make([]model.Obj, 0)
 
@@ -120,6 +120,32 @@ func (d *SexBjCam) getFilms(urlFunc func(index int) string) ([]model.Obj, error)
 
 }
 
+func (d *SexBjCam) getCategoryFilms(urlFunc func(index int) string) ([]model.Obj, error) {
+
+	results := make([]model.Obj, 0)
+
+	films := make([]string, 0)
+	images := make([]string, 0)
+	urls := make([]string, 0)
+	nextPage := false
+	var err error
+
+	films, images, urls, nextPage, err = d.getPageInfo(urlFunc, 1, films, images, urls)
+	if err != nil {
+		return results, err
+	}
+
+	for index := 2; nextPage && index <= 10; index++ {
+		films, images, urls, nextPage, err = d.getPageInfo(urlFunc, index, films, images, urls)
+		if err != nil {
+			return results, err
+		}
+	}
+
+	return convertToModel(films, images, urls, results), nil
+
+}
+
 func (d *SexBjCam) getLink(file model.Obj) (string, error) {
 
 	pageUrl := file.GetID()
@@ -131,7 +157,7 @@ func (d *SexBjCam) getLink(file model.Obj) (string, error) {
 
 	page := string(res.Body())
 
-	jumpUrlRegexp, _ := regexp.Compile(".*<IFRAME SRC=\"(.*)\" FRAMEBORDER=.* MARGINWIDTH=.* MARGINHEIGHT=.* SCROLLING=.* WIDTH=.* HEIGHT=.* allowfullscreen></IFRAME>.*")
+	jumpUrlRegexp, _ := regexp.Compile(".*(https://.*\\.com/e/.*?)\".*")
 	jumpUrls := jumpUrlRegexp.FindAllString(page, -1)
 	if cap(jumpUrls) <= 0 {
 		return "", nil
@@ -143,13 +169,23 @@ func (d *SexBjCam) getLink(file model.Obj) (string, error) {
 		return "", err
 	}
 
+	mp4Regexp, err := regexp.Compile(".*.mp4.*")
+	if err != nil {
+		return "", err
+	}
+	if mp4Regexp.MatchString(playPageUrl) {
+		playPagePattern, err := regexp.Compile("https://.*.tapecontent.net/(.*)")
+		realUrl := playPagePattern.ReplaceAllString(playPagePattern.FindString(playPageUrl), fmt.Sprintf("%s/tapecontent/$1", d.PlayServer))
+		return realUrl, err
+	}
+
 	realUrlRes, err := d.findRealUrl(playPageUrl)
 	if err != nil {
 		return "", err
 	}
 
 	playPagePattern, err := regexp.Compile(".*\"file\":\"https://.*akamai-video-content.com/(.*?)\".*")
-	realUrl := playPagePattern.ReplaceAllString(playPagePattern.FindString(realUrlRes), fmt.Sprintf("%s/$1", d.PlayServer))
+	realUrl := playPagePattern.ReplaceAllString(playPagePattern.FindString(realUrlRes), fmt.Sprintf("%s/akamai/$1", d.PlayServer))
 
 	return realUrl, nil
 
@@ -158,7 +194,7 @@ func (d *SexBjCam) getLink(file model.Obj) (string, error) {
 func (d *SexBjCam) getPageInfo(urlFunc func(index int) string, pageNo int, films []string, images []string, urls []string) ([]string, []string, []string, bool, error) {
 
 	urlRegexp, _ := regexp.Compile(".*<article data-video-uid=\".*\" data-post-id=\".*\" class=\".*\">[\\s|.]<a href=\"(.*)\" title=\".*\">.*")
-	filmsRegexp, _ := regexp.Compile(".*<div class=\"post-thumbnail-container\"><img .* data-src=\"(.*)\" alt=\"(.*)\"></div> <span.*</span> </div>.*")
+	filmsRegexp, _ := regexp.Compile(".*<div.*class=\".*\"><img.*width=\".*\" height=\".*\".*data-src=\"(.*)\".*alt=\"(.*)\"></div>.*<span.*class=\".*\"><i class=\"fa fa-clock-o\"></i>.*</span>.*</div>.*")
 
 	pageUrl := urlFunc(pageNo)
 	//fmt.Printf("开始查询%s\n", pageUrl)

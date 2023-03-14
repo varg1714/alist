@@ -6,6 +6,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/cron"
+	json "github.com/json-iterator/go"
 	"gorm.io/gorm/utils"
 	"net/http"
 	"strconv"
@@ -45,20 +46,25 @@ func (d *SexBjCam) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 
 	results := make([]model.Obj, 0)
 
-	virtualDirectoryMap := make(map[string][]string, 0)
-
 	dirName := dir.GetName()
 
 	actors := strings.Split(d.Addition.Actors, ",")
+	categories := make(map[string]string)
+
+	err := json.Unmarshal([]byte(d.Categories), &categories)
+	if err != nil {
+		return results, err
+	}
 
 	// 1. 构建虚拟文件夹
-	virtualDirectoryMap[d.RootID.GetRootId()] = []string{"关注演员"}
-	virtualDirectoryMap["关注演员"] = actors
+	rootDirectory := []string{"关注演员"}
+	for category := range categories {
+		rootDirectory = append(rootDirectory, category)
+	}
 
-	// 2. 构建页面路径
-	directory, exist := virtualDirectoryMap[dirName]
-	if exist {
-		for _, category := range directory {
+	if dirName == d.RootID.GetRootId() {
+		// 根目录
+		for _, category := range rootDirectory {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
 					Name:     category,
@@ -70,16 +76,44 @@ func (d *SexBjCam) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 			})
 		}
 		return results, nil
-	}
-
-	if utils.Contains(actors, dirName) {
-		// 演员列表
-		return d.getFilms(func(index int) string {
+	} else if dirName == "关注演员" {
+		// 关注演员目录
+		for _, actor := range actors {
+			results = append(results, &model.ObjThumb{
+				Object: model.Object{
+					Name:     actor,
+					IsFolder: true,
+					ID:       actor,
+					Size:     622857143,
+					Modified: time.Now(),
+				},
+			})
+		}
+		return results, nil
+	} else if utils.Contains(actors, dirName) {
+		// 关注演员影片
+		return d.getActorFilms(func(index int) string {
 			return fmt.Sprintf("https://sexbjcam.com/actor/%s/page/%s/", dirName, strconv.Itoa(index))
 
 		})
+	} else {
+
+		category, exists := categories[dirName]
+		if exists {
+			films, err := d.getCategoryFilms(func(index int) string {
+				return fmt.Sprintf(category, strconv.Itoa(index))
+
+			})
+			if err != nil {
+				return results, err
+			}
+			return films, err
+		} else {
+			return results, nil
+		}
+
 	}
-	return results, nil
+
 }
 
 func (d *SexBjCam) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
@@ -89,10 +123,9 @@ func (d *SexBjCam) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 		return nil, err
 	}
 
-	//log.Infof("res:%s,url:%s\n", res, videoUrl)
 	return &model.Link{
 		Header: http.Header{
-			"Referer": []string{"https://madou.club/"},
+			"Referer": []string{"https://sexbjcam.com/"},
 		},
 		URL: link,
 	}, nil

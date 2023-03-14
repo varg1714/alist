@@ -7,6 +7,7 @@ import (
 
 type Addition struct {
 	Actors         string `json:"actors" required:"true"`
+	Categories     string `json:"categories" required:"true"`
 	TransferServer string `json:"transfer_server" required:"true"`
 	SpiderServer   string `json:"spider_server" required:"true"`
 	PlayServer     string `json:"play_server" required:"true"`

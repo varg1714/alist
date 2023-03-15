@@ -174,8 +174,7 @@ func (d *SexBjCam) getLink(file model.Obj) (string, error) {
 		return "", err
 	}
 	if mp4Regexp.MatchString(playPageUrl) {
-		playPagePattern, err := regexp.Compile("https://.*.tapecontent.net/(.*)")
-		realUrl := playPagePattern.ReplaceAllString(playPagePattern.FindString(playPageUrl), fmt.Sprintf("%s/tapecontent/$1", d.PlayServer))
+		realUrl := fmt.Sprintf("%s/tapecontent?source=%s", d.PlayServer, playPageUrl)
 		return realUrl, err
 	}
 

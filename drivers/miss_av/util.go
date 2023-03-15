@@ -66,7 +66,7 @@ func (d *MIssAV) getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 		return results, err
 	}
 
-	for index := 2; index <= 20; index++ {
+	for index := 2; index <= 10; index++ {
 		films, images, urls, err = d.getPageInfo(urlFunc, index, films, images, urls)
 		if err != nil {
 			return results, err

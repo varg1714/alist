@@ -5,9 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/alist-org/alist/v3/server/common"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	stdpath "path"
@@ -21,6 +19,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/sign"
 	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/alist-org/alist/v3/server/common"
 	"github.com/disintegration/imaging"
 	_ "golang.org/x/image/webp"
 )
@@ -28,6 +27,7 @@ import (
 type Local struct {
 	model.Storage
 	Addition
+	mkdirPerm int32
 }
 
 func (d *Local) Config() driver.Config {
@@ -35,8 +35,14 @@ func (d *Local) Config() driver.Config {
 }
 
 func (d *Local) Init(ctx context.Context) error {
-	if d.MkdirPerm == 0 {
-		d.MkdirPerm = 777
+	if d.MkdirPerm == "" {
+		d.mkdirPerm = 0777
+	} else {
+		v, err := strconv.ParseUint(d.MkdirPerm, 8, 32)
+		if err != nil {
+			return err
+		}
+		d.mkdirPerm = int32(v)
 	}
 	if !utils.Exists(d.GetRootPath()) {
 		return fmt.Errorf("root folder %s not exists", d.GetRootPath())
@@ -61,7 +67,7 @@ func (d *Local) GetAddition() driver.Additional {
 
 func (d *Local) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 	fullPath := dir.GetPath()
-	rawFiles, err := ioutil.ReadDir(fullPath)
+	rawFiles, err := readDir(fullPath)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +143,7 @@ func (d *Local) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 			}
 			srcBuf = videoBuf
 		} else {
-			imgData, err := ioutil.ReadFile(fullPath)
+			imgData, err := os.ReadFile(fullPath)
 			if err != nil {
 				return nil, err
 			}
@@ -168,7 +174,7 @@ func (d *Local) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 
 func (d *Local) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
 	fullPath := filepath.Join(parentDir.GetPath(), dirName)
-	err := os.MkdirAll(fullPath, os.FileMode(d.MkdirPerm))
+	err := os.MkdirAll(fullPath, os.FileMode(d.mkdirPerm))
 	if err != nil {
 		return err
 	}

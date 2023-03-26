@@ -3,7 +3,6 @@ package common
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,8 +25,9 @@ func Proxy(w http.ResponseWriter, r *http.Request, link *model.Link, file model.
 		defer func() {
 			_ = link.Data.Close()
 		}()
+		filename := file.GetName()
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, file.GetName(), url.QueryEscape(file.GetName())))
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, filename, url.PathEscape(filename)))
 		w.Header().Set("Content-Length", strconv.FormatInt(file.GetSize(), 10))
 		if link.Header != nil {
 			// TODO clean header with blacklist or whitelist
@@ -60,7 +60,8 @@ func Proxy(w http.ResponseWriter, r *http.Request, link *model.Link, file model.
 		if err != nil {
 			return err
 		}
-		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, file.GetName(), url.QueryEscape(file.GetName())))
+		filename := file.GetName()
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, filename, url.PathEscape(filename)))
 		http.ServeContent(w, r, file.GetName(), fileStat.ModTime(), f)
 		return nil
 	} else {
@@ -92,7 +93,7 @@ func Proxy(w http.ResponseWriter, r *http.Request, link *model.Link, file model.
 		}
 		w.WriteHeader(res.StatusCode)
 		if res.StatusCode >= 400 {
-			all, _ := ioutil.ReadAll(res.Body)
+			all, _ := io.ReadAll(res.Body)
 			msg := string(all)
 			log.Debugln(msg)
 			return errors.New(msg)

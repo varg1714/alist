@@ -95,7 +95,7 @@ func (d *_91MD) getCategoryFilms(urlFunc func(index int) string) ([]model.Obj, e
 		return results, err
 	}
 
-	for index := 2; nextPage && index < 3; index++ {
+	for index := 2; nextPage; index++ {
 		films, images, urls, nextPage, err = d.getPageInfo(urlFunc, index, films, images, urls)
 		if err != nil {
 			return results, err

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	stdpath "path"
 	"strings"
+	"time"
 
 	"github.com/alist-org/alist/v3/internal/conf"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -115,7 +116,17 @@ func getFileStreamFromLink(file model.Obj, link *model.Link) (*model.FileStream,
 			if err != nil {
 				log.Error("open temp file error:", err)
 			}
-
+			fileInfo, err := os.Stat(tempFile.Name())
+			if err != nil {
+				log.Error("open temp file error:", err)
+			}
+			file = &model.Object{
+				Name:     file.GetName(),
+				IsFolder: file.IsDir(),
+				ID:       file.GetID(),
+				Size:     fileInfo.Size(),
+				Modified: time.Now(),
+			}
 			log.Info("FFmpeg command execution completed successfully!")
 		}
 

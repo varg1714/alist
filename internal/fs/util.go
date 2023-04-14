@@ -2,9 +2,11 @@ package fs
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	stdpath "path"
 	"strings"
 
@@ -69,6 +71,54 @@ func getFileStreamFromLink(file model.Obj, link *model.Link) (*model.FileStream,
 			mimetype = mt
 		}
 		rc = res.Body
+
+		m3u8Stream := []string{"application/vnd.apple.mpegurl", "application/x-mpegURL"}
+		if utils.SliceContains(m3u8Stream, mt) {
+
+			tempFile, err := os.CreateTemp("", "output.*.mp4")
+			if err != nil {
+				log.Error("Failed to create temp file:", err)
+			}
+
+			// 构建FFmpeg的命令行参数字符串
+			cmdArgs := []string{"-i", link.URL, "-f", "mp4", tempFile.Name(), "-nostdin", "-y"}
+
+			// 创建FFmpeg命令
+			cmd := exec.Command("ffmpeg", cmdArgs...)
+
+			// 获取FFmpeg的标准错误输出管道
+			stderr, err := cmd.StderrPipe()
+			if err != nil {
+				log.Fatal("Failed to get FFmpeg stderr pipe:", err)
+			}
+
+			err = cmd.Start()
+			if err != nil {
+				log.Error("Failed to start FFmpeg:", err)
+			}
+
+			// 将FFmpeg的错误输出内容通过标准输出打印
+			go func() {
+				_, err := io.Copy(os.Stdout, stderr)
+				if err != nil {
+					log.Error("Failed to copy FFmpeg stderr to stdout:", err.Error())
+				}
+			}()
+
+			err = cmd.Wait()
+			if err != nil {
+				log.Error("FFmpeg command execution failed:", err)
+			}
+
+			// 将FFmpeg的输出内容写入到io.ReadCloser的网络流中
+			rc, err = os.Open(tempFile.Name())
+			if err != nil {
+				log.Error("open temp file error:", err)
+			}
+
+			log.Info("FFmpeg command execution completed successfully!")
+		}
+
 	}
 	// if can't get mimetype, use default application/octet-stream
 	if mimetype == "" {

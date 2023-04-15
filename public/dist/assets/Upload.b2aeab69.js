@@ -1,1 +1,0 @@
-import{f as o}from"./index.6afda90b.js";import{o as a}from"./index.d1f233c0.js";import{T as e}from"./Tasks.2ea0b217.js";import"./Paginator.ba706791.js";import"./index.73508852.js";const i=()=>(a("manage.sidemenu.upload"),o(e,{type:"upload"}));export{i as default};

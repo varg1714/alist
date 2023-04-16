@@ -8,6 +8,7 @@ import (
 	"github.com/go-resty/resty/v2"
 	log "github.com/sirupsen/logrus"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -59,15 +60,16 @@ func (d *MIssAV) getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 	films := make([]string, 0)
 	images := make([]string, 0)
 	urls := make([]string, 0)
+	nextPage := false
 	var err error
 
-	films, images, urls, err = d.getPageInfo(urlFunc, 1, films, images, urls)
+	films, images, urls, nextPage, err = d.getPageInfo(urlFunc, 1, films, images, urls)
 	if err != nil {
 		return results, err
 	}
 
-	for index := 2; index <= 10; index++ {
-		films, images, urls, err = d.getPageInfo(urlFunc, index, films, images, urls)
+	for index := 2; index <= 20 && nextPage; index++ {
+		films, images, urls, nextPage, err = d.getPageInfo(urlFunc, index, films, images, urls)
 		if err != nil {
 			return results, err
 		}
@@ -108,23 +110,29 @@ func (d *MIssAV) getLink(file model.Obj) (string, error) {
 
 }
 
-func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []string, images []string, urls []string) ([]string, []string, []string, error) {
+func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []string, images []string, urls []string) ([]string, []string, []string, bool, error) {
 
 	filmsRegexp, _ := regexp.Compile("<a class=\"text-secondary group-hover:text-primary\" href=\"(.*)\">\\s?(.*)\\s?</a>")
 	imageRegexp, _ := regexp.Compile("<img x-cloak :class=\".*\" class=\".*\" data-src=\"(.*)\" src=\".*\" alt=\".*\">")
+	pagesRegexp, _ := regexp.Compile(".*<span class=\"text-gray-500 sm:text-sm\" id=\"price-currency\">[\\s|.]*/ (.*)[\\s|.]*</span>.*")
 
 	pageUrl := urlFunc(index)
 	//log.Infof("开始查询%s", pageUrl)
 
 	res, err := d.findPage(pageUrl)
 	if err != nil {
-		return films, images, urls, nil
+		return films, images, urls, false, nil
 	}
 
 	page := string(res.Body())
 
 	tempFilms := filmsRegexp.FindAllString(page, -1)
 	imageUrls := imageRegexp.FindAllString(page, -1)
+	pages := pagesRegexp.ReplaceAllString(pagesRegexp.FindString(page), "$1")
+	pageSize := 0
+	if pages != "" {
+		pageSize, err = strconv.Atoi(pages)
+	}
 
 	for _, file := range tempFilms {
 		urls = append(urls, filmsRegexp.ReplaceAllString(file, "$1"))
@@ -135,5 +143,6 @@ func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []
 		images = append(images, imageRegexp.ReplaceAllString(tempUrl, "$1"))
 	}
 
-	return films, images, urls, nil
+	return films, images, urls, pages != "" && pageSize > index, nil
+
 }

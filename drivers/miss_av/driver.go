@@ -42,9 +42,14 @@ func (d *MIssAV) Drop(ctx context.Context) error {
 func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 
 	results := make([]model.Obj, 0)
-	m := make(map[string]string)
+	categories := make(map[string]string)
+	actors := make(map[string]string)
 
-	err := json.Unmarshal([]byte(d.Categories), &m)
+	err := json.Unmarshal([]byte(d.Categories), &categories)
+	if err != nil {
+		return results, err
+	}
+	err = json.Unmarshal([]byte(d.Actors), &actors)
 	if err != nil {
 		return results, err
 	}
@@ -52,7 +57,7 @@ func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 	dirName := dir.GetName()
 	if d.RootID.GetRootId() == dirName {
 		// 1. 顶级目录
-		for category, _ := range m {
+		for category := range categories {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
 					Name:     category,
@@ -63,10 +68,37 @@ func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 				},
 			})
 		}
+		results = append(results, &model.ObjThumb{
+			Object: model.Object{
+				Name:     "关注演员",
+				IsFolder: true,
+				ID:       "关注演员",
+				Size:     622857143,
+				Modified: time.Now(),
+			},
+		})
 		return results, nil
+	} else if dirName == "关注演员" {
+		// 1. 顶级目录
+		for actor := range actors {
+			results = append(results, &model.ObjThumb{
+				Object: model.Object{
+					Name:     actor,
+					IsFolder: true,
+					ID:       actor,
+					Size:     622857143,
+					Modified: time.Now(),
+				},
+			})
+		}
+		return results, nil
+	} else if actors[dirName] != "" {
+		return d.getFilms(func(index int) string {
+			return fmt.Sprintf(actors[dirName], index)
+		})
 	} else {
 
-		url, exist := m[dirName]
+		url, exist := categories[dirName]
 		if !exist {
 			return results, nil
 		}

@@ -57,14 +57,7 @@ func (d *JableTV) findPage(url string) (*resty.Response, error) {
 	//log.Infof("开始查询:%s", url)
 
 	res, err := base.RestyClient.R().
-		SetBody(base.Json{
-			"url":        url,
-			"httpMethod": "GET",
-			"headers": base.Json{
-				"Host": "jable.tv",
-			},
-		}).
-		Post(d.Addition.SpiderServer)
+		Get(fmt.Sprintf("%s%s", d.Addition.SpiderServer, url))
 
 	return res, err
 }

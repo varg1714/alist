@@ -3,7 +3,6 @@ package jable_tv
 import (
 	"context"
 	"fmt"
-	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/cron"
@@ -128,12 +127,7 @@ func (d *JableTV) Link(ctx context.Context, file model.Obj, args model.LinkArgs)
 	url := fmt.Sprintf("https://jable.tv/videos/%s/", code[1])
 	//log.Infof("影片访问地址:%s\n", url)
 
-	res, err := base.RestyClient.R().
-		SetBody(base.Json{
-			"url":        url,
-			"httpMethod": "GET",
-		}).
-		Post(d.Addition.SpiderServer)
+	res, err := d.findPage(url)
 	if err != nil {
 		log.Errorf("出错了：%s,%s\n", err, res)
 		return nil, err

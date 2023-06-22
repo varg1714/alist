@@ -20,6 +20,7 @@ import (
 	_ "github.com/alist-org/alist/v3/drivers/ftp"
 	_ "github.com/alist-org/alist/v3/drivers/google_drive"
 	_ "github.com/alist-org/alist/v3/drivers/google_photo"
+	_ "github.com/alist-org/alist/v3/drivers/ipfs_api"
 	_ "github.com/alist-org/alist/v3/drivers/jable_tv"
 	_ "github.com/alist-org/alist/v3/drivers/lanzou"
 	_ "github.com/alist-org/alist/v3/drivers/local"
@@ -31,7 +32,7 @@ import (
 	_ "github.com/alist-org/alist/v3/drivers/onedrive_app"
 	_ "github.com/alist-org/alist/v3/drivers/pikpak"
 	_ "github.com/alist-org/alist/v3/drivers/pikpak_share"
-	_ "github.com/alist-org/alist/v3/drivers/quark"
+	_ "github.com/alist-org/alist/v3/drivers/quark_uc"
 	_ "github.com/alist-org/alist/v3/drivers/s3"
 	_ "github.com/alist-org/alist/v3/drivers/seafile"
 	_ "github.com/alist-org/alist/v3/drivers/sexbjcam"
@@ -45,6 +46,7 @@ import (
 	_ "github.com/alist-org/alist/v3/drivers/uss"
 	_ "github.com/alist-org/alist/v3/drivers/virtual"
 	_ "github.com/alist-org/alist/v3/drivers/webdav"
+	_ "github.com/alist-org/alist/v3/drivers/wopan"
 	_ "github.com/alist-org/alist/v3/drivers/yandex_disk"
 )
 

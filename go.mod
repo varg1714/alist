@@ -75,8 +75,8 @@ require (
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/crackcomm/go-gitignore v0.0.0-20170627025303-887ab5e44cc3 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/gaoyb7/115drive-webdav v0.1.8 // indirect
 	github.com/geoffgarside/ber v1.1.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect

@@ -5,12 +5,8 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"strings"
-
 	"github.com/alist-org/alist/v3/drivers/base"
+	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
@@ -21,6 +17,11 @@ import (
 	"github.com/go-resty/resty/v2"
 	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+	"time"
 )
 
 type PikPak struct {
@@ -70,6 +71,31 @@ func (d *PikPak) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 		log.Debugln("use media link")
 		link.URL = resp.Medias[0].Link.Url
 	}
+	return &link, nil
+}
+
+func (d *PikPak) HdLink(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
+	var resp File
+	_, err := d.request(fmt.Sprintf("https://api-drive.mypikpak.com/drive/v1/files/%s?_magic=2021&thumbnail_size=SIZE_LARGE", file.GetID()),
+		http.MethodGet, nil, &resp)
+	if err != nil {
+		return nil, err
+	}
+	link := model.Link{
+		URL: resp.WebContentLink,
+	}
+	if len(resp.Medias) > 1 && resp.Medias[1].Link.Url != "" {
+		log.Debugln("use media link")
+		link.URL = resp.Medias[1].Link.Url
+		return &link, nil
+	}
+
+	if len(resp.Medias) > 0 && resp.Medias[0].Link.Url != "" {
+		log.Debugln("use media link")
+		link.URL = resp.Medias[0].Link.Url
+		return &link, nil
+	}
+
 	return &link, nil
 }
 
@@ -191,6 +217,112 @@ func (d *PikPak) Put(ctx context.Context, dstDir model.Obj, stream model.FileStr
 	}
 	_, err = uploader.UploadWithContext(ctx, input)
 	return err
+}
+
+func (d *PikPak) CloudDownload(ctx context.Context, dir string, obj string) ([]model.Obj, error) {
+
+	var resultFile File
+	fileIdCache := db.QueryFileId(obj)
+
+	if fileIdCache == "" {
+		// file don't exist
+		downloadFile, err := d.downloadMagnet(dir, obj)
+		resultFile = downloadFile
+		if err != nil || resultFile.Id == "" {
+			return []model.Obj{}, err
+		}
+
+		err = db.CreateCacheFile(obj, resultFile.Id)
+		if err != nil {
+			return []model.Obj{}, err
+		}
+
+	} else {
+		// get cache file
+		files, err := d.getFiles(dir)
+		if err != nil {
+			return nil, err
+		}
+		for _, tempFile := range files {
+			if tempFile.Id == fileIdCache {
+				resultFile = tempFile
+				break
+			}
+		}
+
+		if resultFile.Id == "" {
+			resultFile, err = d.downloadMagnet(dir, obj)
+			if err != nil || resultFile.Id == "" {
+				return []model.Obj{}, err
+			}
+
+			err = db.UpdateCacheFile(obj, resultFile.Id)
+			if err != nil {
+				return []model.Obj{}, err
+			}
+		}
+
+	}
+
+	// File
+	if resultFile.Kind == "drive#file" {
+		return utils.SliceConvert([]File{resultFile}, func(src File) (model.Obj, error) {
+			return fileToObj(src), nil
+		})
+	}
+
+	// Folder
+	return d.List(ctx, &model.Object{
+		ID: resultFile.Id,
+	}, model.ListArgs{})
+
+}
+
+func (d *PikPak) downloadMagnet(dir string, obj string) (File, error) {
+
+	var resultFile File
+	var result CloudDownloadResp
+
+	_, err := d.request("https://api-drive.mypikpak.com/drive/v1/files", http.MethodPost, func(req *resty.Request) {
+		req.SetBody(base.Json{
+			"kind":        "drive#file",
+			"upload_type": "UPLOAD_TYPE_URL",
+			"params": base.Json{
+				"with_thumbnail": "true",
+				"from":           "manual",
+			},
+			"url": base.Json{
+				"url": obj,
+			},
+			"parent_id": dir,
+		})
+	}, &result)
+
+	if err != nil {
+		return resultFile, err
+	}
+
+	var count int
+	for resultFile.Id == "" {
+
+		if count != 0 {
+			time.Sleep(1 * time.Second)
+		}
+
+		count++
+		files, err := d.getFiles(dir)
+		if err != nil {
+			return resultFile, err
+		}
+		for _, tempFile := range files {
+			if tempFile.Id == result.Task.FileID {
+				resultFile = tempFile
+				break
+			}
+		}
+	}
+
+	return resultFile, nil
 }
 
 var _ driver.Driver = (*PikPak)(nil)

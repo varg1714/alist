@@ -26,6 +26,13 @@ type File struct {
 	ThumbnailLink  string    `json:"thumbnail_link"`
 	WebContentLink string    `json:"web_content_link"`
 	Medias         []Media   `json:"medias"`
+	Params         struct {
+		Duration     string `json:"duration"`
+		Height       string `json:"height"`
+		PlatformIcon string `json:"platform_icon"`
+		URL          string `json:"url"`
+		Width        string `json:"width"`
+	} `json:"params"`
 }
 
 func fileToObj(f File) *model.ObjThumb {
@@ -72,4 +79,39 @@ type Media struct {
 	ResolutionName string        `json:"resolution_name"`
 	IsVisible      bool          `json:"is_visible"`
 	Category       string        `json:"category"`
+}
+
+type CloudDownloadResp struct {
+	UploadType string `json:"upload_type"`
+	URL        struct {
+		Kind string `json:"kind"`
+	} `json:"url"`
+	File any `json:"file"`
+	Task struct {
+		Kind       string `json:"kind"`
+		ID         string `json:"id"`
+		Name       string `json:"name"`
+		Type       string `json:"type"`
+		UserID     string `json:"user_id"`
+		Statuses   []any  `json:"statuses"`
+		StatusSize int    `json:"status_size"`
+		Params     struct {
+			PredictSpeed  string `json:"predict_speed"`
+			PredictType   string `json:"predict_type"`
+			ThumbnailLink string `json:"thumbnail_link"`
+		} `json:"params"`
+		FileID            string    `json:"file_id"`
+		FileName          string    `json:"file_name"`
+		FileSize          string    `json:"file_size"`
+		Message           string    `json:"message"`
+		CreatedTime       time.Time `json:"created_time"`
+		UpdatedTime       time.Time `json:"updated_time"`
+		ThirdTaskID       string    `json:"third_task_id"`
+		Phase             string    `json:"phase"`
+		Progress          int       `json:"progress"`
+		IconLink          string    `json:"icon_link"`
+		Callback          string    `json:"callback"`
+		ReferenceResource any       `json:"reference_resource"`
+		Space             string    `json:"space"`
+	} `json:"task"`
 }

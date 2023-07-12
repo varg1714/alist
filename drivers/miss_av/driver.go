@@ -3,11 +3,13 @@ package miss_av
 import (
 	"context"
 	"fmt"
+	"github.com/alist-org/alist/v3/drivers/pikpak"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/pkg/cron"
 	json "github.com/json-iterator/go"
-	"net/http"
+	"strings"
 	"time"
 )
 
@@ -41,17 +43,17 @@ func (d *MIssAV) Drop(ctx context.Context) error {
 
 func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 
-	results := make([]model.Obj, 0)
 	categories := make(map[string]string)
-	actors := make(map[string]string)
-
+	results := make([]model.Obj, 0)
 	err := json.Unmarshal([]byte(d.Categories), &categories)
 	if err != nil {
 		return results, err
 	}
-	err = json.Unmarshal([]byte(d.Actors), &actors)
-	if err != nil {
-		return results, err
+
+	storage := op.GetBalancedStorage(d.PikPakPath)
+	pikPak, ok := storage.(*pikpak.PikPak)
+	if !ok {
+		return results, nil
 	}
 
 	dirName := dir.GetName()
@@ -68,63 +70,43 @@ func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 				},
 			})
 		}
-		results = append(results, &model.ObjThumb{
-			Object: model.Object{
-				Name:     "关注演员",
-				IsFolder: true,
-				ID:       "关注演员",
-				Size:     622857143,
-				Modified: time.Now(),
-			},
-		})
 		return results, nil
-	} else if dirName == "关注演员" {
-		// 1. 顶级目录
-		for actor := range actors {
-			results = append(results, &model.ObjThumb{
-				Object: model.Object{
-					Name:     actor,
-					IsFolder: true,
-					ID:       actor,
-					Size:     622857143,
-					Modified: time.Now(),
-				},
-			})
+	} else if categories[dirName] != "" {
+		// 自定义目录
+		return d.getFilms(dirName, func(index int) string {
+			return fmt.Sprintf(categories[dirName], index)
+		})
+	} else if strings.Contains(dir.GetID(), "https://") && !strings.Contains(dir.GetID(), ".jpg") {
+		// 临时文件
+		magnet, err := d.getMagnet(dir)
+		if err != nil || magnet == "" {
+			return results, err
 		}
-		return results, nil
-	} else if actors[dirName] != "" {
-		return d.getFilms(func(index int) string {
-			return fmt.Sprintf(actors[dirName], index)
-		})
+		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, magnet)
 	} else {
-
-		url, exist := categories[dirName]
-		if !exist {
-			return results, nil
-		}
-
-		return d.getFilms(func(index int) string {
-			return fmt.Sprintf(url, index)
-		})
-
+		// pikPak文件
+		return results, nil
 	}
 
 }
 
 func (d *MIssAV) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
-	link, err := d.getLink(file)
-	if err != nil {
-		return nil, err
+	if strings.Contains(file.GetID(), ".jpg") {
+		return &model.Link{
+			URL: file.GetID(),
+		}, nil
 	}
 
-	//log.Infof("res:%s,url:%s\n", res, videoUrl)
-	return &model.Link{
-		Header: http.Header{
-			"Referer": []string{"https://madou.club/"},
-		},
-		URL: link,
-	}, nil
+	storage := op.GetBalancedStorage(d.PikPakPath)
+	pikPak, ok := storage.(*pikpak.PikPak)
+	if !ok {
+		return &model.Link{
+			URL: "",
+		}, nil
+	}
+
+	return pikPak.Link(ctx, file, args)
 
 }
 

@@ -3,17 +3,21 @@ package miss_av
 import (
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/base"
+	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
-	js "github.com/dop251/goja"
 	"github.com/go-resty/resty/v2"
-	log "github.com/sirupsen/logrus"
+	"gorm.io/gorm/utils"
 	"regexp"
-	"strconv"
-	"strings"
 	"time"
 )
 
-func convertToModel(films []string, images []string, urls []string, results []model.Obj) []model.Obj {
+var subTitles, _ = regexp.Compile(".*<div class=\".*\">\\s*?<div class=\".*\">\\s*?<a href=\"(.*)\" title=\".*\">\\s*?<span class=\"name\">.*</span>\\s*?<br />\\s*?<span class=\"meta\">[\\s|\\S]*?</span>\\s*?<br/>\\s*?<div class=\"tags\">\\s*?<span class=\".*\">高清</span>\\s*?<span class=\".*\">字幕</span>\\s*?</div>\\s*?</a>\\s*?</div>")
+var hd, _ = regexp.Compile(".*<div class=\".*\">\\s*?<div class=\".*\">\\s*?<a href=\"(.*)\" title=\".*\">\\s*?<span class=\"name\">.*</span>\\s*?<br />\\s*?<span class=\"meta\">[\\s]*.*[\\s]*</span>\\s*?<br/>\\s*?<div class=\"tags\">\\s*?<span class=\".*\">高清</span>\\s*?</div>\\s*?</a>\\s*?</div>")
+
+func convertToModel(films []string, images []string, urls []string) []model.ObjThumb {
+
+	results := make([]model.ObjThumb, 0)
+
 	for index, film := range films {
 
 		var image string
@@ -22,10 +26,10 @@ func convertToModel(films []string, images []string, urls []string, results []mo
 		}
 		//log.Infof("index:%s,image:%s,cap:%s,images:%s\n", index, image, cap(images), images)
 
-		results = append(results, &model.ObjThumb{
+		results = append(results, model.ObjThumb{
 			Object: model.Object{
-				Name:     fmt.Sprintf("%04d", index) + " " + film + ".mp4",
-				IsFolder: false,
+				Name:     film,
+				IsFolder: true,
 				ID:       urls[index],
 				Size:     622857143,
 				Modified: time.Now(),
@@ -44,16 +48,13 @@ func (d *MIssAV) findPage(url string) (*resty.Response, error) {
 		SetBody(base.Json{
 			"url":        url,
 			"httpMethod": "GET",
-			"headers": base.Json{
-				"Host": "https://missav.com/",
-			},
 		}).
 		Post(d.Addition.SpiderServer)
 
 	return res, err
 }
 
-func (d *MIssAV) getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
+func (d *MIssAV) getFilms(dirName string, urlFunc func(index int) string) ([]model.Obj, error) {
 
 	results := make([]model.Obj, 0)
 
@@ -68,18 +69,73 @@ func (d *MIssAV) getFilms(urlFunc func(index int) string) ([]model.Obj, error) {
 		return results, err
 	}
 
-	for index := 2; index <= 20 && nextPage; index++ {
+	existFilms := db.QueryByUrls(urls)
+
+	// not exists
+	for index := 2; index <= 20 && nextPage && len(existFilms) == 0; index++ {
+
 		films, images, urls, nextPage, err = d.getPageInfo(urlFunc, index, films, images, urls)
 		if err != nil {
 			return results, err
 		}
+
+		existFilms = db.QueryByUrls(urls)
+
+	}
+	// exist
+	for index, url := range urls {
+		if utils.Contains(existFilms, url) {
+			if index == 0 {
+				urls = []string{}
+				images = []string{}
+				films = []string{}
+			} else {
+				urls = urls[:index]
+				images = images[:index]
+				films = films[:index]
+			}
+			break
+		}
 	}
 
-	return convertToModel(films, images, urls, results), nil
+	if len(urls) != 0 {
+		err = db.CreateFilms("javdb", dirName, convertToModel(films, images, urls))
+		if err != nil {
+			return results, nil
+		}
+	}
+
+	return d.convertFilm(db.QueryByActor("javdb", dirName), results), nil
 
 }
 
-func (d *MIssAV) getLink(file model.Obj) (string, error) {
+func (d *MIssAV) convertFilm(actor []model.Film, results []model.Obj) []model.Obj {
+	for index, film := range actor {
+		results = append(results, &model.ObjThumb{
+			Object: model.Object{
+				Name:     fmt.Sprintf("%04d", index) + " " + film.Name,
+				IsFolder: true,
+				ID:       film.Url,
+				Size:     622857143,
+				Modified: time.Now(),
+			},
+			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
+		})
+		results = append(results, &model.ObjThumb{
+			Object: model.Object{
+				Name:     fmt.Sprintf("%04d", index) + " " + film.Name + ".jpg",
+				IsFolder: false,
+				ID:       film.Image,
+				Size:     622857143,
+				Modified: time.Now(),
+			},
+			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
+		})
+	}
+	return results
+}
+
+func (d *MIssAV) getMagnet(file model.Obj) (string, error) {
 
 	pageUrl := file.GetID()
 
@@ -90,31 +146,26 @@ func (d *MIssAV) getLink(file model.Obj) (string, error) {
 
 	page := string(res.Body())
 
-	urlScriptRegexp, _ := regexp.Compile(".*(eval\\(.*\\)).*")
-	urlScript := urlScriptRegexp.FindAllString(page, -1)
-	if cap(urlScript) <= 0 {
-		return "", nil
+	url := subTitles.FindString(page)
+	if url != "" {
+		return subTitles.ReplaceAllString(url, "$1"), nil
 	}
 
-	runString, err := js.New().RunString(urlScript[0])
-	//log.Infof("js计算脚本%s", urlScript)
-	if err != nil {
-		log.Errorf("js计算错误%s", err)
-		return "", err
+	url = hd.FindString(page)
+	if url != "" {
+		return hd.ReplaceAllString(url, "$1"), nil
 	}
 
-	realUrl := runString.Export().(string)
-	//log.Infof("js计算访问地址:%s", realUrl)
-
-	return strings.ReplaceAll(realUrl, d.Addition.PlayServer, d.Addition.PlayProxyServer), nil
+	return "", nil
 
 }
 
 func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []string, images []string, urls []string) ([]string, []string, []string, bool, error) {
 
-	filmsRegexp, _ := regexp.Compile("<a class=\"text-secondary group-hover:text-primary\" href=\"(.*)\">\\s?(.*)\\s?</a>")
-	imageRegexp, _ := regexp.Compile("<img x-cloak :class=\".*\" class=\".*\" data-src=\"(.*)\" src=\".*\" alt=\".*\">")
-	pagesRegexp, _ := regexp.Compile(".*<span class=\"text-gray-500 sm:text-sm\" id=\"price-currency\">[\\s|.]*/ (.*)[\\s|.]*</span>.*")
+	urlsRegexp, _ := regexp.Compile(".*<a href=\"(.*)\" class=\"box\" title=\".*\">.*")
+	filmsRegexp, _ := regexp.Compile(".*<div class=\"video-title\"><strong>(.*)</strong>(.*)</div>.*")
+	imageRegexp, _ := regexp.Compile(".*<img loading=\"lazy\" src=\"(.*)\" />.*")
+	pagesRegexp, _ := regexp.Compile(".*<a rel=\"next\" class=\"pagination-next\" href=\".*\">下一頁</a>.*")
 
 	pageUrl := urlFunc(index)
 	//log.Infof("开始查询%s", pageUrl)
@@ -126,23 +177,21 @@ func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []
 
 	page := string(res.Body())
 
+	tempUrls := urlsRegexp.FindAllString(page, -1)
 	tempFilms := filmsRegexp.FindAllString(page, -1)
 	imageUrls := imageRegexp.FindAllString(page, -1)
-	pages := pagesRegexp.ReplaceAllString(pagesRegexp.FindString(page), "$1")
-	pageSize := 0
-	if pages != "" {
-		pageSize, err = strconv.Atoi(pages)
-	}
+	pages := pagesRegexp.FindAllString(page, -1)
 
 	for _, file := range tempFilms {
-		urls = append(urls, filmsRegexp.ReplaceAllString(file, "$1"))
-		films = append(films, filmsRegexp.ReplaceAllString(file, "$2"))
+		films = append(films, filmsRegexp.ReplaceAllString(file, "$1$2"))
+	}
+	for _, imageUrl := range imageUrls {
+		images = append(images, imageRegexp.ReplaceAllString(imageUrl, "$1"))
+	}
+	for _, tempUrl := range tempUrls {
+		urls = append(urls, "https://javdb.com/"+urlsRegexp.ReplaceAllString(tempUrl, "$1"))
 	}
 
-	for _, tempUrl := range imageUrls {
-		images = append(images, imageRegexp.ReplaceAllString(tempUrl, "$1"))
-	}
-
-	return films, images, urls, pages != "" && pageSize > index, nil
+	return films, images, urls, len(pages) != 0, nil
 
 }

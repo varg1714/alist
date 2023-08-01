@@ -41,10 +41,10 @@ func QueryByActor(source string, actor string) []model.Film {
 
 }
 
-func QueryByUrls(urls []string) []string {
+func QueryByUrls(actor string, urls []string) []string {
 
 	films := make([]model.Film, 0)
-	db.Select("url").Where("url IN (?)", urls).Find(&films)
+	db.Select("url").Where("url IN (?)", urls).Where("actor = ?", actor).Find(&films)
 
 	result := make([]string, 0)
 

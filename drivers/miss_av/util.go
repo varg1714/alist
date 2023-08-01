@@ -69,7 +69,7 @@ func (d *MIssAV) getFilms(dirName string, urlFunc func(index int) string) ([]mod
 		return results, err
 	}
 
-	existFilms := db.QueryByUrls(urls)
+	existFilms := db.QueryByUrls(dirName, urls)
 
 	// not exists
 	for index := 2; index <= 20 && nextPage && len(existFilms) == 0; index++ {
@@ -79,7 +79,7 @@ func (d *MIssAV) getFilms(dirName string, urlFunc func(index int) string) ([]mod
 			return results, err
 		}
 
-		existFilms = db.QueryByUrls(urls)
+		existFilms = db.QueryByUrls(dirName, urls)
 
 	}
 	// exist

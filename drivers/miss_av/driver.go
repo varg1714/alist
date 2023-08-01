@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/pikpak"
+	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/op"
@@ -108,6 +109,24 @@ func (d *MIssAV) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 
 	return pikPak.Link(ctx, file, args)
 
+}
+
+func (d *MIssAV) Remove(ctx context.Context, obj model.Obj) error {
+
+	categories := make(map[string]string)
+	err := json.Unmarshal([]byte(d.Categories), &categories)
+	if err != nil {
+		return err
+	}
+
+	if categories[obj.GetName()] != "" {
+		err = db.DeleteByActor("javdb", obj.GetName())
+		if err != nil {
+			return err
+		}
+	}
+
+	return err
 }
 
 var _ driver.Driver = (*MIssAV)(nil)

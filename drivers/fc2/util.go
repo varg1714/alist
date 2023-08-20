@@ -17,7 +17,7 @@ var magnetUrl, _ = regexp.Compile(".*<a href=\"(.*)\" class=\".*\"><i class=\".*
 var actorUrlsRegexp, _ = regexp.Compile(".*<a href=\"/article_search.php\\?id=(.*)\"data-counter=\".*\" data-counter-id=\".*?\"title=\"(.*)\"class=\".*\"id=\".*\"false\">.*")
 var actorImageRegexp, _ = regexp.Compile(".*<img src=\"(.*?)\">.*")
 var rankingUrlsRegexp, _ = regexp.Compile(".*<h3><a href=\"/article_search.php\\?id=(.*?)\">(.*?)</a></h3>.*")
-var rankingImageRegexp, _ = regexp.Compile(".*<img src=\"(//contents-.*?)\">.*")
+var rankingImageRegexp, _ = regexp.Compile(".*<img src=\"(//.*?)\">.*")
 
 func convertToModel(films []string, images []string, urls []string) []model.ObjThumb {
 

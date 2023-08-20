@@ -83,7 +83,7 @@ func (d *SexBjCam) findRealUrl(url string) (string, error) {
 
 func (d *SexBjCam) spider(url string) (string, error) {
 
-	realUrl := fmt.Sprintf("%s?pageUrl=%s&matchUrl=.*.mp4.*&matchUrl=.*/sources.*", d.SpiderServer, url)
+	realUrl := fmt.Sprintf("%s?pageUrl=%s&matchUrl=.*.mp4.*&matchUrl=.*/sources.*&matchUrl=.*m3u8.*", d.SpiderServer, url)
 	log.Infof("realUrl:%s", realUrl)
 
 	res, err := base.RestyClient.R().Get(realUrl)
@@ -157,7 +157,7 @@ func (d *SexBjCam) getLink(file model.Obj) (string, error) {
 
 	page := string(res.Body())
 
-	jumpUrlRegexp, _ := regexp.Compile(".*(https://.*\\.com/e/.*?)\".*")
+	jumpUrlRegexp, _ := regexp.Compile(".*(https://.*/e/.*?)\".*")
 	jumpUrls := jumpUrlRegexp.FindAllString(page, -1)
 	if cap(jumpUrls) <= 0 {
 		return "", nil
@@ -169,24 +169,7 @@ func (d *SexBjCam) getLink(file model.Obj) (string, error) {
 		return "", err
 	}
 
-	mp4Regexp, err := regexp.Compile(".*.mp4.*")
-	if err != nil {
-		return "", err
-	}
-	if mp4Regexp.MatchString(playPageUrl) {
-		realUrl := fmt.Sprintf("%s/tapecontent?source=%s", d.PlayServer, playPageUrl)
-		return realUrl, err
-	}
-
-	realUrlRes, err := d.findRealUrl(playPageUrl)
-	if err != nil {
-		return "", err
-	}
-
-	playPagePattern, err := regexp.Compile(".*\"file\":\"https://.*akamai-video-content.com/(.*?)\".*")
-	realUrl := playPagePattern.ReplaceAllString(playPagePattern.FindString(realUrlRes), fmt.Sprintf("%s/akamai/$1", d.PlayServer))
-
-	return realUrl, nil
+	return playPageUrl, nil
 
 }
 

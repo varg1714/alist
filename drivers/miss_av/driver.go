@@ -2,6 +2,7 @@ package miss_av
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/pikpak"
 	"github.com/alist-org/alist/v3/internal/db"
@@ -9,7 +10,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/pkg/cron"
-	json "github.com/json-iterator/go"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -46,10 +47,6 @@ func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 
 	categories := make(map[string]string)
 	results := make([]model.Obj, 0)
-	err := json.Unmarshal([]byte(d.Categories), &categories)
-	if err != nil {
-		return results, err
-	}
 
 	storage := op.GetBalancedStorage(d.PikPakPath)
 	pikPak, ok := storage.(*pikpak.PikPak)
@@ -58,6 +55,16 @@ func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 	}
 
 	dirName := dir.GetName()
+
+	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
+	for _, actor := range actors {
+		url := actor.Url
+		if !strings.HasPrefix(url, "http") {
+			url = "https://javdb.com/actors/" + url + "?page=%d&sort_type=0&t=d"
+		}
+		categories[actor.Name] = url
+	}
+
 	if d.RootID.GetRootId() == dirName {
 		// 1. 顶级目录
 		for category := range categories {
@@ -113,20 +120,24 @@ func (d *MIssAV) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 
 func (d *MIssAV) Remove(ctx context.Context, obj model.Obj) error {
 
-	categories := make(map[string]string)
-	err := json.Unmarshal([]byte(d.Categories), &categories)
+	err := db.DeleteActor(strconv.Itoa(int(d.ID)), obj.GetName())
 	if err != nil {
 		return err
 	}
 
-	if categories[obj.GetName()] != "" {
-		err = db.DeleteByActor("javdb", obj.GetName())
-		if err != nil {
-			return err
-		}
+	return db.DeleteByActor("javdb", obj.GetName())
+
+}
+
+func (d *MIssAV) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
+
+	split := strings.Split(dirName, " ")
+	if len(split) != 2 {
+		return errors.New("illegal dirName")
 	}
 
-	return err
+	return db.CreateActor(strconv.Itoa(int(d.ID)), split[0], split[1])
+
 }
 
 var _ driver.Driver = (*MIssAV)(nil)

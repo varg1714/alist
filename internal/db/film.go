@@ -94,3 +94,34 @@ func UpdateCacheFile(magnet string, fileId string) error {
 	return errors.WithStack(db.Where("magnet = ?", magnet).Save(magnetCache).Error)
 
 }
+
+func CreateActor(dir string, name string, url string) error {
+
+	actor := model.Actor{
+		Dir:  dir,
+		Name: name,
+		Url:  url,
+	}
+
+	return errors.WithStack(db.Create(actor).Error)
+
+}
+
+func QueryActor(source string) []model.Actor {
+
+	actors := make([]model.Actor, 0)
+	actor := model.Actor{
+		Dir: source,
+	}
+
+	db.Where(actor).Find(&actors)
+
+	return actors
+
+}
+
+func DeleteActor(source string, actor string) error {
+
+	return errors.WithStack(db.Where("dir = ?", source).Where("name = ?", actor).Delete(&model.Actor{}).Error)
+
+}

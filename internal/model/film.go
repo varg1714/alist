@@ -12,3 +12,9 @@ type MagnetCache struct {
 	Magnet string `json:"magnet" gorm:"index"`
 	FileId string `json:"file_id"`
 }
+
+type Actor struct {
+	Dir  string `json:"dir" gorm:"index"`
+	Name string `json:"name"`
+	Url  string `json:"url"`
+}

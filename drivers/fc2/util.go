@@ -56,7 +56,7 @@ func (d *FC2) findPage(url string) (string, error) {
 			"headers": base.Json{
 				"user-agent":      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
 				"referer":         "https://adult.contents.fc2.com",
-				"X-PJAX":          true,
+				"X-PJAX":          "true",
 				"Accept-Language": "zh-CN,zh;q=0.9,zh-TW;q=0.8,en;q=0.7,ko;q=0.6,ja;q=0.5",
 				"host":            "adult.contents.fc2.com",
 			},

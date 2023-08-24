@@ -69,6 +69,23 @@ func (d *FC2) findPage(url string) (string, error) {
 	return res.String(), err
 }
 
+func (d *FC2) findMagnet(url string) (string, error) {
+
+	//log.Infof("开始查询:%s", url)
+
+	res, err := base.RestyClient.R().
+		SetBody(base.Json{
+			"url":        url,
+			"httpMethod": "GET",
+		}).Post(d.Addition.SpiderServer)
+
+	if err != nil {
+		return "", err
+	}
+
+	return res.String(), err
+}
+
 func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.Obj, error) {
 
 	results := make([]model.Obj, 0)
@@ -154,7 +171,7 @@ func (d *FC2) getMagnet(file model.Obj) (string, error) {
 
 	id := file.GetID()
 
-	res, err := d.findPage(fmt.Sprintf("https://sukebei.nyaa.si/?f=0&c=0_0&q=%s&s=downloads&o=desc", id))
+	res, err := d.findMagnet(fmt.Sprintf("https://sukebei.nyaa.si/?f=0&c=0_0&q=%s&s=downloads&o=desc", id))
 	if err != nil {
 		return "", err
 	}
@@ -164,7 +181,7 @@ func (d *FC2) getMagnet(file model.Obj) (string, error) {
 		return "", nil
 	}
 
-	magPage, err := d.findPage(fmt.Sprintf("https://sukebei.nyaa.si%s", subTitles.ReplaceAllString(url, "$1")))
+	magPage, err := d.findMagnet(fmt.Sprintf("https://sukebei.nyaa.si%s", subTitles.ReplaceAllString(url, "$1")))
 	if err != nil {
 		return "", err
 	}

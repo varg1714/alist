@@ -298,13 +298,21 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string
 			return fileToObj(src), nil
 		})
 	} else {
-		d.prettyFile(resultFile.Id)
-	}
+		// Folder
+		// pretty file
+		newFileId := d.prettyFile(fileDir, resultFile.Id, name)
+		if newFileId != resultFile.Id {
+			err = db.UpdateCacheFile(magnet, newFileId)
+			if err != nil {
+				return []model.Obj{}, err
+			}
+		}
 
-	// Folder
-	return d.List(ctx, &model.Object{
-		ID: resultFile.Id,
-	}, model.ListArgs{})
+		return d.List(ctx, &model.Object{
+			ID: newFileId,
+		}, model.ListArgs{})
+
+	}
 
 }
 
@@ -365,29 +373,78 @@ func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (F
 	return resultFile, nil
 }
 
-func (d *PikPak) prettyFile(dirId string) {
+func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) string {
 
 	files, err := d.getFiles(dirId)
 	if err != nil {
 		utils.Log.Info("get file error:", err)
-		return
+		return dirId
 	}
 
 	deletingFileIds := make([]string, 0)
+	savedFileIds := make([]File, 0)
 	for _, file := range files {
 
 		size, err := strconv.Atoi(file.Size)
 		if err != nil {
 			utils.Log.Info("pretty file error:", err)
-			return
+			return dirId
 		}
 
 		if size/(1024*1024) < 50 {
 			deletingFileIds = append(deletingFileIds, file.Id)
+		} else {
+			savedFileIds = append(savedFileIds, file)
 		}
+
 	}
 
-	if len(deletingFileIds) > 0 {
+	if len(savedFileIds) == 1 {
+		// rename file
+		oldName := savedFileIds[0].Name
+		index := strings.LastIndex(oldName, ".")
+		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files/"+savedFileIds[0].Id, http.MethodPatch, func(req *resty.Request) {
+			req.SetBody(base.Json{
+				"name": fmt.Sprintf("%s.%s", name, oldName[index+1:]),
+			})
+		}, nil)
+
+		if err != nil {
+			utils.Log.Info("file rename error:", err)
+			return dirId
+		}
+
+		// move file
+		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchMove", http.MethodPost, func(req *resty.Request) {
+			req.SetBody(base.Json{
+				"ids": []string{savedFileIds[0].Id},
+				"to": base.Json{
+					"parent_id": parentDirId,
+				},
+			})
+		}, nil)
+
+		if err != nil {
+			utils.Log.Info("move file error:", err)
+			return dirId
+		}
+
+		// delete garbage file
+		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchTrash", http.MethodPost, func(req *resty.Request) {
+			req.SetBody(base.Json{
+				"ids": []string{dirId},
+			})
+		}, nil)
+		if err != nil {
+			utils.Log.Info("delete file error:", err)
+			return parentDirId
+		}
+
+		time.Sleep(1 * time.Second)
+
+		return parentDirId
+
+	} else if len(deletingFileIds) > 0 {
 
 		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchTrash", http.MethodPost, func(req *resty.Request) {
 			req.SetBody(base.Json{
@@ -400,7 +457,10 @@ func (d *PikPak) prettyFile(dirId string) {
 
 		time.Sleep(1 * time.Second)
 
+		return dirId
 	}
+
+	return dirId
 
 }
 

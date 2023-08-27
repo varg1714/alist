@@ -90,7 +90,7 @@ func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 		if err != nil || magnet == "" {
 			return results, err
 		}
-		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, magnet)
+		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir.GetPath(), dir.GetName(), magnet)
 	} else {
 		// pikPak文件
 		return results, nil

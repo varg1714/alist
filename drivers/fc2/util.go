@@ -137,11 +137,11 @@ func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.
 		}
 	}
 
-	return d.convertFilm(db.QueryByActor("fc2", dirName), results), nil
+	return d.convertFilm(dirName, db.QueryByActor("fc2", dirName), results), nil
 
 }
 
-func (d *FC2) convertFilm(actor []model.Film, results []model.Obj) []model.Obj {
+func (d *FC2) convertFilm(dirName string, actor []model.Film, results []model.Obj) []model.Obj {
 	for index, film := range actor {
 		results = append(results, &model.ObjThumb{
 			Object: model.Object{
@@ -150,6 +150,7 @@ func (d *FC2) convertFilm(actor []model.Film, results []model.Obj) []model.Obj {
 				ID:       film.Url,
 				Size:     622857143,
 				Modified: time.Now(),
+				Path:     dirName,
 			},
 			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 		})
@@ -160,6 +161,7 @@ func (d *FC2) convertFilm(actor []model.Film, results []model.Obj) []model.Obj {
 				ID:       film.Image,
 				Size:     622857143,
 				Modified: time.Now(),
+				Path:     dirName,
 			},
 			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 		})

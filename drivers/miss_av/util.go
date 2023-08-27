@@ -105,11 +105,11 @@ func (d *MIssAV) getFilms(dirName string, urlFunc func(index int) string) ([]mod
 		}
 	}
 
-	return d.convertFilm(db.QueryByActor("javdb", dirName), results), nil
+	return d.convertFilm(dirName, db.QueryByActor("javdb", dirName), results), nil
 
 }
 
-func (d *MIssAV) convertFilm(actor []model.Film, results []model.Obj) []model.Obj {
+func (d *MIssAV) convertFilm(dirName string, actor []model.Film, results []model.Obj) []model.Obj {
 	for index, film := range actor {
 		results = append(results, &model.ObjThumb{
 			Object: model.Object{
@@ -118,6 +118,7 @@ func (d *MIssAV) convertFilm(actor []model.Film, results []model.Obj) []model.Ob
 				ID:       film.Url,
 				Size:     622857143,
 				Modified: time.Now(),
+				Path:     dirName,
 			},
 			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 		})
@@ -128,6 +129,7 @@ func (d *MIssAV) convertFilm(actor []model.Film, results []model.Obj) []model.Ob
 				ID:       film.Image,
 				Size:     622857143,
 				Modified: time.Now(),
+				Path:     dirName,
 			},
 			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 		})

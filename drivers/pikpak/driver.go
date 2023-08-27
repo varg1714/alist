@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -219,27 +220,54 @@ func (d *PikPak) Put(ctx context.Context, dstDir model.Obj, stream model.FileStr
 	return err
 }
 
-func (d *PikPak) CloudDownload(ctx context.Context, dir string, obj string) ([]model.Obj, error) {
+func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string, name string, magnet string) ([]model.Obj, error) {
 
 	var resultFile File
-	fileIdCache := db.QueryFileId(obj)
+	fileIdCache := db.QueryFileId(magnet)
+
+	var fileDir string
+	parentFiles, err := d.getFiles(parentDir)
+	if err != nil {
+		return []model.Obj{}, err
+	}
+
+	for _, parentFile := range parentFiles {
+		if parentFile.Name == dir {
+			fileDir = parentFile.Id
+			break
+		}
+	}
+	if fileDir == "" {
+		var newDir CloudDownloadResp
+		_, err := d.request("https://api-drive.mypikpak.com/drive/v1/files", http.MethodPost, func(req *resty.Request) {
+			req.SetBody(base.Json{
+				"kind":      "drive#folder",
+				"parent_id": parentDir,
+				"name":      dir,
+			})
+		}, &newDir)
+		if err != nil || newDir.File.Id == "" {
+			return []model.Obj{}, err
+		}
+		fileDir = newDir.File.Id
+	}
 
 	if fileIdCache == "" {
 		// file don't exist
-		downloadFile, err := d.downloadMagnet(dir, obj)
+		downloadFile, err := d.downloadMagnet(fileDir, name, magnet)
 		resultFile = downloadFile
 		if err != nil || resultFile.Id == "" {
 			return []model.Obj{}, err
 		}
 
-		err = db.CreateCacheFile(obj, resultFile.Id)
+		err = db.CreateCacheFile(magnet, resultFile.Id)
 		if err != nil {
 			return []model.Obj{}, err
 		}
 
 	} else {
 		// get cache file
-		files, err := d.getFiles(dir)
+		files, err := d.getFiles(fileDir)
 		if err != nil {
 			return nil, err
 		}
@@ -251,12 +279,12 @@ func (d *PikPak) CloudDownload(ctx context.Context, dir string, obj string) ([]m
 		}
 
 		if resultFile.Id == "" {
-			resultFile, err = d.downloadMagnet(dir, obj)
+			resultFile, err = d.downloadMagnet(fileDir, name, magnet)
 			if err != nil || resultFile.Id == "" {
 				return []model.Obj{}, err
 			}
 
-			err = db.UpdateCacheFile(obj, resultFile.Id)
+			err = db.UpdateCacheFile(magnet, resultFile.Id)
 			if err != nil {
 				return []model.Obj{}, err
 			}
@@ -269,6 +297,8 @@ func (d *PikPak) CloudDownload(ctx context.Context, dir string, obj string) ([]m
 		return utils.SliceConvert([]File{resultFile}, func(src File) (model.Obj, error) {
 			return fileToObj(src), nil
 		})
+	} else {
+		d.prettyFile(resultFile.Id)
 	}
 
 	// Folder
@@ -278,7 +308,7 @@ func (d *PikPak) CloudDownload(ctx context.Context, dir string, obj string) ([]m
 
 }
 
-func (d *PikPak) downloadMagnet(dir string, obj string) (File, error) {
+func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (File, error) {
 
 	var resultFile File
 	var result CloudDownloadResp
@@ -292,9 +322,9 @@ func (d *PikPak) downloadMagnet(dir string, obj string) (File, error) {
 				"from":           "manual",
 			},
 			"url": base.Json{
-				"url": obj,
+				"url": magnet,
 			},
-			"parent_id": dir,
+			"parent_id": parentDir,
 		})
 	}, &result)
 
@@ -310,7 +340,7 @@ func (d *PikPak) downloadMagnet(dir string, obj string) (File, error) {
 		}
 
 		count++
-		files, err := d.getFiles(dir)
+		files, err := d.getFiles(parentDir)
 		if err != nil {
 			return resultFile, err
 		}
@@ -322,7 +352,56 @@ func (d *PikPak) downloadMagnet(dir string, obj string) (File, error) {
 		}
 	}
 
+	_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files/"+resultFile.Id, http.MethodPatch, func(req *resty.Request) {
+		req.SetBody(base.Json{
+			"name": name,
+		})
+	}, nil)
+
+	if err != nil {
+		return resultFile, nil
+	}
+
 	return resultFile, nil
+}
+
+func (d *PikPak) prettyFile(dirId string) {
+
+	files, err := d.getFiles(dirId)
+	if err != nil {
+		utils.Log.Info("get file error:", err)
+		return
+	}
+
+	deletingFileIds := make([]string, 0)
+	for _, file := range files {
+
+		size, err := strconv.Atoi(file.Size)
+		if err != nil {
+			utils.Log.Info("pretty file error:", err)
+			return
+		}
+
+		if size/(1024*1024) < 50 {
+			deletingFileIds = append(deletingFileIds, file.Id)
+		}
+	}
+
+	if len(deletingFileIds) > 0 {
+
+		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchTrash", http.MethodPost, func(req *resty.Request) {
+			req.SetBody(base.Json{
+				"ids": deletingFileIds,
+			})
+		}, nil)
+		if err != nil {
+			utils.Log.Info("pretty file error:", err)
+		}
+
+		time.Sleep(1 * time.Second)
+
+	}
+
 }
 
 var _ driver.Driver = (*PikPak)(nil)

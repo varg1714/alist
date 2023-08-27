@@ -86,7 +86,7 @@ type CloudDownloadResp struct {
 	URL        struct {
 		Kind string `json:"kind"`
 	} `json:"url"`
-	File any `json:"file"`
+	File File `json:"file"`
 	Task struct {
 		Kind       string `json:"kind"`
 		ID         string `json:"id"`

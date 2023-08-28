@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -360,9 +361,38 @@ func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (F
 		}
 	}
 
+	count = 0
+	completed := false
+	for resultFile.Kind != "drive#file" && !completed && count < 10 {
+
+		if count != 0 {
+			time.Sleep(1 * time.Second)
+		}
+
+		count++
+		files, err := d.getFiles(resultFile.Id)
+		if err != nil {
+			return resultFile, err
+		}
+		for _, tempFile := range files {
+
+			size, err := strconv.Atoi(tempFile.Size)
+			if err != nil {
+				utils.Log.Info("pretty file error:", err)
+				return resultFile, err
+			}
+
+			if size/(1024*1024) > 50 {
+				completed = true
+				break
+			}
+
+		}
+	}
+
 	_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files/"+resultFile.Id, http.MethodPatch, func(req *resty.Request) {
 		req.SetBody(base.Json{
-			"name": name,
+			"name": d.prettyName(name),
 		})
 	}, nil)
 
@@ -371,6 +401,22 @@ func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (F
 	}
 
 	return resultFile, nil
+}
+
+func (d *PikPak) prettyName(name string) string {
+
+	pattern := d.FileNameBlackChars
+	if pattern == "" {
+		pattern = "*:"
+	}
+
+	renamePattern, err := regexp.Compile(fmt.Sprintf("[%s]", pattern))
+	if err != nil {
+		utils.Log.Info("fileNameBlackChars error:", err)
+		return name
+	}
+
+	return renamePattern.ReplaceAllString(name, "")
 }
 
 func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) string {
@@ -405,7 +451,7 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) strin
 		index := strings.LastIndex(oldName, ".")
 		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files/"+savedFileIds[0].Id, http.MethodPatch, func(req *resty.Request) {
 			req.SetBody(base.Json{
-				"name": fmt.Sprintf("%s.%s", name, oldName[index+1:]),
+				"name": fmt.Sprintf("%s.%s", d.prettyName(name), oldName[index+1:]),
 			})
 		}, nil)
 

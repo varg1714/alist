@@ -87,7 +87,10 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 		if err != nil || magnet == "" {
 			return results, err
 		}
-		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir.GetPath(), dir.GetName(), magnet)
+
+		index := strings.Index(dirName, " ")
+
+		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir.GetPath(), fmt.Sprintf("%s FC2-PPV-%s %s", dirName[:index], dir.GetID(), dirName[index+1:]), magnet)
 	} else {
 		// pikPak文件
 		return results, nil

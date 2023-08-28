@@ -341,7 +341,7 @@ func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (F
 	}
 
 	var count int
-	for resultFile.Id == "" {
+	for resultFile.Id == "" && count < 10 {
 
 		if count != 0 {
 			time.Sleep(1 * time.Second)

@@ -2,7 +2,6 @@ package op
 
 import (
 	"context"
-	"os"
 	stdpath "path"
 	"time"
 
@@ -243,7 +242,7 @@ func Link(ctx context.Context, storage driver.Driver, path string, args model.Li
 	if file.IsDir() {
 		return nil, nil, errors.WithStack(errs.NotFile)
 	}
-	key := Key(storage, path) + ":" + args.IP
+	key := Key(storage, path)
 	if link, ok := linkCache.Get(key); ok {
 		return link, file, nil
 	}
@@ -253,6 +252,9 @@ func Link(ctx context.Context, storage driver.Driver, path string, args model.Li
 			return nil, errors.Wrapf(err, "failed get link")
 		}
 		if link.Expiration != nil {
+			if link.IPCacheKey {
+				key = key + ":" + args.IP
+			}
 			linkCache.Set(key, link, cache.WithEx[*model.Link](*link.Expiration))
 		}
 		return link, nil
@@ -478,18 +480,10 @@ func Remove(ctx context.Context, storage driver.Driver, path string) error {
 	return errors.WithStack(err)
 }
 
-func Put(ctx context.Context, storage driver.Driver, dstDirPath string, file *model.FileStream, up driver.UpdateProgress, lazyCache ...bool) error {
+func Put(ctx context.Context, storage driver.Driver, dstDirPath string, file model.FileStreamer, up driver.UpdateProgress, lazyCache ...bool) error {
 	if storage.Config().CheckStatus && storage.GetStorage().Status != WORK {
 		return errors.Errorf("storage not init: %s", storage.GetStorage().Status)
 	}
-	defer func() {
-		if f, ok := file.GetReadCloser().(*os.File); ok {
-			err := os.RemoveAll(f.Name())
-			if err != nil {
-				log.Errorf("failed to remove file [%s]", f.Name())
-			}
-		}
-	}()
 	defer func() {
 		if err := file.Close(); err != nil {
 			log.Errorf("failed to close file streamer, %v", err)
@@ -505,7 +499,7 @@ func Put(ctx context.Context, storage driver.Driver, dstDirPath string, file *mo
 		if fi.GetSize() == 0 {
 			err = Remove(ctx, storage, dstPath)
 			if err != nil {
-				return errors.WithMessagef(err, "failed remove file that exist and have size 0")
+				return errors.WithMessagef(err, "while uploading, failed remove existing file which size = 0")
 			}
 		} else if storage.Config().NoOverwriteUpload {
 			// try to rename old obj
@@ -514,7 +508,7 @@ func Put(ctx context.Context, storage driver.Driver, dstDirPath string, file *mo
 				return err
 			}
 		} else {
-			file.Old = fi
+			file.SetExist(fi)
 		}
 	}
 	err = MakeDir(ctx, storage, dstDirPath)
@@ -563,6 +557,9 @@ func Put(ctx context.Context, storage driver.Driver, dstDirPath string, file *mo
 			err := Remove(ctx, storage, tempPath)
 			if err != nil {
 				return err
+			} else {
+				key := Key(storage, stdpath.Join(dstDirPath, file.GetName()))
+				linkCache.Del(key)
 			}
 		}
 	}

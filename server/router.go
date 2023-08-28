@@ -39,19 +39,31 @@ func Init(e *gin.Engine) {
 
 	g.GET("/d/*path", middlewares.Down, handles.Down)
 	g.GET("/p/*path", middlewares.Down, handles.Proxy)
+	g.HEAD("/d/*path", middlewares.Down, handles.Down)
+	g.HEAD("/p/*path", middlewares.Down, handles.Proxy)
 
 	api := g.Group("/api")
 	auth := api.Group("", middlewares.Auth)
+	webauthn := api.Group("/authn", middlewares.Authn)
 
 	api.POST("/auth/login", handles.Login)
+	api.POST("/auth/login/hash", handles.LoginHash)
 	auth.GET("/me", handles.CurrentUser)
 	auth.POST("/me/update", handles.UpdateCurrent)
 	auth.POST("/auth/2fa/generate", handles.Generate2FA)
 	auth.POST("/auth/2fa/verify", handles.Verify2FA)
 
-	// github auth
+	// auth
 	api.GET("/auth/sso", handles.SSOLoginRedirect)
 	api.GET("/auth/sso_callback", handles.SSOLoginCallback)
+
+	//webauthn
+	webauthn.GET("/webauthn_begin_registration", handles.BeginAuthnRegistration)
+	webauthn.POST("/webauthn_finish_registration", handles.FinishAuthnRegistration)
+	webauthn.GET("/webauthn_begin_login", handles.BeginAuthnLogin)
+	webauthn.POST("/webauthn_finish_login", handles.FinishAuthnLogin)
+	webauthn.POST("/delete_authn", handles.DeleteAuthnLogin)
+	webauthn.GET("/getcredentials", handles.GetAuthnCredentials)
 
 	// no need auth
 	public := api.Group("/public")
@@ -82,6 +94,7 @@ func admin(g *gin.RouterGroup) {
 	user.POST("/update", handles.UpdateUser)
 	user.POST("/cancel_2fa", handles.Cancel2FAById)
 	user.POST("/delete", handles.DeleteUser)
+	user.POST("/del_cache", handles.DelUserCache)
 
 	storage := g.Group("/storage")
 	storage.GET("/list", handles.ListStorages)

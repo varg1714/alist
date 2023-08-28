@@ -27,5 +27,8 @@ output/
 /log/
 /lang/
 /daemon/
+/public/dist/*
 /!public/dist/README.md
 alist
+
+.VSCodeCounter

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/alist-org/alist/v3/internal/stream"
 	"io"
 	"net/url"
 	stdpath "path"
@@ -53,9 +54,9 @@ func (d *S3) Drop(ctx context.Context) error {
 
 func (d *S3) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 	if d.ListObjectVersion == "v2" {
-		return d.listV2(dir.GetPath())
+		return d.listV2(dir.GetPath(), args)
 	}
-	return d.listV1(dir.GetPath())
+	return d.listV1(dir.GetPath(), args)
 }
 
 func (d *S3) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
@@ -96,13 +97,13 @@ func (d *S3) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*mo
 func (d *S3) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
 	return d.Put(ctx, &model.Object{
 		Path: stdpath.Join(parentDir.GetPath(), dirName),
-	}, &model.FileStream{
+	}, &stream.FileStream{
 		Obj: &model.Object{
 			Name:     getPlaceholderName(d.Placeholder),
 			Modified: time.Now(),
 		},
-		ReadCloser: io.NopCloser(bytes.NewReader([]byte{})),
-		Mimetype:   "application/octet-stream",
+		Reader:   io.NopCloser(bytes.NewReader([]byte{})),
+		Mimetype: "application/octet-stream",
 	}, func(int) {})
 }
 

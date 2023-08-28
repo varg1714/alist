@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/alist-org/alist/v3/drivers/base"
@@ -56,7 +55,7 @@ func (x *Thunder) Init(ctx context.Context) (err error) {
 					"j",
 					"4scKJNdd7F27Hv7tbt",
 				},
-				DeviceID:          utils.GetMD5Encode(x.Username + x.Password),
+				DeviceID:          utils.GetMD5EncodeStr(x.Username + x.Password),
 				ClientID:          "Xp6vsxz_7IYVw2BB",
 				ClientSecret:      "Xp6vsy4tN9toTVdMSpomVdXpRmES",
 				ClientVersion:     "7.51.0.8196",
@@ -137,7 +136,7 @@ func (x *ThunderExpert) Init(ctx context.Context) (err error) {
 
 				DeviceID: func() string {
 					if len(x.DeviceID) != 32 {
-						return utils.GetMD5Encode(x.DeviceID)
+						return utils.GetMD5EncodeStr(x.DeviceID)
 					}
 					return x.DeviceID
 				}(),
@@ -333,13 +332,12 @@ func (xc *XunLeiCommon) Remove(ctx context.Context, obj model.Obj) error {
 }
 
 func (xc *XunLeiCommon) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {
-	tempFile, err := utils.CreateTempFile(stream.GetReadCloser())
+	tempFile, err := stream.CacheFullInTempFile()
 	if err != nil {
 		return err
 	}
 	defer func() {
 		_ = tempFile.Close()
-		_ = os.Remove(tempFile.Name())
 	}()
 
 	gcid, err := getGcid(tempFile, stream.GetSize())

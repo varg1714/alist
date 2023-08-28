@@ -9,6 +9,7 @@ type Addition struct {
 	driver.RootID
 	Username           string `json:"username" required:"true"`
 	Password           string `json:"password" required:"true"`
+	DisableMediaLink   bool   `json:"disable_media_link"`
 	FileNameBlackChars string `json:"file_name_black_chars"`
 }
 

@@ -213,21 +213,22 @@ func (d *PikPak) Put(ctx context.Context, dstDir model.Obj, stream model.FileStr
 
 func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string, name string, magnet string) ([]model.Obj, error) {
 
-	var resultFile File
-	fileIdCache := db.QueryFileId(magnet)
-
+	// 1. 获取临时目录下所有文件
 	var fileDir string
 	parentFiles, err := d.getFiles(parentDir)
 	if err != nil {
 		return []model.Obj{}, err
 	}
 
+	// 1.1 在临时目录下寻找待下载的文件夹
 	for _, parentFile := range parentFiles {
 		if parentFile.Name == dir {
 			fileDir = parentFile.Id
 			break
 		}
 	}
+
+	// 2.2 正在下载的文件所属文件夹不存在，新建文件夹
 	if fileDir == "" {
 		var newDir CloudDownloadResp
 		_, err := d.request("https://api-drive.mypikpak.com/drive/v1/files", http.MethodPost, func(req *resty.Request) {
@@ -243,65 +244,92 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string
 		fileDir = newDir.File.Id
 	}
 
-	if fileIdCache == "" {
-		// file don't exist
-		downloadFile, err := d.downloadMagnet(fileDir, name, magnet)
-		resultFile = downloadFile
-		if err != nil || resultFile.Id == "" {
-			return []model.Obj{}, err
-		}
+	// 2. 尝试获取缓存文件
+	var resultFile File
 
-		err = db.CreateCacheFile(magnet, resultFile.Id)
-		if err != nil {
-			return []model.Obj{}, err
-		}
+	// 2.1 获取缓存的文件ID
+	fileIdCache := db.QueryFileId(magnet)
 
-	} else {
-		// get cache file
-		files, err := d.getFiles(fileDir)
-		if err != nil {
-			return nil, err
+	// 2.2 判断该文件是否已下载
+	files, err := d.getFiles(fileDir)
+	if err != nil {
+		return nil, err
+	}
+	for _, tempFile := range files {
+		if tempFile.Id == fileIdCache || strings.HasPrefix(magnet, tempFile.Params.URL) {
+			resultFile = tempFile
+			break
 		}
-		for _, tempFile := range files {
-			if tempFile.Id == fileIdCache {
-				resultFile = tempFile
-				break
-			}
-		}
+	}
 
-		if resultFile.Id == "" {
-			resultFile, err = d.downloadMagnet(fileDir, name, magnet)
-			if err != nil || resultFile.Id == "" {
+	// 2.3 该文件在云盘已存在，直接返回该文件
+	if resultFile.Id != "" {
+
+		// 2.3.1 缓存此文件
+		if fileIdCache == "" {
+			err = db.CreateCacheFile(magnet, resultFile.Id)
+			if err != nil {
 				return []model.Obj{}, err
 			}
-
+		} else if fileIdCache != resultFile.Id {
 			err = db.UpdateCacheFile(magnet, resultFile.Id)
 			if err != nil {
 				return []model.Obj{}, err
 			}
 		}
 
+		// 2.3.2 返回结果
+		if resultFile.Kind == "drive#file" {
+			return utils.SliceConvert([]File{resultFile}, func(src File) (model.Obj, error) {
+				return fileToObj(src), nil
+			})
+		} else {
+			return d.List(ctx, &model.Object{
+				ID: resultFile.Id,
+			}, model.ListArgs{})
+		}
+
 	}
 
-	// File
+	// 3. 文件不存在，下载文件
+
+	// 3.1 下载文件
+	resultFile, err = d.downloadMagnet(fileDir, name, magnet)
+	if err != nil || resultFile.Id == "" {
+		return []model.Obj{}, err
+	}
+
+	// 3.2 缓存文件
 	if resultFile.Kind == "drive#file" {
+		// 3.2.1 下载结果为单文件，直接缓存
+		err = db.CreateCacheFile(magnet, resultFile.Id)
+		if err != nil {
+			return []model.Obj{}, err
+		}
+
 		return utils.SliceConvert([]File{resultFile}, func(src File) (model.Obj, error) {
 			return fileToObj(src), nil
 		})
 	} else {
-		// Folder
-		// pretty file
-		newFileId := d.prettyFile(fileDir, resultFile.Id, name)
-		if newFileId != resultFile.Id {
-			err = db.UpdateCacheFile(magnet, newFileId)
-			if err != nil {
-				return []model.Obj{}, err
-			}
+		// 3.2.2 下载结果为文件夹，进行文件夹清理
+		prettyFiles := d.prettyFile(fileDir, resultFile.Id, name)
+
+		var newFileId string
+		if len(prettyFiles) == 0 {
+			return []model.Obj{}, err
+		} else if len(prettyFiles) == 1 {
+			newFileId = prettyFiles[0].Id
+		} else {
+			newFileId = resultFile.Id
+		}
+		err = db.CreateCacheFile(magnet, newFileId)
+		if err != nil {
+			return []model.Obj{}, err
 		}
 
-		return d.List(ctx, &model.Object{
-			ID: newFileId,
-		}, model.ListArgs{})
+		return utils.SliceConvert(prettyFiles, func(src File) (model.Obj, error) {
+			return fileToObj(src), nil
+		})
 
 	}
 
@@ -409,37 +437,37 @@ func (d *PikPak) prettyName(name string) string {
 	return renamePattern.ReplaceAllString(name, "")
 }
 
-func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) string {
+func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []File {
 
 	files, err := d.getFiles(dirId)
 	if err != nil {
 		utils.Log.Info("get file error:", err)
-		return dirId
+		return []File{}
 	}
 
 	deletingFileIds := make([]string, 0)
-	savedFileIds := make([]File, 0)
+	savedFiles := make([]File, 0)
 	for _, file := range files {
 
 		size, err := strconv.Atoi(file.Size)
 		if err != nil {
 			utils.Log.Info("pretty file error:", err)
-			return dirId
+			return files
 		}
 
 		if size/(1024*1024) < 50 {
 			deletingFileIds = append(deletingFileIds, file.Id)
 		} else {
-			savedFileIds = append(savedFileIds, file)
+			savedFiles = append(savedFiles, file)
 		}
 
 	}
 
-	if len(savedFileIds) == 1 {
+	if len(savedFiles) == 1 {
 		// rename file
-		oldName := savedFileIds[0].Name
+		oldName := savedFiles[0].Name
 		index := strings.LastIndex(oldName, ".")
-		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files/"+savedFileIds[0].Id, http.MethodPatch, func(req *resty.Request) {
+		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files/"+savedFiles[0].Id, http.MethodPatch, func(req *resty.Request) {
 			req.SetBody(base.Json{
 				"name": fmt.Sprintf("%s.%s", d.prettyName(name), oldName[index+1:]),
 			})
@@ -447,13 +475,13 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) strin
 
 		if err != nil {
 			utils.Log.Info("file rename error:", err)
-			return dirId
+			return savedFiles
 		}
 
 		// move file
 		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchMove", http.MethodPost, func(req *resty.Request) {
 			req.SetBody(base.Json{
-				"ids": []string{savedFileIds[0].Id},
+				"ids": []string{savedFiles[0].Id},
 				"to": base.Json{
 					"parent_id": parentDirId,
 				},
@@ -462,7 +490,7 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) strin
 
 		if err != nil {
 			utils.Log.Info("move file error:", err)
-			return dirId
+			return savedFiles
 		}
 
 		// delete garbage file
@@ -473,12 +501,12 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) strin
 		}, nil)
 		if err != nil {
 			utils.Log.Info("delete file error:", err)
-			return parentDirId
+			return savedFiles
 		}
 
 		time.Sleep(1 * time.Second)
 
-		return parentDirId
+		return savedFiles
 
 	} else if len(deletingFileIds) > 0 {
 
@@ -493,10 +521,10 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) strin
 
 		time.Sleep(1 * time.Second)
 
-		return dirId
+		return savedFiles
 	}
 
-	return dirId
+	return []File{}
 
 }
 

@@ -267,12 +267,12 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string
 
 		// 2.3.1 缓存此文件
 		if fileIdCache == "" {
-			err = db.CreateCacheFile(magnet, resultFile.Id)
+			err = db.CreateCacheFile(magnet, resultFile.Id, name)
 			if err != nil {
 				return []model.Obj{}, err
 			}
 		} else if fileIdCache != resultFile.Id {
-			err = db.UpdateCacheFile(magnet, resultFile.Id)
+			err = db.UpdateCacheFile(magnet, resultFile.Id, name)
 			if err != nil {
 				return []model.Obj{}, err
 			}
@@ -302,7 +302,7 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string
 	// 3.2 缓存文件
 	if resultFile.Kind == "drive#file" {
 		// 3.2.1 下载结果为单文件，直接缓存
-		err = db.CreateCacheFile(magnet, resultFile.Id)
+		err = db.CreateCacheFile(magnet, resultFile.Id, name)
 		if err != nil {
 			return []model.Obj{}, err
 		}
@@ -322,7 +322,7 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string
 		} else {
 			newFileId = resultFile.Id
 		}
-		err = db.CreateCacheFile(magnet, newFileId)
+		err = db.CreateCacheFile(magnet, newFileId, name)
 		if err != nil {
 			return []model.Obj{}, err
 		}

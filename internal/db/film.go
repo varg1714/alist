@@ -3,6 +3,7 @@ package db
 import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/pkg/errors"
+	"strings"
 	"time"
 )
 
@@ -77,22 +78,38 @@ func QueryFileId(magnet string) string {
 
 }
 
-func CreateCacheFile(magnet string, fileId string) error {
+func CreateCacheFile(magnet string, fileId string, name string) error {
+
+	var code string
+	split := strings.Split(name, " ")
+	if len(split) >= 3 {
+		code = split[1]
+	}
 
 	magnetCache := model.MagnetCache{
 		Magnet: magnet,
 		FileId: fileId,
+		Name:   name,
+		Code:   code,
 	}
 
 	return errors.WithStack(db.Create(magnetCache).Error)
 
 }
 
-func UpdateCacheFile(magnet string, fileId string) error {
+func UpdateCacheFile(magnet string, fileId string, name string) error {
+
+	var code string
+	split := strings.Split(name, " ")
+	if len(split) >= 3 {
+		code = split[1]
+	}
 
 	magnetCache := model.MagnetCache{
 		Magnet: magnet,
 		FileId: fileId,
+		Name:   name,
+		Code:   code,
 	}
 
 	return errors.WithStack(db.Where("magnet = ?", magnet).Save(magnetCache).Error)

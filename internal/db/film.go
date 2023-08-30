@@ -3,6 +3,7 @@ package db
 import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/pkg/errors"
+	"time"
 )
 
 func CreateFilms(source string, actor string, models []model.ObjThumb) error {
@@ -13,13 +14,16 @@ func CreateFilms(source string, actor string, models []model.ObjThumb) error {
 
 	films := make([]model.Film, 0)
 
+	now := time.Now()
 	for _, obj := range models {
+		now = now.Add(-1 * time.Hour)
 		films = append(films, model.Film{
-			Url:    obj.GetID(),
-			Name:   obj.GetName(),
-			Image:  obj.Thumb(),
-			Source: source,
-			Actor:  actor,
+			Url:       obj.GetID(),
+			Name:      obj.GetName(),
+			Image:     obj.Thumb(),
+			Source:    source,
+			Actor:     actor,
+			CreatedAt: now,
 		})
 	}
 
@@ -35,7 +39,7 @@ func QueryByActor(source string, actor string) []model.Film {
 		Actor:  actor,
 	}
 
-	db.Where(film).Find(&films)
+	db.Where(film).Order("created_at desc").Find(&films)
 
 	return films
 

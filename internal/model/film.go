@@ -1,11 +1,14 @@
 package model
 
+import "time"
+
 type Film struct {
-	Url    string `json:"url" gorm:"index"`
-	Name   string `json:"name"`
-	Image  string `json:"image"`
-	Source string `json:"source"`
-	Actor  string `json:"actor"`
+	Url       string    `json:"url" gorm:"index"`
+	Name      string    `json:"name"`
+	Image     string    `json:"image"`
+	Source    string    `json:"source"`
+	Actor     string    `json:"actor"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type MagnetCache struct {

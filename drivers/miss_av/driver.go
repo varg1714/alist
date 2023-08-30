@@ -120,11 +120,6 @@ func (d *MIssAV) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 
 func (d *MIssAV) Remove(ctx context.Context, obj model.Obj) error {
 
-	err := db.DeleteActor(strconv.Itoa(int(d.ID)), obj.GetName())
-	if err != nil {
-		return err
-	}
-
 	return db.DeleteByActor("javdb", obj.GetName())
 
 }

@@ -242,13 +242,7 @@ func (d *AliDrive) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *AliDrive) Remove(ctx context.Context, obj model.Obj) error {
-	_, err, _ := d.request("https://api.aliyundrive.com/v2/recyclebin/trash", http.MethodPost, func(req *resty.Request) {
-		req.SetBody(base.Json{
-			"drive_id": d.DriveId,
-			"file_id":  obj.GetID(),
-		})
-	}, nil)
-	return err
+	return db.DeleteVirtualFile(strconv.Itoa(int(d.ID)), obj.GetName())
 }
 
 func (d *AliDrive) Put(ctx context.Context, dstDir model.Obj, streamer model.FileStreamer, up driver.UpdateProgress) error {

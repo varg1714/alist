@@ -174,3 +174,9 @@ func CreateVirtualFile(storageId string, name string, shareId string, parentDir 
 	return errors.WithStack(db.Create(file).Error)
 
 }
+
+func DeleteVirtualFile(storageId string, name string) error {
+
+	return errors.WithStack(db.Where("storage_id = ?", storageId).Where("name = ?", name).Delete(&model.VirtualFile{}).Error)
+
+}

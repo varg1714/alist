@@ -13,6 +13,8 @@ type Addition struct {
 	OrderDirection string `json:"order_direction" type:"select" options:"ASC,DESC"`
 	RapidUpload    bool   `json:"rapid_upload"`
 	InternalUpload bool   `json:"internal_upload"`
+	StoragePath    string `json:"storage_path" required:"true"`
+	TempFolderPath string `json:"temp_folder_path" required:"true"`
 }
 
 var config = driver.Config{

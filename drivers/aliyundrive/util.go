@@ -35,7 +35,7 @@ func (d *AliDrive) createSession() error {
 			"refreshToken": d.RefreshToken,
 		})
 	}, nil)
-	if err == nil{
+	if err == nil {
 		state.retry = 0
 	}
 	return err
@@ -158,7 +158,7 @@ func (d *AliDrive) getFiles(fileId string) ([]File, error) {
 			"video_thumbnail_process": "video/snapshot,t_0,f_jpg,ar_auto,w_300",
 			"url_expire_sec":          14400,
 		}
-		_, err, _ := d.request("https://api.aliyundrive.com/v2/file/list", http.MethodPost, func(req *resty.Request) {
+		_, err, _ := d.request("https://api.aliyundrive.com/adrive/v3/file/list", http.MethodPost, func(req *resty.Request) {
 			req.SetBody(data)
 		}, &resp)
 
@@ -169,6 +169,68 @@ func (d *AliDrive) getFiles(fileId string) ([]File, error) {
 		res = append(res, resp.Items...)
 	}
 	return res, nil
+}
+
+func (d *AliDrive) getShareFiles(shareId string, parentFileId string) ([]File, error) {
+
+	token, err := d.getShareToken(shareId)
+	if err != nil {
+		return nil, err
+	}
+
+	marker := "first"
+	res := make([]File, 0)
+	for marker != "" {
+		if marker == "first" {
+			marker = ""
+		}
+		var resp Files
+		data := base.Json{
+			"share_id":                shareId,
+			"parent_file_id":          parentFileId,
+			"limit":                   200,
+			"image_thumbnail_process": "image/resize,w_256/format,jpeg",
+			"image_url_process":       "image/resize,w_1920/format,jpeg/interlace,1",
+			"video_thumbnail_process": "video/snapshot,t_1000,f_jpg,ar_auto,w_256",
+			"order_by":                "name",
+			"order_direction":         "ASC",
+			"marker":                  marker,
+		}
+		_, err, _ := d.request("https://api.aliyundrive.com/adrive/v2/file/list_by_share", http.MethodPost, func(req *resty.Request) {
+			req.SetBody(data)
+			req.SetHeader("x-share-token", token)
+		}, &resp)
+
+		if err != nil {
+			return nil, err
+		}
+		marker = resp.NextMarker
+
+		for _, item := range resp.Items {
+			if item.Size/(1024*1024) > 50 {
+				res = append(res, item)
+			}
+		}
+
+	}
+	return res, nil
+}
+
+func (d *AliDrive) getShareToken(shareId string) (string, error) {
+
+	var shareResp ShareResp
+	data := base.Json{
+		"share_id": shareId,
+	}
+	_, err, _ := d.request("https://api.aliyundrive.com/v2/share_link/get_share_token", http.MethodPost, func(req *resty.Request) {
+		req.SetBody(data)
+	}, &shareResp)
+
+	if err != nil {
+		return "", err
+	}
+
+	return shareResp.ShareToken, nil
 }
 
 func (d *AliDrive) batch(srcId, dstId string, url string) error {
@@ -201,4 +263,45 @@ func (d *AliDrive) batch(srcId, dstId string, url string) error {
 		return nil
 	}
 	return errors.New(string(res))
+}
+
+func (d *AliDrive) SaveShare(shareId string, srcId string, dstId string) (string, error) {
+
+	token, err := d.getShareToken(shareId)
+	if err != nil {
+		utils.Log.Warn("获取shareToken错误:", token, err)
+		return "", err
+	}
+
+	var shareSaveResp ShareSaveResp
+
+	_, err, _ = d.request("https://api.aliyundrive.com/v3/batch", http.MethodPost, func(req *resty.Request) {
+		req.SetHeader("x-share-token", token)
+		req.SetBody(base.Json{
+			"requests": []base.Json{
+				{
+					"headers": base.Json{
+						"Content-Type": "application/json",
+					},
+					"method": "POST",
+					"id":     srcId,
+					"body": base.Json{
+						"file_id":           srcId,
+						"share_id":          shareId,
+						"auto_rename":       true,
+						"to_parent_file_id": dstId,
+						"drive_id":          d.DriveId,
+						"to_drive_id":       d.DriveId,
+					},
+					"url": "/file/copy",
+				},
+			},
+			"resource": "file",
+		})
+	}, &shareSaveResp)
+	if err != nil || len(shareSaveResp.Responses) == 0 {
+		utils.Log.Warn("转存错误:", shareSaveResp, err)
+		return "", err
+	}
+	return shareSaveResp.Responses[0].Body.FileID, err
 }

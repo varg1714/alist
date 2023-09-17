@@ -23,3 +23,12 @@ type Actor struct {
 	Name string `json:"name"`
 	Url  string `json:"url"`
 }
+
+type VirtualFile struct {
+	StorageId  string `json:"storage_id"`
+	Name       string `json:"name"`
+	ShareId    string `json:"share_id"`
+	ParentDir  string `json:"parent_dir"`
+	SourceName string `json:"source_name"`
+	StartNum   string `json:"start_num"`
+}

@@ -54,3 +54,30 @@ type UploadResp struct {
 
 	RapidUpload bool `json:"rapid_upload"`
 }
+
+type ShareResp struct {
+	ExpireTime time.Time `json:"expire_time"`
+	ExpiresIn  int       `json:"expires_in"`
+	ShareToken string    `json:"share_token"`
+}
+
+type ShareSaveResp struct {
+	Responses []struct {
+		Body struct {
+			DomainID string `json:"domain_id"`
+			DriveID  string `json:"drive_id"`
+			FileID   string `json:"file_id"`
+		} `json:"body"`
+		ID     string `json:"id"`
+		Status int    `json:"status"`
+	} `json:"responses"`
+	DistributorCouponInfo struct {
+		Title           string `json:"title"`
+		Description     string `json:"description"`
+		ButtonText      string `json:"buttonText"`
+		ButtonSchemaURL string `json:"buttonSchemaUrl"`
+		DisplayValidity string `json:"displayValidity"`
+		MaxSaving       string `json:"maxSaving"`
+		DisplayCurrency string `json:"displayCurrency"`
+	} `json:"distributorCouponInfo"`
+}

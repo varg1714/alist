@@ -146,3 +146,31 @@ func DeleteActor(source string, actor string) error {
 	return errors.WithStack(db.Where("dir = ?", source).Where("name = ?", actor).Delete(&model.Actor{}).Error)
 
 }
+
+func QueryVirtualFilms(storageId string) []model.VirtualFile {
+
+	virtualFiles := make([]model.VirtualFile, 0)
+	file := model.VirtualFile{
+		StorageId: storageId,
+	}
+
+	db.Where(file).Find(&virtualFiles)
+
+	return virtualFiles
+
+}
+
+func CreateVirtualFile(storageId string, name string, shareId string, parentDir string, sourceName string, startNum string) error {
+
+	file := model.VirtualFile{
+		StorageId:  storageId,
+		Name:       name,
+		ShareId:    shareId,
+		ParentDir:  parentDir,
+		SourceName: sourceName,
+		StartNum:   startNum,
+	}
+
+	return errors.WithStack(db.Create(file).Error)
+
+}

@@ -6,19 +6,24 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/alist-org/alist/v3/drivers/aliyundrive_open"
+	"github.com/alist-org/alist/v3/internal/db"
+	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/internal/stream"
 	"io"
 	"math"
 	"math/big"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/conf"
 	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/cron"
 	"github.com/alist-org/alist/v3/pkg/utils"
@@ -90,46 +95,128 @@ func (d *AliDrive) Drop(ctx context.Context) error {
 }
 
 func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
-	files, err := d.getFiles(dir.GetID())
-	if err != nil {
-		return nil, err
+
+	categories := make(map[string]model.VirtualFile)
+	results := make([]model.Obj, 0)
+
+	dirName := dir.GetName()
+
+	virtualFilms := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)))
+	for _, virtualFilm := range virtualFilms {
+		categories[virtualFilm.Name] = virtualFilm
 	}
-	return utils.SliceConvert(files, func(src File) (model.Obj, error) {
-		return fileToObj(src), nil
-	})
+
+	if d.RootID.GetRootId() == dirName {
+		// 1. 顶级目录
+		for category := range categories {
+			results = append(results, &model.ObjThumb{
+				Object: model.Object{
+					Name:     category,
+					IsFolder: true,
+					ID:       category,
+					Size:     622857143,
+					Modified: time.Now(),
+				},
+			})
+		}
+		return results, nil
+	}
+
+	if file, exist := categories[dirName]; exist {
+		// 分享文件夹
+		files, err := d.getShareFiles(file.ShareId, file.ParentDir)
+		//files, err := d.getFiles(dir.GetID())
+		if err != nil {
+			return nil, err
+		}
+
+		sourceName := file.SourceName
+		startNum := file.StartNum
+		tempInt, increaseErr := strconv.Atoi(startNum)
+
+		return utils.SliceConvert(files, func(src File) (model.Obj, error) {
+
+			obj := fileToObj(src)
+
+			if sourceName != "" && increaseErr == nil {
+
+				var suffix string
+				index := strings.LastIndex(obj.Name, ".")
+
+				if index != -1 {
+					suffix = obj.Name[index:]
+				}
+				obj.Name = sourceName + startNum + suffix
+				tempInt, increaseErr = strconv.Atoi(startNum)
+
+				tempInt += 1
+				if len(strconv.Itoa(tempInt)) < len(file.StartNum) {
+					padLength := len(file.StartNum) - len(strconv.Itoa(tempInt))
+					pad := strings.Repeat("0", padLength)
+					startNum = pad + strconv.Itoa(tempInt)
+				} else {
+					startNum = strconv.Itoa(tempInt)
+				}
+
+			}
+
+			obj.Path = file.ShareId
+
+			return obj, nil
+
+		})
+
+	} else {
+		// 分享文件的子文件夹
+		return results, nil
+	}
+
 }
 
 func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
-	data := base.Json{
-		"drive_id":   d.DriveId,
-		"file_id":    file.GetID(),
-		"expire_sec": 14400,
+
+	storage := op.GetBalancedStorage(d.StoragePath)
+	aliDrive, ok := storage.(*aliyundrive_open.AliyundriveOpen)
+	if !ok {
+		return &model.Link{
+			URL: "",
+		}, nil
 	}
-	res, err, _ := d.request("https://api.aliyundrive.com/v2/file/get_download_url", http.MethodPost, func(req *resty.Request) {
-		req.SetBody(data)
-	}, nil)
+
+	// 转存
+	utils.Log.Infof("开始转存文件:[%s]\n", file.GetName())
+	shareFileId, err := d.SaveShare(file.GetPath(), file.GetID(), d.TempFolderPath)
 	if err != nil {
-		return nil, err
+		return &model.Link{
+			URL: "",
+		}, nil
 	}
-	return &model.Link{
-		Header: http.Header{
-			"Referer": []string{"https://www.aliyundrive.com/"},
-		},
-		URL: utils.Json.Get(res, "url").ToString(),
-	}, nil
+
+	return aliDrive.Link(ctx, &model.Object{
+		ID: shareFileId,
+	}, args)
+
 }
 
 func (d *AliDrive) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
-	_, err, _ := d.request("https://api.aliyundrive.com/adrive/v2/file/createWithFolders", http.MethodPost, func(req *resty.Request) {
-		req.SetBody(base.Json{
-			"check_name_mode": "refuse",
-			"drive_id":        d.DriveId,
-			"name":            dirName,
-			"parent_file_id":  parentDir.GetID(),
-			"type":            "folder",
-		})
-	}, nil)
-	return err
+
+	split := strings.Split(dirName, " ")
+
+	if len(split) == 3 {
+		err := db.CreateVirtualFile(strconv.Itoa(int(d.ID)), split[0], split[1], split[2], "", "")
+		if err != nil {
+			return err
+		}
+	} else if len(split) == 5 {
+		err := db.CreateVirtualFile(strconv.Itoa(int(d.ID)), split[0], split[1], split[2], split[3], split[4])
+		if err != nil {
+			return err
+		}
+	} else {
+		return errors.New("illegal dirName")
+	}
+
+	return nil
 }
 
 func (d *AliDrive) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
@@ -325,30 +412,7 @@ func (d *AliDrive) Put(ctx context.Context, dstDir model.Obj, streamer model.Fil
 }
 
 func (d *AliDrive) Other(ctx context.Context, args model.OtherArgs) (interface{}, error) {
-	var resp base.Json
-	var url string
-	data := base.Json{
-		"drive_id": d.DriveId,
-		"file_id":  args.Obj.GetID(),
-	}
-	switch args.Method {
-	case "doc_preview":
-		url = "https://api.aliyundrive.com/v2/file/get_office_preview_url"
-		data["access_token"] = d.AccessToken
-	case "video_preview":
-		url = "https://api.aliyundrive.com/v2/file/get_video_preview_play_info"
-		data["category"] = "live_transcoding"
-		data["url_expire_sec"] = 14400
-	default:
-		return nil, errs.NotSupport
-	}
-	_, err, _ := d.request(url, http.MethodPost, func(req *resty.Request) {
-		req.SetBody(data)
-	}, &resp)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
+	return nil, nil
 }
 
 var _ driver.Driver = (*AliDrive)(nil)

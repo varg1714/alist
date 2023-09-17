@@ -207,7 +207,7 @@ func (d *AliDrive) getShareFiles(shareId string, parentFileId string) ([]File, e
 		marker = resp.NextMarker
 
 		for _, item := range resp.Items {
-			if item.Size/(1024*1024) > 50 {
+			if item.Size/(1024*1024) > 50 || item.Size == 0 {
 				res = append(res, item)
 			}
 		}

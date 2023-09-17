@@ -137,6 +137,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 		return utils.SliceConvert(files, func(src File) (model.Obj, error) {
 
 			obj := fileToObj(src)
+			obj.Path = file.ShareId
 
 			if sourceName != "" && increaseErr == nil {
 
@@ -167,8 +168,17 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 		})
 
 	} else {
+		files, err := d.getShareFiles(dir.GetPath(), dir.GetID())
+		//files, err := d.getFiles(dir.GetID())
+		if err != nil {
+			return nil, err
+		}
 		// 分享文件的子文件夹
-		return results, nil
+		return utils.SliceConvert(files, func(src File) (model.Obj, error) {
+			obj := fileToObj(src)
+			obj.Path = dir.GetPath()
+			return obj, nil
+		})
 	}
 
 }

@@ -147,11 +147,27 @@ func DeleteActor(source string, actor string) error {
 
 }
 
-func QueryVirtualFilms(storageId string) []model.VirtualFile {
+func QueryVirtualFileNames(storageId string) []string {
+
+	names := make([]model.VirtualFile, 0)
+	db.Select("name").Where("storage_id = ?", storageId).Find(&names)
+
+	result := make([]string, 0)
+
+	for _, film := range names {
+		result = append(result, film.Name)
+	}
+
+	return result
+
+}
+
+func QueryVirtualFilms(storageId string, name string) []model.VirtualFile {
 
 	virtualFiles := make([]model.VirtualFile, 0)
 	file := model.VirtualFile{
 		StorageId: storageId,
+		Name:      name,
 	}
 
 	db.Where(file).Find(&virtualFiles)
@@ -160,18 +176,9 @@ func QueryVirtualFilms(storageId string) []model.VirtualFile {
 
 }
 
-func CreateVirtualFile(storageId string, name string, shareId string, parentDir string, sourceName string, startNum string) error {
+func CreateVirtualFile(virtualFiles []model.VirtualFile) error {
 
-	file := model.VirtualFile{
-		StorageId:  storageId,
-		Name:       name,
-		ShareId:    shareId,
-		ParentDir:  parentDir,
-		SourceName: sourceName,
-		StartNum:   startNum,
-	}
-
-	return errors.WithStack(db.Create(file).Error)
+	return errors.WithStack(db.CreateInBatches(virtualFiles, 100).Error)
 
 }
 

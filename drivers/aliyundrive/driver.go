@@ -6,7 +6,6 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/aliyundrive_open"
 	"github.com/alist-org/alist/v3/internal/db"
@@ -96,24 +95,20 @@ func (d *AliDrive) Drop(ctx context.Context) error {
 
 func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 
-	categories := make(map[string]model.VirtualFile)
 	results := make([]model.Obj, 0)
 
 	dirName := dir.GetName()
 
-	virtualFilms := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)))
-	for _, virtualFilm := range virtualFilms {
-		categories[virtualFilm.Name] = virtualFilm
-	}
+	virtualNames := db.QueryVirtualFileNames(strconv.Itoa(int(d.ID)))
 
 	if d.RootID.GetRootId() == dirName {
 		// 1. 顶级目录
-		for category := range categories {
+		for category := range virtualNames {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
-					Name:     category,
+					Name:     virtualNames[category],
 					IsFolder: true,
-					ID:       category,
+					ID:       virtualNames[category],
 					Size:     622857143,
 					Modified: time.Now(),
 				},
@@ -122,46 +117,47 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 		return results, nil
 	}
 
-	if file, exist := categories[dirName]; exist {
+	if utils.SliceContains(virtualNames, dirName) {
 		// 分享文件夹
-		files, err := d.getShareFiles(file.ShareId, file.ParentDir)
-		//files, err := d.getFiles(dir.GetID())
+
+		virtualFiles := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)), dirName)
+
+		files, err := d.getShareFiles(virtualFiles[0].ShareId, virtualFiles[0].ParentDir)
 		if err != nil {
 			return nil, err
 		}
 
-		sourceName := file.SourceName
-		startNum := file.StartNum
-		tempInt, increaseErr := strconv.Atoi(startNum)
-
+		fileIndex := 0
 		return utils.SliceConvert(files, func(src File) (model.Obj, error) {
 
 			obj := fileToObj(src)
-			obj.Path = file.ShareId
+			obj.Path = virtualFiles[0].ShareId
 
-			if sourceName != "" && increaseErr == nil {
+			for testIndex := range virtualFiles {
+				if replace(virtualFiles[testIndex], fileIndex) {
 
-				var suffix string
-				index := strings.LastIndex(obj.Name, ".")
+					var suffix string
+					index := strings.LastIndex(obj.Name, ".")
+					if index != -1 {
+						suffix = obj.Name[index:]
+					}
 
-				if index != -1 {
-					suffix = obj.Name[index:]
+					tempNum := ""
+					if virtualFiles[testIndex].StartNum != -1 {
+						tempNum = strconv.Itoa(virtualFiles[testIndex].StartNum)
+						if len(tempNum) == 1 {
+							tempNum = "0" + tempNum
+						}
+					}
+
+					obj.Name = virtualFiles[testIndex].SourceName + tempNum + suffix
+					virtualFiles[testIndex].StartNum += 1
+
+					break
 				}
-				obj.Name = sourceName + startNum + suffix
-				tempInt, increaseErr = strconv.Atoi(startNum)
-
-				tempInt += 1
-				if len(strconv.Itoa(tempInt)) < len(file.StartNum) {
-					padLength := len(file.StartNum) - len(strconv.Itoa(tempInt))
-					pad := strings.Repeat("0", padLength)
-					startNum = pad + strconv.Itoa(tempInt)
-				} else {
-					startNum = strconv.Itoa(tempInt)
-				}
-
 			}
 
-			obj.Path = file.ShareId
+			fileIndex++
 
 			return obj, nil
 
@@ -210,23 +206,14 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 
 func (d *AliDrive) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
 
-	split := strings.Split(dirName, " ")
-
-	if len(split) == 3 {
-		err := db.CreateVirtualFile(strconv.Itoa(int(d.ID)), split[0], split[1], split[2], "", "")
-		if err != nil {
-			return err
-		}
-	} else if len(split) == 5 {
-		err := db.CreateVirtualFile(strconv.Itoa(int(d.ID)), split[0], split[1], split[2], split[3], split[4])
-		if err != nil {
-			return err
-		}
-	} else {
-		return errors.New("illegal dirName")
+	var req VirtualDirReq
+	err := utils.Json.Unmarshal([]byte(dirName), &req)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	return db.CreateVirtualFile(dirToVirtualFile(strconv.Itoa(int(d.ID)), req))
+
 }
 
 func (d *AliDrive) Move(ctx context.Context, srcObj, dstDir model.Obj) error {

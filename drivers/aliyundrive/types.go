@@ -81,3 +81,45 @@ type ShareSaveResp struct {
 		DisplayCurrency string `json:"displayCurrency"`
 	} `json:"distributorCouponInfo"`
 }
+
+type VirtualDirReq struct {
+	Name      string `json:"name"`
+	ShareID   string `json:"shareId"`
+	ParentDir string `json:"parentDir"`
+	Replace   []struct {
+		Start      int    `json:"start"`
+		End        int    `json:"end"`
+		SourceName string `json:"sourceName"`
+		StartNum   int    `json:"startNum"`
+	} `json:"replace"`
+}
+
+func dirToVirtualFile(storageId string, req VirtualDirReq) []model.VirtualFile {
+
+	files := make([]model.VirtualFile, 0)
+
+	for index := range req.Replace {
+		files = append(files, model.VirtualFile{
+			StorageId:  storageId,
+			Name:       req.Name,
+			ShareId:    req.ShareID,
+			ParentDir:  req.ParentDir,
+			SourceName: req.Replace[index].SourceName,
+			StartNum:   req.Replace[index].StartNum,
+			Start:      req.Replace[index].Start,
+			End:        req.Replace[index].End,
+		})
+	}
+
+	if len(files) == 0 {
+		files = append(files, model.VirtualFile{
+			StorageId: storageId,
+			Name:      req.Name,
+			ShareId:   req.ShareID,
+			ParentDir: req.ParentDir,
+		})
+	}
+
+	return files
+
+}

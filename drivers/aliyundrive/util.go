@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/alist-org/alist/v3/internal/model"
 	"net/http"
 
 	"github.com/alist-org/alist/v3/drivers/base"
@@ -207,7 +208,7 @@ func (d *AliDrive) getShareFiles(shareId string, parentFileId string) ([]File, e
 		marker = resp.NextMarker
 
 		for _, item := range resp.Items {
-			if item.Size/(1024*1024) > 50 || item.Size == 0 {
+			if item.Size/(1024*1024) > 50 || item.Type == "folder" {
 				res = append(res, item)
 			}
 		}
@@ -304,4 +305,20 @@ func (d *AliDrive) SaveShare(shareId string, srcId string, dstId string) (string
 		return "", err
 	}
 	return shareSaveResp.Responses[0].Body.FileID, err
+}
+
+func replace(test model.VirtualFile, index int) bool {
+
+	if test.SourceName == "" {
+		return false
+	}
+
+	if index >= test.Start && ((index <= test.End) || (test.End == -1)) {
+		return true
+	} else if test.Start == -1 && test.End == -1 {
+		return true
+	}
+
+	return false
+
 }

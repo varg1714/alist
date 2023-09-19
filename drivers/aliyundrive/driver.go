@@ -126,7 +126,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 		files, err := d.getShareFiles(virtualFiles[0].ShareId, virtualFiles[0].ParentDir)
 		if err != nil {
 			utils.Log.Warnf("list file error:[%s],msg:[%s]\n", dirName, err.Error())
-			return nil, err
+			return results, nil
 		}
 
 		fileIndex := 0

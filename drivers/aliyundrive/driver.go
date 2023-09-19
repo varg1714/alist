@@ -98,6 +98,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 	results := make([]model.Obj, 0)
 
 	dirName := dir.GetName()
+	utils.Log.Infof("list file:[%s]\n", dirName)
 
 	virtualNames := db.QueryVirtualFileNames(strconv.Itoa(int(d.ID)))
 
@@ -124,6 +125,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 
 		files, err := d.getShareFiles(virtualFiles[0].ShareId, virtualFiles[0].ParentDir)
 		if err != nil {
+			utils.Log.Warnf("list file error:[%s],msg:[%s]\n", dirName, err.Error())
 			return nil, err
 		}
 

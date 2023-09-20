@@ -33,4 +33,5 @@ type VirtualFile struct {
 	End        int    `json:"end" gorm:"default -1"`
 	SourceName string `json:"source_name"`
 	StartNum   int    `json:"start_num"`
+	Type       int    `json:"type"`
 }

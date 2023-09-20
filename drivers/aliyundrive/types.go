@@ -91,6 +91,7 @@ type VirtualDirReq struct {
 		End        int    `json:"end"`
 		SourceName string `json:"sourceName"`
 		StartNum   int    `json:"startNum"`
+		Type       int    `json:"type"`
 	} `json:"replace"`
 }
 
@@ -108,6 +109,7 @@ func dirToVirtualFile(storageId string, req VirtualDirReq) []model.VirtualFile {
 			StartNum:   req.Replace[index].StartNum,
 			Start:      req.Replace[index].Start,
 			End:        req.Replace[index].End,
+			Type:       req.Replace[index].Type,
 		})
 	}
 

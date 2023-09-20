@@ -129,14 +129,20 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 			return results, nil
 		}
 
-		fileIndex := 0
-		return utils.SliceConvert(files, func(src File) (model.Obj, error) {
-
-			obj := fileToObj(src)
-			obj.Path = virtualFiles[0].ShareId
+		for fileIndex := range files {
 
 			for testIndex := range virtualFiles {
+
 				if replace(virtualFiles[testIndex], fileIndex) {
+
+					// skip this file
+					if virtualFiles[testIndex].Type == 1 {
+						break
+					}
+
+					// transfer file
+					obj := fileToObj(files[fileIndex])
+					obj.Path = virtualFiles[0].ShareId
 
 					var suffix string
 					index := strings.LastIndex(obj.Name, ".")
@@ -155,15 +161,16 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 					obj.Name = virtualFiles[testIndex].SourceName + tempNum + suffix
 					virtualFiles[testIndex].StartNum += 1
 
+					results = append(results, obj)
+
 					break
 				}
+
 			}
 
-			fileIndex++
+		}
 
-			return obj, nil
-
-		})
+		return results, nil
 
 	} else {
 		files, err := d.getShareFiles(dir.GetPath(), dir.GetID())

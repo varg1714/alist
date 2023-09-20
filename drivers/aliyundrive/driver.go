@@ -131,18 +131,21 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 
 		for fileIndex := range files {
 
+			// transfer file
+			obj := fileToObj(files[fileIndex])
+			obj.Path = virtualFiles[0].ShareId
+
+			appendFile := true
+
 			for testIndex := range virtualFiles {
 
 				if replace(virtualFiles[testIndex], fileIndex) {
 
 					// skip this file
 					if virtualFiles[testIndex].Type == 1 {
+						appendFile = false
 						break
 					}
-
-					// transfer file
-					obj := fileToObj(files[fileIndex])
-					obj.Path = virtualFiles[0].ShareId
 
 					var suffix string
 					index := strings.LastIndex(obj.Name, ".")
@@ -162,10 +165,15 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 					virtualFiles[testIndex].StartNum += 1
 
 					results = append(results, obj)
+					appendFile = false
 
 					break
 				}
 
+			}
+
+			if appendFile {
+				results = append(results, obj)
 			}
 
 		}

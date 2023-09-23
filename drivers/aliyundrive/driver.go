@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/aliyundrive_open"
 	"github.com/alist-org/alist/v3/internal/db"
@@ -123,7 +124,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 
 		virtualFiles := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)), dirName)
 
-		files, err := d.getShareFiles(virtualFiles[0].ShareId, virtualFiles[0].ParentDir)
+		files, err := d.getShareFiles(virtualFiles[0].ShareId, virtualFiles[0].ParentDir, virtualFiles[0].AppendSubFolder == 1)
 		if err != nil {
 			utils.Log.Warnf("list file error:[%s],msg:[%s]\n", dirName, err.Error())
 			return results, nil
@@ -181,7 +182,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 		return results, nil
 
 	} else {
-		files, err := d.getShareFiles(dir.GetPath(), dir.GetID())
+		files, err := d.getShareFiles(dir.GetPath(), dir.GetID(), false)
 		//files, err := d.getFiles(dir.GetID())
 		if err != nil {
 			return nil, err
@@ -227,6 +228,11 @@ func (d *AliDrive) MakeDir(ctx context.Context, parentDir model.Obj, dirName str
 	err := utils.Json.Unmarshal([]byte(dirName), &req)
 	if err != nil {
 		return err
+	}
+
+	virtualFiles := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)), req.Name)
+	if len(virtualFiles) > 0 {
+		return errors.New("文件夹已存在")
 	}
 
 	return db.CreateVirtualFile(dirToVirtualFile(strconv.Itoa(int(d.ID)), req))

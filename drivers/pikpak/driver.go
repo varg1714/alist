@@ -400,7 +400,7 @@ func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (F
 				return resultFile, err
 			}
 
-			if size/(1024*1024) > 50 {
+			if size/(1024*1024) > 100 {
 				completed = true
 				break
 			}

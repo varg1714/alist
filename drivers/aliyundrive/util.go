@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/alist-org/alist/v3/pkg/generic"
 	"net/http"
+	"time"
 
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/op"
@@ -172,48 +174,65 @@ func (d *AliDrive) getFiles(fileId string) ([]File, error) {
 	return res, nil
 }
 
-func (d *AliDrive) getShareFiles(shareId string, parentFileId string) ([]File, error) {
+func (d *AliDrive) getShareFiles(shareId string, parentFileId string, appendSubFolder bool) ([]File, error) {
 
 	token, err := d.getShareToken(shareId)
 	if err != nil {
 		return nil, err
 	}
 
-	marker := "first"
 	res := make([]File, 0)
-	for marker != "" {
-		if marker == "first" {
-			marker = ""
-		}
-		var resp Files
-		data := base.Json{
-			"share_id":                shareId,
-			"parent_file_id":          parentFileId,
-			"limit":                   200,
-			"image_thumbnail_process": "image/resize,w_256/format,jpeg",
-			"image_url_process":       "image/resize,w_1920/format,jpeg/interlace,1",
-			"video_thumbnail_process": "video/snapshot,t_1000,f_jpg,ar_auto,w_256",
-			"order_by":                "name",
-			"order_direction":         "ASC",
-			"marker":                  marker,
-		}
-		_, err, _ := d.request("https://api.aliyundrive.com/adrive/v2/file/list_by_share", http.MethodPost, func(req *resty.Request) {
-			req.SetBody(data)
-			req.SetHeader("x-share-token", token)
-		}, &resp)
 
-		if err != nil {
-			return nil, err
-		}
-		marker = resp.NextMarker
+	queue := generic.NewQueue[string]()
+	queue.Push(parentFileId)
 
-		for _, item := range resp.Items {
-			if item.Size/(1024*1024) > 50 || item.Type == "folder" {
-				res = append(res, item)
+	for queue.Len() > 0 {
+
+		tempParentFileId := queue.Pop()
+		time.Sleep(200 * time.Millisecond)
+
+		marker := "first"
+		for marker != "" {
+			if marker == "first" {
+				marker = ""
 			}
-		}
+			var resp Files
+			data := base.Json{
+				"share_id":                shareId,
+				"parent_file_id":          tempParentFileId,
+				"limit":                   200,
+				"image_thumbnail_process": "image/resize,w_256/format,jpeg",
+				"image_url_process":       "image/resize,w_1920/format,jpeg/interlace,1",
+				"video_thumbnail_process": "video/snapshot,t_1000,f_jpg,ar_auto,w_256",
+				"order_by":                "name",
+				"order_direction":         "ASC",
+				"marker":                  marker,
+			}
+			_, err, _ := d.request("https://api.aliyundrive.com/adrive/v2/file/list_by_share", http.MethodPost, func(req *resty.Request) {
+				req.SetBody(data)
+				req.SetHeader("x-share-token", token)
+			}, &resp)
 
+			if err != nil {
+				return nil, err
+			}
+			marker = resp.NextMarker
+
+			for _, item := range resp.Items {
+				if item.Size/(1024*1024) > 100 || (item.Type == "folder" && !appendSubFolder) {
+					res = append(res, item)
+				}
+
+				if item.Type == "folder" && appendSubFolder {
+					utils.Log.Infof("递归遍历子文件夹：[%s]", item.Name)
+					queue.Push(item.FileId)
+				}
+
+			}
+
+		}
 	}
+
 	return res, nil
 }
 

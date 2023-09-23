@@ -83,10 +83,11 @@ type ShareSaveResp struct {
 }
 
 type VirtualDirReq struct {
-	Name      string `json:"name"`
-	ShareID   string `json:"shareId"`
-	ParentDir string `json:"parentDir"`
-	Replace   []struct {
+	Name            string `json:"name"`
+	ShareID         string `json:"shareId"`
+	ParentDir       string `json:"parentDir"`
+	AppendSubFolder int    `json:"appendSubFolder"`
+	Replace         []struct {
 		Start      int    `json:"start"`
 		End        int    `json:"end"`
 		SourceName string `json:"sourceName"`
@@ -101,24 +102,26 @@ func dirToVirtualFile(storageId string, req VirtualDirReq) []model.VirtualFile {
 
 	for index := range req.Replace {
 		files = append(files, model.VirtualFile{
-			StorageId:  storageId,
-			Name:       req.Name,
-			ShareId:    req.ShareID,
-			ParentDir:  req.ParentDir,
-			SourceName: req.Replace[index].SourceName,
-			StartNum:   req.Replace[index].StartNum,
-			Start:      req.Replace[index].Start,
-			End:        req.Replace[index].End,
-			Type:       req.Replace[index].Type,
+			StorageId:       storageId,
+			Name:            req.Name,
+			ShareId:         req.ShareID,
+			ParentDir:       req.ParentDir,
+			AppendSubFolder: req.AppendSubFolder,
+			SourceName:      req.Replace[index].SourceName,
+			StartNum:        req.Replace[index].StartNum,
+			Start:           req.Replace[index].Start,
+			End:             req.Replace[index].End,
+			Type:            req.Replace[index].Type,
 		})
 	}
 
 	if len(files) == 0 {
 		files = append(files, model.VirtualFile{
-			StorageId: storageId,
-			Name:      req.Name,
-			ShareId:   req.ShareID,
-			ParentDir: req.ParentDir,
+			StorageId:       storageId,
+			Name:            req.Name,
+			ShareId:         req.ShareID,
+			ParentDir:       req.ParentDir,
+			AppendSubFolder: req.AppendSubFolder,
 		})
 	}
 

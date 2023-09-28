@@ -183,13 +183,16 @@ func (d *AliDrive) getShareFiles(shareId string, parentFileId string, appendSubF
 
 	res := make([]File, 0)
 
+	firstAccess := true
 	queue := generic.NewQueue[string]()
 	queue.Push(parentFileId)
 
 	for queue.Len() > 0 {
 
 		tempParentFileId := queue.Pop()
-		time.Sleep(200 * time.Millisecond)
+		if !firstAccess {
+			time.Sleep(200 * time.Millisecond)
+		}
 
 		marker := "first"
 		for marker != "" {
@@ -208,10 +211,12 @@ func (d *AliDrive) getShareFiles(shareId string, parentFileId string, appendSubF
 				"order_direction":         "ASC",
 				"marker":                  marker,
 			}
-			_, err, _ := d.request("https://api.aliyundrive.com/adrive/v2/file/list_by_share", http.MethodPost, func(req *resty.Request) {
+			_, err, _ = d.request("https://api.aliyundrive.com/adrive/v2/file/list_by_share", http.MethodPost, func(req *resty.Request) {
 				req.SetBody(data)
 				req.SetHeader("x-share-token", token)
 			}, &resp)
+
+			firstAccess = false
 
 			if err != nil {
 				return nil, err

@@ -230,6 +230,7 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string
 
 	// 2.2 正在下载的文件所属文件夹不存在，新建文件夹
 	if fileDir == "" {
+		utils.Log.Infof("新建文件夹:[%s]\n", dir)
 		var newDir CloudDownloadResp
 		_, err := d.request("https://api-drive.mypikpak.com/drive/v1/files", http.MethodPost, func(req *resty.Request) {
 			req.SetBody(base.Json{
@@ -362,6 +363,7 @@ func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (F
 	var count int
 	for resultFile.Id == "" && count < 10 {
 
+		utils.Log.Infof("文件未下载完毕，第[%d]次等待\n", count)
 		if count != 0 {
 			time.Sleep(1 * time.Second)
 		}
@@ -478,6 +480,8 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []Fil
 			return savedFiles
 		}
 
+		utils.Log.Infof("重名名文件:[%s]\n", oldName)
+
 		// move file
 		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchMove", http.MethodPost, func(req *resty.Request) {
 			req.SetBody(base.Json{
@@ -492,6 +496,8 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []Fil
 			utils.Log.Info("move file error:", err)
 			return savedFiles
 		}
+
+		utils.Log.Infof("移动文件:[%s]\n", oldName)
 
 		// delete garbage file
 		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchTrash", http.MethodPost, func(req *resty.Request) {
@@ -523,6 +529,8 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []Fil
 
 		return savedFiles
 	}
+
+	utils.Log.Infof("重名名文件失败:[%v]\n", files)
 
 	return []File{}
 

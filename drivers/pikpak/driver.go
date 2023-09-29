@@ -365,7 +365,7 @@ func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (F
 
 		utils.Log.Infof("文件未下载完毕，第[%d]次等待\n", count)
 		if count != 0 {
-			time.Sleep(1 * time.Second)
+			time.Sleep(3 * time.Second)
 		}
 
 		count++

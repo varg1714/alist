@@ -216,9 +216,22 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 		}, nil
 	}
 
-	return aliDrive.Link(ctx, &model.Object{
+	obj := &model.Object{
 		ID: shareFileId,
-	}, args)
+	}
+	link, err := aliDrive.Link(ctx, obj, args)
+
+	if err != nil {
+		return link, err
+	}
+
+	err = aliDrive.Remove(ctx, obj)
+	if err != nil {
+		utils.Log.Infof("清除文件:[%s]失败,错误原因:[%s]\n", file.GetName(), err.Error())
+		return nil, err
+	}
+	utils.Log.Infof("清除文件:[%s]完毕\n", file.GetName())
+	return link, err
 
 }
 

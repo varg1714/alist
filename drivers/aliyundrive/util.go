@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/Xhofe/go-cache"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/generic"
 	"net/http"
@@ -243,6 +244,11 @@ func (d *AliDrive) getShareFiles(shareId string, parentFileId string, appendSubF
 
 func (d *AliDrive) getShareToken(shareId string) (string, error) {
 
+	shareToken, exist := shareTokenCache.Get(shareId)
+	if exist {
+		return shareToken, nil
+	}
+
 	var shareResp ShareResp
 	data := base.Json{
 		"share_id": shareId,
@@ -254,6 +260,8 @@ func (d *AliDrive) getShareToken(shareId string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	shareTokenCache.Set(shareId, shareResp.ShareToken, cache.WithEx[string](time.Minute*time.Duration(100)))
 
 	return shareResp.ShareToken, nil
 }

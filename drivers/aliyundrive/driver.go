@@ -208,6 +208,8 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 	}
 
 	// 转存
+	start := time.Now().UnixMilli()
+
 	utils.Log.Infof("开始转存文件:[%s]\n", file.GetName())
 	shareFileId, err := d.SaveShare(file.GetPath(), file.GetID(), d.TempFolderPath)
 	if err != nil {
@@ -221,16 +223,21 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 	}
 	link, err := aliDrive.Link(ctx, obj, args)
 
+	utils.Log.Infof("文件转存与获取地址耗时：:[%d]ms\n", time.Now().UnixMilli()-start)
+
 	if err != nil {
 		return link, err
 	}
 
-	err = aliDrive.Remove(ctx, obj)
-	if err != nil {
-		utils.Log.Infof("清除文件:[%s]失败,错误原因:[%s]\n", file.GetName(), err.Error())
-		return nil, err
-	}
-	utils.Log.Infof("清除文件:[%s]完毕\n", file.GetName())
+	go func() {
+		err = aliDrive.Remove(ctx, obj)
+		if err != nil {
+			utils.Log.Infof("清除文件:[%s]失败,错误原因:[%s]\n", file.GetName(), err.Error())
+			return
+		}
+		utils.Log.Infof("清除文件:[%s]完毕\n", file.GetName())
+	}()
+
 	return link, err
 
 }

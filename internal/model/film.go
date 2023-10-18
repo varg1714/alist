@@ -30,6 +30,7 @@ type VirtualFile struct {
 	ShareId         string `json:"share_id"`
 	ParentDir       string `json:"parent_dir"`
 	AppendSubFolder int    `json:"append_sub_folder"`
+	ExcludeUnMatch  bool   `json:"exclude_un_match"`
 	Start           int    `json:"start" gorm:"default -1"`
 	End             int    `json:"end" gorm:"default -1"`
 	SourceName      string `json:"source_name"`

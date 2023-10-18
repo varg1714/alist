@@ -457,7 +457,7 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []Fil
 			return files
 		}
 
-		if size/(1024*1024) < 50 {
+		if size/(1024*1024) < 150 {
 			deletingFileIds = append(deletingFileIds, file.Id)
 		} else {
 			savedFiles = append(savedFiles, file)

@@ -87,6 +87,7 @@ type VirtualDirReq struct {
 	ShareID         string `json:"shareId"`
 	ParentDir       string `json:"parentDir"`
 	AppendSubFolder int    `json:"appendSubFolder"`
+	ExcludeUnMatch  bool   `json:"excludeUnMatch"`
 	Replace         []struct {
 		Start      int    `json:"start"`
 		End        int    `json:"end"`
@@ -107,6 +108,7 @@ func dirToVirtualFile(storageId string, req VirtualDirReq) []model.VirtualFile {
 			ShareId:         req.ShareID,
 			ParentDir:       req.ParentDir,
 			AppendSubFolder: req.AppendSubFolder,
+			ExcludeUnMatch:  req.ExcludeUnMatch,
 			SourceName:      req.Replace[index].SourceName,
 			StartNum:        req.Replace[index].StartNum,
 			Start:           req.Replace[index].Start,
@@ -122,6 +124,7 @@ func dirToVirtualFile(storageId string, req VirtualDirReq) []model.VirtualFile {
 			ShareId:         req.ShareID,
 			ParentDir:       req.ParentDir,
 			AppendSubFolder: req.AppendSubFolder,
+			ExcludeUnMatch:  req.ExcludeUnMatch,
 		})
 	}
 

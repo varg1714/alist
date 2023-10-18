@@ -136,7 +136,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 			obj := fileToObj(files[fileIndex])
 			obj.Path = virtualFiles[0].ShareId
 
-			appendFile := true
+			excludeFile := virtualFiles[0].ExcludeUnMatch
 
 			for testIndex := range virtualFiles {
 
@@ -144,7 +144,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 
 					// skip this file
 					if virtualFiles[testIndex].Type == 1 {
-						appendFile = false
+						excludeFile = true
 						break
 					}
 
@@ -166,14 +166,14 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 					virtualFiles[testIndex].StartNum += 1
 
 					results = append(results, obj)
-					appendFile = false
+					excludeFile = true
 
 					break
 				}
 
 			}
 
-			if appendFile {
+			if !excludeFile {
 				results = append(results, obj)
 			}
 

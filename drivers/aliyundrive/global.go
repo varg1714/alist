@@ -19,4 +19,4 @@ var global = generic_sync.MapOf[string, *State]{}
 
 var shareTokenCache = cache.NewMemCache(cache.WithShards[string](128))
 
-var limiter = rate.NewLimiter(rate.Every(500*time.Millisecond), 2)
+var limiter = rate.NewLimiter(rate.Every(1000*time.Millisecond), 1)

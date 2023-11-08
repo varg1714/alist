@@ -178,7 +178,7 @@ func (d *AliDrive) getFiles(fileId string) ([]File, error) {
 
 func (d *AliDrive) getShareFiles(ctx context.Context, shareId string, parentFileId string, appendSubFolder bool) ([]File, error) {
 
-	err := limiter.WaitN(ctx, 5)
+	err := limiter.WaitN(ctx, 1)
 	if err != nil {
 		return nil, err
 	}

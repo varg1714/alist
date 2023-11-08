@@ -124,7 +124,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 
 		virtualFiles := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)), dirName)
 
-		files, err := d.getShareFiles(virtualFiles[0].ShareId, virtualFiles[0].ParentDir, virtualFiles[0].AppendSubFolder == 1)
+		files, err := d.getShareFiles(ctx, virtualFiles[0].ShareId, virtualFiles[0].ParentDir, virtualFiles[0].AppendSubFolder == 1)
 		if err != nil {
 			utils.Log.Warnf("list file error:[%s],msg:[%s]\n", dirName, err.Error())
 			return results, nil
@@ -182,7 +182,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 		return results, nil
 
 	} else {
-		files, err := d.getShareFiles(dir.GetPath(), dir.GetID(), false)
+		files, err := d.getShareFiles(ctx, dir.GetPath(), dir.GetID(), false)
 		//files, err := d.getFiles(dir.GetID())
 		if err != nil {
 			return nil, err

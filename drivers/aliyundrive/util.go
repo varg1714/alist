@@ -1,6 +1,7 @@
 package aliyundrive
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -175,7 +176,12 @@ func (d *AliDrive) getFiles(fileId string) ([]File, error) {
 	return res, nil
 }
 
-func (d *AliDrive) getShareFiles(shareId string, parentFileId string, appendSubFolder bool) ([]File, error) {
+func (d *AliDrive) getShareFiles(ctx context.Context, shareId string, parentFileId string, appendSubFolder bool) ([]File, error) {
+
+	err := limiter.WaitN(ctx, 5)
+	if err != nil {
+		return nil, err
+	}
 
 	token, err := d.getShareToken(shareId)
 	if err != nil {
@@ -192,7 +198,7 @@ func (d *AliDrive) getShareFiles(shareId string, parentFileId string, appendSubF
 
 		tempParentFileId := queue.Pop()
 		if !firstAccess {
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(250 * time.Millisecond)
 		}
 
 		marker := "first"

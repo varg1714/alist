@@ -25,15 +25,20 @@ type Actor struct {
 }
 
 type VirtualFile struct {
-	StorageId       string `json:"storage_id"`
-	Name            string `json:"name"`
-	ShareId         string `json:"share_id"`
-	ParentDir       string `json:"parent_dir"`
-	AppendSubFolder int    `json:"append_sub_folder"`
-	ExcludeUnMatch  bool   `json:"exclude_un_match"`
-	Start           int    `json:"start" gorm:"default -1"`
-	End             int    `json:"end" gorm:"default -1"`
-	SourceName      string `json:"source_name"`
-	StartNum        int    `json:"start_num"`
-	Type            int    `json:"type"`
+	StorageId       uint          `json:"storage_id"`
+	Name            string        `json:"name"`
+	ShareID         string        `json:"shareId"`
+	ParentDir       string        `json:"parentDir"`
+	AppendSubFolder bool          `json:"appendSubFolder"`
+	ExcludeUnMatch  bool          `json:"excludeUnMatch"`
+	SourceName      string        `json:"sourceName"`
+	MinFileSize     int64         `json:"minFileSize"`
+	Replace         []ReplaceItem `json:"replace" gorm:"type:json;serializer:json"`
+}
+
+type ReplaceItem struct {
+	Start      int    `json:"start"`
+	End        int    `json:"end"`
+	StartNum   int    `json:"startNum"`
+	SourceName string `json:"sourceName"`
 }

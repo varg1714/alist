@@ -176,14 +176,14 @@ func (d *AliDrive) getFiles(fileId string) ([]File, error) {
 	return res, nil
 }
 
-func (d *AliDrive) getShareFiles(ctx context.Context, shareId string, parentFileId string, appendSubFolder bool) ([]File, error) {
+func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualFile) ([]File, error) {
 
 	err := limiter.WaitN(ctx, 1)
 	if err != nil {
 		return nil, err
 	}
 
-	token, err := d.getShareToken(shareId)
+	token, err := d.getShareToken(virtualFile.ShareID)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func (d *AliDrive) getShareFiles(ctx context.Context, shareId string, parentFile
 
 	firstAccess := true
 	queue := generic.NewQueue[string]()
-	queue.Push(parentFileId)
+	queue.Push(virtualFile.ParentDir)
 
 	for queue.Len() > 0 {
 
@@ -208,7 +208,7 @@ func (d *AliDrive) getShareFiles(ctx context.Context, shareId string, parentFile
 			}
 			var resp Files
 			data := base.Json{
-				"share_id":                shareId,
+				"share_id":                virtualFile.ShareID,
 				"parent_file_id":          tempParentFileId,
 				"limit":                   200,
 				"image_thumbnail_process": "image/resize,w_256/format,jpeg",
@@ -231,11 +231,11 @@ func (d *AliDrive) getShareFiles(ctx context.Context, shareId string, parentFile
 			marker = resp.NextMarker
 
 			for _, item := range resp.Items {
-				if item.Size/(1024*1024) > 100 || (item.Type == "folder" && !appendSubFolder) {
+				if item.Size/(1024*1024) > virtualFile.MinFileSize || (item.Type == "folder" && !virtualFile.AppendSubFolder) {
 					res = append(res, item)
 				}
 
-				if item.Type == "folder" && appendSubFolder {
+				if item.Type == "folder" && virtualFile.AppendSubFolder {
 					utils.Log.Infof("递归遍历子文件夹：[%s]", item.Name)
 					queue.Push(item.FileId)
 				}
@@ -345,7 +345,7 @@ func (d *AliDrive) SaveShare(shareId string, srcId string, dstId string) (string
 	return shareSaveResp.Responses[0].Body.FileID, err
 }
 
-func replace(test model.VirtualFile, index int) bool {
+func replace(test model.ReplaceItem, index int) bool {
 
 	if test.SourceName == "" {
 		return false

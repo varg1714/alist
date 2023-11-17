@@ -121,10 +121,9 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 
 	if utils.SliceContains(virtualNames, dirName) {
 		// 分享文件夹
+		virtualFile := db.QueryVirtualFilms(d.ID, dirName)
 
-		virtualFiles := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)), dirName)
-
-		files, err := d.getShareFiles(ctx, virtualFiles[0].ShareId, virtualFiles[0].ParentDir, virtualFiles[0].AppendSubFolder == 1)
+		files, err := d.getShareFiles(ctx, virtualFile)
 		if err != nil {
 			utils.Log.Warnf("list file error:[%s],msg:[%s]\n", dirName, err.Error())
 			return results, nil
@@ -134,19 +133,13 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 
 			// transfer file
 			obj := fileToObj(files[fileIndex])
-			obj.Path = virtualFiles[0].ShareId
+			obj.Path = virtualFile.ShareID
 
-			excludeFile := virtualFiles[0].ExcludeUnMatch
+			excludeFile := virtualFile.ExcludeUnMatch
 
-			for testIndex := range virtualFiles {
+			for testIndex := range virtualFile.Replace {
 
-				if replace(virtualFiles[testIndex], fileIndex) {
-
-					// skip this file
-					if virtualFiles[testIndex].Type == 1 {
-						excludeFile = true
-						break
-					}
+				if replace(virtualFile.Replace[testIndex], fileIndex) {
 
 					var suffix string
 					index := strings.LastIndex(obj.Name, ".")
@@ -155,15 +148,15 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 					}
 
 					tempNum := ""
-					if virtualFiles[testIndex].StartNum != -1 {
-						tempNum = strconv.Itoa(virtualFiles[testIndex].StartNum)
+					if virtualFile.Replace[testIndex].StartNum != -1 {
+						tempNum = strconv.Itoa(virtualFile.Replace[testIndex].StartNum)
 						if len(tempNum) == 1 {
 							tempNum = "0" + tempNum
 						}
 					}
 
-					obj.Name = virtualFiles[testIndex].SourceName + tempNum + suffix
-					virtualFiles[testIndex].StartNum += 1
+					obj.Name = virtualFile.Replace[testIndex].SourceName + tempNum + suffix
+					virtualFile.Replace[testIndex].StartNum += 1
 
 					results = append(results, obj)
 					excludeFile = true
@@ -182,17 +175,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 		return results, nil
 
 	} else {
-		files, err := d.getShareFiles(ctx, dir.GetPath(), dir.GetID(), false)
-		//files, err := d.getFiles(dir.GetID())
-		if err != nil {
-			return nil, err
-		}
-		// 分享文件的子文件夹
-		return utils.SliceConvert(files, func(src File) (model.Obj, error) {
-			obj := fileToObj(src)
-			obj.Path = dir.GetPath()
-			return obj, nil
-		})
+		return results, nil
 	}
 
 }
@@ -244,18 +227,20 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 
 func (d *AliDrive) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
 
-	var req VirtualDirReq
+	var req model.VirtualFile
 	err := utils.Json.Unmarshal([]byte(dirName), &req)
 	if err != nil {
 		return err
 	}
 
-	virtualFiles := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)), req.Name)
-	if len(virtualFiles) > 0 {
+	virtualFiles := db.QueryVirtualFilms(d.ID, req.Name)
+	if virtualFiles.ShareID != "" {
 		return errors.New("文件夹已存在")
 	}
 
-	return db.CreateVirtualFile(dirToVirtualFile(strconv.Itoa(int(d.ID)), req))
+	req.StorageId = d.ID
+
+	return db.CreateVirtualFile(req)
 
 }
 

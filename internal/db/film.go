@@ -162,23 +162,22 @@ func QueryVirtualFileNames(storageId string) []string {
 
 }
 
-func QueryVirtualFilms(storageId string, name string) []model.VirtualFile {
+func QueryVirtualFilms(storageId uint, name string) model.VirtualFile {
 
-	virtualFiles := make([]model.VirtualFile, 0)
 	file := model.VirtualFile{
 		StorageId: storageId,
 		Name:      name,
 	}
 
-	db.Where(file).Find(&virtualFiles)
+	db.Where(file).Take(&file)
 
-	return virtualFiles
+	return file
 
 }
 
-func CreateVirtualFile(virtualFiles []model.VirtualFile) error {
+func CreateVirtualFile(virtualFile model.VirtualFile) error {
 
-	return errors.WithStack(db.CreateInBatches(virtualFiles, 100).Error)
+	return errors.WithStack(db.Create(virtualFile).Error)
 
 }
 

@@ -28,6 +28,7 @@ type VirtualFile struct {
 	StorageId       uint          `json:"storage_id"`
 	Name            string        `json:"name"`
 	ShareID         string        `json:"shareId"`
+	SharePwd        string        `json:"sharePwd"`
 	ParentDir       string        `json:"parentDir"`
 	AppendSubFolder bool          `json:"appendSubFolder"`
 	ExcludeUnMatch  bool          `json:"excludeUnMatch"`

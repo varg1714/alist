@@ -136,4 +136,8 @@ func (d *PikPakShare) MakeDir(ctx context.Context, parentDir model.Obj, dirName 
 
 }
 
+func (d *PikPakShare) Remove(ctx context.Context, obj model.Obj) error {
+	return db.DeleteVirtualFile(strconv.Itoa(int(d.ID)), obj.GetName())
+}
+
 var _ driver.Driver = (*PikPakShare)(nil)

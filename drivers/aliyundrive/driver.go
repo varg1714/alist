@@ -11,7 +11,6 @@ import (
 	"github.com/alist-org/alist/v3/drivers/aliyundrive_open"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/stream"
 	"io"
 	"math"
 	"math/big"
@@ -20,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/alist-org/alist/v3/internal/stream"
 
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/conf"
@@ -413,7 +414,7 @@ func (d *AliDrive) Put(ctx context.Context, dstDir model.Obj, streamer model.Fil
 		}
 		res.Body.Close()
 		if count > 0 {
-			up(i * 100 / count)
+			up(float64(i) * 100 / float64(count))
 		}
 	}
 	var resp2 base.Json

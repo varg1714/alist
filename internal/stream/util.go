@@ -3,13 +3,14 @@ package stream
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+
 	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/net"
 	"github.com/alist-org/alist/v3/pkg/http_range"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"net/http"
 )
 
 func GetRangeReadCloserFromLink(size int64, link *model.Link) (model.RangeReadCloserIF, error) {
@@ -40,10 +41,13 @@ func GetRangeReadCloserFromLink(size int64, link *model.Link) (model.RangeReadCl
 		if len(link.URL) > 0 {
 			response, err := RequestRangedHttp(ctx, link, r.Start, r.Length)
 			if err != nil {
+				if response == nil {
+					return nil, fmt.Errorf("http request failure, err:%s", err)
+				}
 				return nil, fmt.Errorf("http request failure,status: %d err:%s", response.StatusCode, err)
 			}
 			if r.Start == 0 && (r.Length == -1 || r.Length == size) || response.StatusCode == http.StatusPartialContent ||
-				checkContentRange(&response.Header, size, r.Start) {
+				checkContentRange(&response.Header, r.Start) {
 				return response.Body, nil
 			} else if response.StatusCode == http.StatusOK {
 				log.Warnf("remote http server not supporting range request, expect low perfromace!")
@@ -72,12 +76,12 @@ func RequestRangedHttp(ctx context.Context, link *model.Link, offset, length int
 }
 
 // 139 cloud does not properly return 206 http status code, add a hack here
-func checkContentRange(header *http.Header, size, offset int64) bool {
-	r, err2 := http_range.ParseRange(header.Get("Content-Range"), size)
-	if err2 != nil {
-		log.Warnf("exception trying to parse Content-Range, will ignore,err=%s", err2)
+func checkContentRange(header *http.Header, offset int64) bool {
+	start, _, err := http_range.ParseContentRange(header.Get("Content-Range"))
+	if err != nil {
+		log.Warnf("exception trying to parse Content-Range, will ignore,err=%s", err)
 	}
-	if len(r) == 1 && r[0].Start == offset {
+	if start == offset {
 		return true
 	}
 	return false

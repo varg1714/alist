@@ -22,7 +22,7 @@ func Init(e *gin.Engine) {
 	Cors(e)
 	g := e.Group(conf.URL.Path)
 	if conf.Conf.Scheme.HttpPort != -1 && conf.Conf.Scheme.HttpsPort != -1 && conf.Conf.Scheme.ForceHttps {
-		g.Use(middlewares.ForceHttps)
+		e.Use(middlewares.ForceHttps)
 	}
 	g.Any("/ping", func(c *gin.Context) {
 		c.String(200, "pong")
@@ -56,6 +56,8 @@ func Init(e *gin.Engine) {
 	// auth
 	api.GET("/auth/sso", handles.SSOLoginRedirect)
 	api.GET("/auth/sso_callback", handles.SSOLoginCallback)
+	api.GET("/auth/get_sso_id", handles.SSOLoginCallback)
+	api.GET("/auth/sso_get_token", handles.SSOLoginCallback)
 
 	//webauthn
 	webauthn.GET("/webauthn_begin_registration", handles.BeginAuthnRegistration)
@@ -68,11 +70,12 @@ func Init(e *gin.Engine) {
 	// no need auth
 	public := api.Group("/public")
 	public.Any("/settings", handles.PublicSettings)
+	public.Any("/offline_download_tools", handles.OfflineDownloadTools)
 
 	_fs(auth.Group("/fs"))
 	admin(auth.Group("/admin", middlewares.AuthAdmin))
-	if flags.Dev {
-		dev(g.Group("/dev"))
+	if flags.Debug || flags.Dev {
+		debug(g.Group("/debug"))
 	}
 	static.Static(g, func(handlers ...gin.HandlerFunc) {
 		e.NoRoute(handlers...)
@@ -153,14 +156,16 @@ func _fs(g *gin.RouterGroup) {
 	g.PUT("/put", middlewares.FsUp, handles.FsStream)
 	g.PUT("/form", middlewares.FsUp, handles.FsForm)
 	g.POST("/link", middlewares.AuthAdmin, handles.Link)
-	g.POST("/add_aria2", handles.AddAria2)
-	g.POST("/add_qbit", handles.AddQbittorrent)
+	//g.POST("/add_aria2", handles.AddOfflineDownload)
+	//g.POST("/add_qbit", handles.AddQbittorrent)
+	g.POST("/add_offline_download", handles.AddOfflineDownload)
 }
 
 func Cors(r *gin.Engine) {
 	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
-	config.AllowHeaders = []string{"*"}
-	config.AllowMethods = []string{"*"}
+	//config.AllowAllOrigins = true
+	config.AllowOrigins = conf.Conf.Cors.AllowOrigins
+	config.AllowHeaders = conf.Conf.Cors.AllowHeaders
+	config.AllowMethods = conf.Conf.Cors.AllowMethods
 	r.Use(cors.New(config))
 }

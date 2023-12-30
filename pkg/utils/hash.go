@@ -4,12 +4,15 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"encoding"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
-	"github.com/alist-org/alist/v3/internal/errs"
 	"hash"
 	"io"
-	"strings"
+
+	"github.com/alist-org/alist/v3/internal/errs"
+	log "github.com/sirupsen/logrus"
 )
 
 func GetMD5EncodeStr(data string) string {
@@ -27,8 +30,25 @@ type HashType struct {
 	Width   int
 	Name    string
 	Alias   string
-	NewFunc func() hash.Hash
+	NewFunc func(...any) hash.Hash
 }
+
+func (ht *HashType) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + ht.Name + `"`), nil
+}
+
+func (ht *HashType) MarshalText() (text []byte, err error) {
+	return []byte(ht.Name), nil
+}
+
+var (
+	_ json.Marshaler = (*HashType)(nil)
+	//_ json.Unmarshaler = (*HashType)(nil)
+
+	// read/write from/to json keys
+	_ encoding.TextMarshaler = (*HashType)(nil)
+	//_ encoding.TextUnmarshaler = (*HashType)(nil)
+)
 
 var (
 	name2hash  = map[string]*HashType{}
@@ -38,7 +58,10 @@ var (
 
 // RegisterHash adds a new Hash to the list and returns its Type
 func RegisterHash(name, alias string, width int, newFunc func() hash.Hash) *HashType {
+	return RegisterHashWithParam(name, alias, width, func(a ...any) hash.Hash { return newFunc() })
+}
 
+func RegisterHashWithParam(name, alias string, width int, newFunc func(...any) hash.Hash) *HashType {
 	newType := &HashType{
 		Name:    name,
 		Alias:   alias,
@@ -64,15 +87,15 @@ var (
 )
 
 // HashData get hash of one hashType
-func HashData(hashType *HashType, data []byte) string {
-	h := hashType.NewFunc()
+func HashData(hashType *HashType, data []byte, params ...any) string {
+	h := hashType.NewFunc(params...)
 	h.Write(data)
 	return hex.EncodeToString(h.Sum(nil))
 }
 
 // HashReader get hash of one hashType from a reader
-func HashReader(hashType *HashType, reader io.Reader) (string, error) {
-	h := hashType.NewFunc()
+func HashReader(hashType *HashType, reader io.Reader, params ...any) (string, error) {
+	h := hashType.NewFunc(params...)
 	_, err := io.Copy(h, reader)
 	if err != nil {
 		return "", errs.NewErr(err, "HashReader error")
@@ -81,8 +104,8 @@ func HashReader(hashType *HashType, reader io.Reader) (string, error) {
 }
 
 // HashFile get hash of one hashType from a model.File
-func HashFile(hashType *HashType, file io.ReadSeeker) (string, error) {
-	str, err := HashReader(hashType, file)
+func HashFile(hashType *HashType, file io.ReadSeeker, params ...any) (string, error) {
+	str, err := HashReader(hashType, file, params...)
 	if err != nil {
 		return "", err
 	}
@@ -158,24 +181,48 @@ func (m *MultiHasher) Size() int64 {
 
 // A HashInfo contains hash string for one or more hashType
 type HashInfo struct {
-	h map[*HashType]string
+	h map[*HashType]string `json:"hashInfo"`
+}
+
+func NewHashInfoByMap(h map[*HashType]string) HashInfo {
+	return HashInfo{h}
 }
 
 func NewHashInfo(ht *HashType, str string) HashInfo {
 	m := make(map[*HashType]string)
-	m[ht] = str
+	if ht != nil {
+		m[ht] = str
+	}
 	return HashInfo{h: m}
 }
 
 func (hi HashInfo) String() string {
-	var tmp []string
-	for ht, str := range hi.h {
-		if len(str) > 0 {
-			tmp = append(tmp, ht.Name+":"+str)
+	result, err := json.Marshal(hi.h)
+	if err != nil {
+		return ""
+	}
+	return string(result)
+}
+func FromString(str string) HashInfo {
+	hi := NewHashInfo(nil, "")
+	var tmp map[string]string
+	err := json.Unmarshal([]byte(str), &tmp)
+	if err != nil {
+		log.Warnf("failed to unmarsh HashInfo from string=%s", str)
+	} else {
+		for k, v := range tmp {
+			if name2hash[k] != nil && len(v) > 0 {
+				hi.h[name2hash[k]] = v
+			}
 		}
 	}
-	return strings.Join(tmp, "\n")
+
+	return hi
 }
 func (hi HashInfo) GetHash(ht *HashType) string {
 	return hi.h[ht]
+}
+
+func (hi HashInfo) Export() map[*HashType]string {
+	return hi.h
 }

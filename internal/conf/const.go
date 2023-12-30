@@ -41,7 +41,8 @@ const (
 	OcrApi                  = "ocr_api"
 	FilenameCharMapping     = "filename_char_mapping"
 	ForwardDirectLinkParams = "forward_direct_link_params"
-	WebauthnLoginEnabled = "webauthn_login_enabled"
+	IgnoreDirectLinkParams  = "ignore_direct_link_params"
+	WebauthnLoginEnabled    = "webauthn_login_enabled"
 
 	// index
 	SearchIndex     = "search_index"
@@ -62,6 +63,7 @@ const (
 	SSOClientSecret      = "sso_client_secret"
 	SSOLoginEnabled      = "sso_login_enabled"
 	SSOLoginPlatform     = "sso_login_platform"
+	SSOOIDCUsernameKey   = "sso_oidc_username_key"
 	SSOOrganizationName  = "sso_organization_name"
 	SSOApplicationName   = "sso_application_name"
 	SSOEndpointName      = "sso_endpoint_name"
@@ -69,6 +71,7 @@ const (
 	SSOAutoRegister      = "sso_auto_register"
 	SSODefaultDir        = "sso_default_dir"
 	SSODefaultPermission = "sso_default_permission"
+	SSOCompatibilityMode = "sso_compatibility_mode"
 
 	// qbittorrent
 	QbittorrentUrl      = "qbittorrent_url"
@@ -83,4 +86,9 @@ const (
 	AUDIO
 	TEXT
 	IMAGE
+)
+
+// ContextKey is the type of context keys.
+const (
+	NoTaskKey = "no_task"
 )

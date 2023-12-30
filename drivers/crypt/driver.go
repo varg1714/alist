@@ -16,6 +16,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/pkg/http_range"
 	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/alist-org/alist/v3/server/common"
 	rcCrypt "github.com/rclone/rclone/backend/crypt"
 	"github.com/rclone/rclone/fs/config/configmap"
 	"github.com/rclone/rclone/fs/config/obscure"
@@ -54,6 +55,8 @@ func (d *Crypt) Init(ctx context.Context) error {
 	if !isCryptExt(d.EncryptedSuffix) {
 		return fmt.Errorf("EncryptedSuffix is Illegal")
 	}
+	d.FileNameEncoding = utils.GetNoneEmpty(d.FileNameEncoding, "base64")
+	d.EncryptedSuffix = utils.GetNoneEmpty(d.EncryptedSuffix, ".bin")
 
 	op.MustSaveDriverStorage(d)
 
@@ -71,7 +74,7 @@ func (d *Crypt) Init(ctx context.Context) error {
 		"password2":                 p2,
 		"filename_encryption":       d.FileNameEnc,
 		"directory_name_encryption": d.DirNameEnc,
-		"filename_encoding":         "base64",
+		"filename_encoding":         d.FileNameEncoding,
 		"suffix":                    d.EncryptedSuffix,
 		"pass_bad_blocks":           "",
 	}
@@ -121,6 +124,9 @@ func (d *Crypt) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 				//filter illegal files
 				continue
 			}
+			if !d.ShowHidden && strings.HasPrefix(name, ".") {
+				continue
+			}
 			objRes := model.Object{
 				Name:     name,
 				Size:     0,
@@ -142,6 +148,9 @@ func (d *Crypt) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 				//filter illegal files
 				continue
 			}
+			if !d.ShowHidden && strings.HasPrefix(name, ".") {
+				continue
+			}
 			objRes := model.Object{
 				Name:     name,
 				Size:     size,
@@ -150,7 +159,10 @@ func (d *Crypt) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 				Ctime:    obj.CreateTime(),
 				// discarding hash as it's encrypted
 			}
-			if !ok {
+			if d.Thumbnail && thumb == "" {
+				thumb = utils.EncodePath(common.GetApiUrl(nil)+stdpath.Join("/d", args.ReqPath, ".thumbnails", name+".webp"), true)
+			}
+			if !ok && !d.Thumbnail {
 				result = append(result, &objRes)
 			} else {
 				objWithThumb := model.ObjThumb{

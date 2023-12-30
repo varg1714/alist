@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/alist-org/alist/v3/pkg/http_range"
 	"io"
 	"math"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/alist-org/alist/v3/pkg/http_range"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/avast/retry-go"
 	"github.com/go-resty/resty/v2"
@@ -148,9 +148,8 @@ func (d *AliyundriveOpen) upload(ctx context.Context, dstDir model.Obj, stream m
 	// Part Size Unit: Bytes, Default: 20MB,
 	// Maximum number of slices 10,000, ≈195.3125GB
 	var partSize = calPartSize(stream.GetSize())
-	const dateFormat = "2006-01-02T15:04:05.88Z"
-	mtime := stream.ModTime()
-	mtimeStr := mtime.UTC().Format(dateFormat)
+	const dateFormat = "2006-01-02T15:04:05.000Z"
+	mtimeStr := stream.ModTime().UTC().Format(dateFormat)
 	ctimeStr := stream.CreateTime().UTC().Format(dateFormat)
 
 	createData := base.Json{
@@ -259,6 +258,7 @@ func (d *AliyundriveOpen) upload(ctx context.Context, dstDir model.Obj, stream m
 				return nil, err
 			}
 			offset += partSize
+			up(float64(i*100) / float64(count))
 		}
 	} else {
 		log.Debugf("[aliyundrive_open] rapid upload success, file id: %s", createResp.FileId)

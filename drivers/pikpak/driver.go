@@ -3,22 +3,23 @@ package pikpak
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
+	hash_extend "github.com/alist-org/alist/v3/pkg/utils/hash"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/go-resty/resty/v2"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -151,22 +152,20 @@ func (d *PikPak) Remove(ctx context.Context, obj model.Obj) error {
 }
 
 func (d *PikPak) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {
-	tempFile, err := stream.CacheFullInTempFile()
-	if err != nil {
-		return err
+	hi := stream.GetHash()
+	sha1Str := hi.GetHash(hash_extend.GCID)
+	if len(sha1Str) < hash_extend.GCID.Width {
+		tFile, err := stream.CacheFullInTempFile()
+		if err != nil {
+			return err
+		}
+
+		sha1Str, err = utils.HashFile(hash_extend.GCID, tFile, stream.GetSize())
+		if err != nil {
+			return err
+		}
 	}
-	defer func() {
-		_ = tempFile.Close()
-	}()
-	// cal gcid
-	sha1Str, err := getGcid(tempFile, stream.GetSize())
-	if err != nil {
-		return err
-	}
-	_, err = tempFile.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
-	}
+
 	var resp UploadTaskData
 	res, err := d.request("https://api-drive.mypikpak.com/drive/v1/files", http.MethodPost, func(req *resty.Request) {
 		req.SetBody(base.Json{
@@ -205,7 +204,7 @@ func (d *PikPak) Put(ctx context.Context, dstDir model.Obj, stream model.FileStr
 	input := &s3manager.UploadInput{
 		Bucket: &params.Bucket,
 		Key:    &params.Key,
-		Body:   tempFile,
+		Body:   stream,
 	}
 	_, err = uploader.UploadWithContext(ctx, input)
 	return err

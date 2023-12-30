@@ -49,6 +49,7 @@ BuildWinArm64() {
   export GOARCH=arm64
   export CC=$(pwd)/wrapper/zcc-arm64
   export CXX=$(pwd)/wrapper/zcxx-arm64
+  export CGO_ENABLED=1
   go build -o "$1" -ldflags="$ldflags" -tags=jsoniter .
 }
 
@@ -75,7 +76,7 @@ BuildDev() {
     export CGO_ENABLED=1
     go build -o ./dist/$appName-$os_arch -ldflags="$muslflags" -tags=jsoniter .
   done
-  xgo -targets=windows/amd64,darwin/amd64 -out "$appName" -ldflags="$ldflags" -tags=jsoniter .
+  xgo -targets=windows/amd64,darwin/amd64,darwin/arm64 -out "$appName" -ldflags="$ldflags" -tags=jsoniter .
   mv alist-* dist
   cd dist
   cp ./alist-windows-amd64.exe ./alist-windows-amd64-upx.exe
@@ -85,10 +86,24 @@ BuildDev() {
 }
 
 BuildDocker() {
+  echo "replace github.com/mattn/go-sqlite3 => github.com/leso-kn/go-sqlite3 v0.0.0-20230710125852-03158dc838ed" >>go.mod
+  go get gorm.io/driver/sqlite@v1.4.4
   go build -o ./bin/alist -ldflags="$ldflags" -tags=jsoniter .
 }
 
 BuildRelease() {
+  rm -rf .git/
+  mkdir -p "build"
+  BuildWinArm64 ./build/alist-windows-arm64.exe
+  xgo -out "$appName" -ldflags="$ldflags" -tags=jsoniter .
+  # why? Because some target platforms seem to have issues with upx compression
+  upx -9 ./alist-linux-amd64
+  cp ./alist-windows-amd64.exe ./alist-windows-amd64-upx.exe
+  upx -9 ./alist-windows-amd64-upx.exe
+  mv alist-* build
+}
+
+BuildReleaseLinuxMusl() {
   rm -rf .git/
   mkdir -p "build"
   muslflags="--extldflags '-static -fpic' $ldflags"
@@ -112,13 +127,6 @@ BuildRelease() {
     export CGO_ENABLED=1
     go build -o ./build/$appName-$os_arch -ldflags="$muslflags" -tags=jsoniter .
   done
-  BuildWinArm64 ./build/alist-windows-arm64.exe
-  xgo -out "$appName" -ldflags="$ldflags" -tags=jsoniter .
-  # why? Because some target platforms seem to have issues with upx compression
-  upx -9 ./alist-linux-amd64
-  cp ./alist-windows-amd64.exe ./alist-windows-amd64-upx.exe
-  upx -9 ./alist-windows-amd64-upx.exe
-  mv alist-* build
 }
 
 BuildReleaseLinuxMuslArm() {
@@ -192,6 +200,9 @@ elif [ "$1" = "release" ]; then
   elif [ "$2" = "linux_musl_arm" ]; then
     BuildReleaseLinuxMuslArm
     MakeRelease "md5-linux-musl-arm.txt"
+  elif [ "$2" = "linux_musl" ]; then
+    BuildReleaseLinuxMusl
+    MakeRelease "md5-linux-musl.txt"
   else
     BuildRelease
     MakeRelease "md5.txt"

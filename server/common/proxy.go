@@ -3,20 +3,25 @@ package common
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/net"
 	"github.com/alist-org/alist/v3/pkg/http_range"
 	"github.com/alist-org/alist/v3/pkg/utils"
-	"io"
-	"net/http"
-	"net/url"
 )
 
 func Proxy(w http.ResponseWriter, r *http.Request, link *model.Link, file model.Obj) error {
 	if link.MFile != nil {
-		attachFileName(w, file)
-		http.ServeContent(w, r, file.GetName(), file.ModTime(), link.MFile)
 		defer link.MFile.Close()
+		attachFileName(w, file)
+		contentType := link.Header.Get("Content-Type")
+		if contentType != "" {
+			w.Header().Set("Content-Type", contentType)
+		}
+		http.ServeContent(w, r, file.GetName(), file.ModTime(), link.MFile)
 		return nil
 	} else if link.RangeReadCloser != nil {
 		attachFileName(w, file)
@@ -75,4 +80,5 @@ func Proxy(w http.ResponseWriter, r *http.Request, link *model.Link, file model.
 func attachFileName(w http.ResponseWriter, file model.Obj) {
 	fileName := file.GetName()
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"; filename*=UTF-8''%s`, fileName, url.PathEscape(fileName)))
+	w.Header().Set("Content-Type", utils.GetMimeType(fileName))
 }

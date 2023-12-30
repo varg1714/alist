@@ -5,13 +5,13 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/alist-org/alist/v3/pkg/http_range"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/alist-org/alist/v3/pkg/http_range"
 
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -43,7 +43,7 @@ func (d *GoogleDrive) refreshToken() error {
 		gdsaFileThis := d.RefreshToken
 		if gdsaFile.IsDir() {
 			if len(d.ServiceAccountFileList) <= 0 {
-				gdsaReadDir, gdsaDirErr := ioutil.ReadDir(d.RefreshToken)
+				gdsaReadDir, gdsaDirErr := os.ReadDir(d.RefreshToken)
 				if gdsaDirErr != nil {
 					log.Error("read dir fail")
 					return gdsaDirErr
@@ -75,7 +75,7 @@ func (d *GoogleDrive) refreshToken() error {
 			}
 		}
 
-		gdsaFileThisContent, err := ioutil.ReadFile(gdsaFileThis)
+		gdsaFileThisContent, err := os.ReadFile(gdsaFileThis)
 		if err != nil {
 			return err
 		}
@@ -195,7 +195,7 @@ func (d *GoogleDrive) getFiles(id string) ([]File, error) {
 		}
 		query := map[string]string{
 			"orderBy":  orderBy,
-			"fields":   "files(id,name,mimeType,size,modifiedTime,thumbnailLink,shortcutDetails),nextPageToken",
+			"fields":   "files(id,name,mimeType,size,modifiedTime,createdTime,thumbnailLink,shortcutDetails,md5Checksum,sha1Checksum,sha256Checksum),nextPageToken",
 			"pageSize": "1000",
 			"q":        fmt.Sprintf("'%s' in parents and trashed = false", id),
 			//"includeItemsFromAllDrives": "true",

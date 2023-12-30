@@ -222,9 +222,6 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 		utils.Log.Infof("清除文件:[%s]完毕\n", file.GetName())
 	}()
 
-	expireTime := 10 * time.Minute
-	link.Expiration = &expireTime
-
 	return link, err
 
 }

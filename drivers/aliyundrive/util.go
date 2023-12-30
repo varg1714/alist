@@ -231,7 +231,7 @@ func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualF
 			marker = resp.NextMarker
 
 			for _, item := range resp.Items {
-				if item.Size/(1024*1024) > virtualFile.MinFileSize || (item.Type == "folder" && !virtualFile.AppendSubFolder) {
+				if item.Size/(1024*1024) >= virtualFile.MinFileSize || (item.Type == "folder" && !virtualFile.AppendSubFolder) {
 					res = append(res, item)
 				}
 

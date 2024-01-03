@@ -4,10 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Xhofe/go-cache"
+	"github.com/alist-org/alist/v3/drivers/virtual_file"
+	"github.com/alist-org/alist/v3/internal/db"
+	"github.com/alist-org/alist/v3/pkg/utils"
 	"io"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alist-org/alist/v3/internal/driver"
@@ -28,6 +34,18 @@ type BaiduShare struct {
 	}
 }
 
+type ShareInfo struct {
+	Errno int64 `json:"errno"`
+	Data  struct {
+		List [1]struct {
+			Path string `json:"path"`
+		} `json:"list"`
+		Uk      json.Number `json:"uk"`
+		Shareid json.Number `json:"shareid"`
+		Seckey  string      `json:"seckey"`
+	} `json:"data"`
+}
+
 func (d *BaiduShare) Config() driver.Config {
 	return config
 }
@@ -44,36 +62,43 @@ func (d *BaiduShare) Init(ctx context.Context) error {
 		SetHeader("User-Agent", "netdisk").
 		SetCookie(&http.Cookie{Name: "BDUSS", Value: d.BDUSS}).
 		SetCookie(&http.Cookie{Name: "ndut_fmt"})
-	respJson := struct {
-		Errno int64 `json:"errno"`
-		Data  struct {
-			List [1]struct {
-				Path string `json:"path"`
-			} `json:"list"`
-			Uk      json.Number `json:"uk"`
-			Shareid json.Number `json:"shareid"`
-			Seckey  string      `json:"seckey"`
-		} `json:"data"`
-	}{}
+
+	var err error
+
+	d.info.Root, d.info.Seckey, d.info.Shareid, d.info.Uk, err = d.getShareInfo(d.Surl, d.Pwd)
+
+	return err
+}
+
+func (d *BaiduShare) getShareInfo(shareId, pwd string) (string, string, string, string, error) {
+
+	shareToken, exist := shareTokenCache.Get(shareId)
+	if exist {
+		return path.Dir(shareToken.Data.List[0].Path), shareToken.Data.Seckey, shareToken.Data.Shareid.String(), shareToken.Data.Uk.String(), nil
+	}
+
+	respJson := ShareInfo{}
+
 	resp, err := d.client.R().
 		SetBody(url.Values{
-			"pwd":      {d.Pwd},
+			"pwd":      {pwd},
 			"root":     {"1"},
-			"shorturl": {d.Surl},
+			"shorturl": {shareId},
 		}.Encode()).
 		SetResult(&respJson).
 		Post("share/wxlist?channel=weixin&version=2.2.2&clienttype=25&web=1")
+
 	if err == nil {
 		if resp.IsSuccess() && respJson.Errno == 0 {
-			d.info.Root = path.Dir(respJson.Data.List[0].Path)
-			d.info.Seckey = respJson.Data.Seckey
-			d.info.Shareid = respJson.Data.Shareid.String()
-			d.info.Uk = respJson.Data.Uk.String()
+			shareTokenCache.Set(shareId, respJson, cache.WithEx[ShareInfo](time.Hour*time.Duration(7)))
+			return path.Dir(respJson.Data.List[0].Path), respJson.Data.Seckey, respJson.Data.Shareid.String(), respJson.Data.Uk.String(), nil
 		} else {
 			err = fmt.Errorf(" %s; %s; ", resp.Status(), resp.Body())
+			return "", "", "", "", err
 		}
 	}
-	return err
+	utils.Log.Error("百度云token获取错误", err)
+	return "", "", "", "", err
 }
 
 func (d *BaiduShare) Drop(ctx context.Context) error {
@@ -82,12 +107,50 @@ func (d *BaiduShare) Drop(ctx context.Context) error {
 
 func (d *BaiduShare) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 	// TODO return the files list, required
-	reqDir := dir.GetPath()
+
+	results := make([]model.Obj, 0)
+
+	dirName := dir.GetName()
+	utils.Log.Infof("list file:[%s]\n", dirName)
+
+	virtualNames := db.QueryVirtualFileNames(strconv.Itoa(int(d.ID)))
+
+	if "root" == dirName {
+		// 1. 顶级目录
+		for category := range virtualNames {
+			results = append(results, &model.ObjThumb{
+				Object: model.Object{
+					Name:     virtualNames[category],
+					IsFolder: true,
+					ID:       virtualNames[category],
+					Size:     622857143,
+					Modified: time.Now(),
+				},
+			})
+		}
+		return results, nil
+	}
+
+	split := strings.Split(dir.GetPath(), "/")
+
+	if !utils.SliceContains(virtualNames, split[1]) {
+		// 分享文件夹
+		return results, nil
+	}
+
+	virtualFile := db.QueryVirtualFilms(d.ID, split[1])
+	var reqDir string
+	if len(split) == 2 {
+		reqDir = "/"
+	} else {
+		reqDir = "/" + strings.Join(split[2:], "/")
+	}
+
 	isRoot := "0"
 	if reqDir == d.RootFolderPath {
-		reqDir = path.Join(d.info.Root, reqDir)
+		reqDir = path.Join(virtualFile.ParentDir, reqDir)
 	}
-	if reqDir == d.info.Root {
+	if reqDir == virtualFile.ParentDir || reqDir == "/" {
 		isRoot = "1"
 	}
 	objs := []model.Obj{}
@@ -115,9 +178,9 @@ func (d *BaiduShare) List(ctx context.Context, dir model.Obj, args model.ListArg
 				"num":      {"1000"},
 				"order":    {"time"},
 				"page":     {fmt.Sprint(page)},
-				"pwd":      {d.Pwd},
+				"pwd":      {virtualFile.SharePwd},
 				"root":     {isRoot},
-				"shorturl": {d.Surl},
+				"shorturl": {virtualFile.ShareID},
 			}.Encode()).
 			SetResult(&respJson).
 			Post("share/wxlist?channel=weixin&version=2.2.2&clienttype=25&web=1")
@@ -131,7 +194,7 @@ func (d *BaiduShare) List(ctx context.Context, dir model.Obj, args model.ListArg
 					mtime, _ := v.Mtime.Int64()
 					objs = append(objs, &model.Object{
 						ID:       v.Fsid.String(),
-						Path:     v.Path,
+						Path:     "/" + split[1] + v.Path,
 						Name:     v.Name,
 						Size:     size,
 						Modified: time.Unix(mtime, 0),
@@ -148,6 +211,12 @@ func (d *BaiduShare) List(ctx context.Context, dir model.Obj, args model.ListArg
 
 func (d *BaiduShare) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 	// TODO return link of file, required
+
+	split := strings.Split(file.GetPath(), "/")
+	virtualFile := db.QueryVirtualFilms(d.ID, split[1])
+
+	_, secKey, shareId, uk, _ := d.getShareInfo(virtualFile.ShareID, virtualFile.SharePwd)
+
 	link := model.Link{Header: d.client.Header}
 	sign := ""
 	stamp := ""
@@ -159,7 +228,7 @@ func (d *BaiduShare) Link(ctx context.Context, file model.Obj, args model.LinkAr
 		} `json:"data"`
 	}{}
 	resp, err := d.client.R().
-		SetQueryParam("surl", d.Surl).
+		SetQueryParam("surl", virtualFile.ShareID).
 		SetResult(&signJson).
 		Get("share/tplconfig?fields=sign,timestamp&channel=chunlei&web=1&app_id=250528&clienttype=0")
 	if err == nil {
@@ -182,12 +251,12 @@ func (d *BaiduShare) Link(ctx context.Context, file model.Obj, args model.LinkAr
 			SetQueryParam("timestamp", stamp).
 			SetBody(url.Values{
 				"encrypt":   {"0"},
-				"extra":     {fmt.Sprintf(`{"sekey":"%s"}`, d.info.Seckey)},
+				"extra":     {fmt.Sprintf(`{"sekey":"%s"}`, secKey)},
 				"fid_list":  {fmt.Sprintf("[%s]", file.GetID())},
-				"primaryid": {d.info.Shareid},
+				"primaryid": {shareId},
 				"product":   {"share"},
 				"type":      {"nolimit"},
-				"uk":        {d.info.Uk},
+				"uk":        {uk},
 			}.Encode()).
 			SetResult(&respJson).
 			Post("api/sharedownload?app_id=250528&channel=chunlei&clienttype=12&web=1")
@@ -215,8 +284,7 @@ func (d *BaiduShare) Link(ctx context.Context, file model.Obj, args model.LinkAr
 }
 
 func (d *BaiduShare) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
-	// TODO create folder, optional
-	return errs.NotSupport
+	return virtual_file.MakeDir(d.ID, dirName)
 }
 
 func (d *BaiduShare) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
@@ -235,8 +303,7 @@ func (d *BaiduShare) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *BaiduShare) Remove(ctx context.Context, obj model.Obj) error {
-	// TODO remove obj, optional
-	return errs.NotSupport
+	return db.DeleteVirtualFile(strconv.Itoa(int(d.ID)), obj.GetName())
 }
 
 func (d *BaiduShare) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {

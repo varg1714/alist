@@ -3,15 +3,14 @@ package pikpak_share
 import (
 	"context"
 	"errors"
+	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
-	"net/http"
-	"strconv"
-	"time"
-
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/go-resty/resty/v2"
+	"net/http"
+	"strconv"
 )
 
 type PikPakShare struct {
@@ -44,47 +43,19 @@ func (d *PikPakShare) Drop(ctx context.Context) error {
 
 func (d *PikPakShare) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 
-	results := make([]model.Obj, 0)
-
-	dirName := dir.GetName()
-	utils.Log.Infof("list file:[%s]\n", dirName)
-
-	virtualNames := db.QueryVirtualFileNames(strconv.Itoa(int(d.ID)))
-
-	if "root" == dirName {
-		// 1. 顶级目录
-		for category := range virtualNames {
-			results = append(results, &model.ObjThumb{
-				Object: model.Object{
-					Name:     virtualNames[category],
-					IsFolder: true,
-					ID:       virtualNames[category],
-					Size:     622857143,
-					Modified: time.Now(),
-				},
-			})
-		}
-		return results, nil
-	}
-
-	if utils.SliceContains(virtualNames, dirName) {
-		// 分享文件夹
-		virtualFile := db.QueryVirtualFilms(d.ID, dirName)
+	return virtual_file.List(d.ID, dir, func(virtualFile model.VirtualFile) ([]model.Obj, error) {
 
 		files, err := d.aggeFiles(virtualFile)
-
 		if err != nil {
 			return nil, err
 		}
+
 		return utils.SliceConvert(files, func(src File) (model.Obj, error) {
 			obj := fileToObj(src)
 			obj.Path = virtualFile.Name
 			return obj, nil
 		})
-
-	} else {
-		return results, nil
-	}
+	})
 
 }
 

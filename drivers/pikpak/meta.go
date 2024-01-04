@@ -11,6 +11,7 @@ type Addition struct {
 	Password           string `json:"password" required:"true"`
 	DisableMediaLink   bool   `json:"disable_media_link"`
 	FileNameBlackChars string `json:"file_name_black_chars"`
+	TempDir            string `json:"temp_dir" required:"true"`
 }
 
 var config = driver.Config{

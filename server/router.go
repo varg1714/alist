@@ -159,6 +159,7 @@ func _fs(g *gin.RouterGroup) {
 	//g.POST("/add_aria2", handles.AddOfflineDownload)
 	//g.POST("/add_qbit", handles.AddQbittorrent)
 	g.POST("/add_offline_download", handles.AddOfflineDownload)
+	g.POST("/offline_download", handles.FsOfflineDownload)
 }
 
 func Cors(r *gin.Engine) {

@@ -109,6 +109,10 @@ type PutResult interface {
 	Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up UpdateProgress) (model.Obj, error)
 }
 
+type OfflineDownload interface {
+	Download(ctx context.Context, url string) error
+}
+
 type UpdateProgress func(percentage float64)
 
 type Progress struct {

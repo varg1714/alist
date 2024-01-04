@@ -341,3 +341,44 @@ func Link(c *gin.Context) {
 	common.SuccessResp(c, link)
 	return
 }
+
+type OfflineDownloadReq struct {
+	Dir string `json:"dir" required:"true"`
+	Url string `json:"url" required:"true"`
+}
+
+func FsOfflineDownload(c *gin.Context) {
+	var req OfflineDownloadReq
+	if err := c.ShouldBind(&req); err != nil {
+		common.ErrorResp(c, err, 400)
+		return
+	}
+
+	user := c.MustGet("user").(*model.User)
+	if !user.CanRemove() {
+		common.ErrorResp(c, errs.PermissionDenied, 403)
+		return
+	}
+	srcDir, err := user.JoinPath(req.Dir)
+	if err != nil {
+		common.ErrorResp(c, err, 403)
+		return
+	}
+
+	meta, err := op.GetNearestMeta(srcDir)
+	if err != nil {
+		if !errors.Is(errors.Cause(err), errs.MetaNotFound) {
+			common.ErrorResp(c, err, 500, true)
+			return
+		}
+	}
+	c.Set("meta", meta)
+
+	err = fs.OfflineDownload(c, srcDir, req.Url)
+	if err != nil {
+		common.ErrorResp(c, err, 500)
+	}
+
+	common.SuccessResp(c)
+
+}

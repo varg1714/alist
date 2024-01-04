@@ -579,3 +579,23 @@ func Put(ctx context.Context, storage driver.Driver, dstDirPath string, file mod
 	}
 	return errors.WithStack(err)
 }
+
+func OfflineDownload(ctx context.Context, storage driver.Driver, url string) error {
+
+	if storage.Config().CheckStatus && storage.GetStorage().Status != WORK {
+		return errors.Errorf("storage not init: %s", storage.GetStorage().Status)
+	}
+
+	switch s := storage.(type) {
+	case driver.OfflineDownload:
+		err := s.Download(ctx, url)
+		if err == nil {
+			return err
+		}
+	default:
+		return errs.NotImplement
+	}
+
+	return nil
+
+}

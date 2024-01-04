@@ -127,3 +127,14 @@ func Other(ctx context.Context, args model.FsOtherArgs) (interface{}, error) {
 	}
 	return res, err
 }
+
+func OfflineDownload(ctx context.Context, path, url string) error {
+
+	storage, err := GetStorage(path, nil)
+	if err != nil {
+		return err
+	}
+
+	return op.OfflineDownload(ctx, storage, url)
+
+}

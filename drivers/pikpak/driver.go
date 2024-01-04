@@ -535,4 +535,31 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []Fil
 
 }
 
+func (d *PikPak) Download(ctx context.Context, url string) error {
+
+	var result CloudDownloadResp
+
+	resp, err := d.request("https://api-drive.mypikpak.com/drive/v1/files", http.MethodPost, func(req *resty.Request) {
+		req.SetBody(base.Json{
+			"kind":        "drive#file",
+			"upload_type": "UPLOAD_TYPE_URL",
+			"params": base.Json{
+				"with_thumbnail": "true",
+				"from":           "manual",
+			},
+			"url": base.Json{
+				"url": url,
+			},
+			"parent_id": d.TempDir,
+		})
+	}, &result)
+
+	if err != nil {
+		utils.Log.Warnf("文件下载失败，失败原因为:[%s]", string(resp))
+	}
+
+	return err
+
+}
+
 var _ driver.Driver = (*PikPak)(nil)

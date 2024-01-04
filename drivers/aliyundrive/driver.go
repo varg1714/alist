@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/aliyundrive_open"
+	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/op"
 	"io"
@@ -130,6 +131,12 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 			return results, nil
 		}
 
+		replacements := db.QueryReplacements(d.ID, virtualFile.ShareID)
+		replaceMap := make(map[string]string)
+		for _, temp := range replacements {
+			replaceMap[temp.OldName] = temp.NewName
+		}
+
 		for fileIndex := range files {
 
 			// transfer file
@@ -169,6 +176,10 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 
 			if !excludeFile {
 				results = append(results, obj)
+			}
+
+			if newName, ok := replaceMap[obj.GetID()]; ok {
+				obj.Name = newName
 			}
 
 		}
@@ -251,15 +262,9 @@ func (d *AliDrive) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *AliDrive) Rename(ctx context.Context, srcObj model.Obj, newName string) error {
-	_, err, _ := d.request("https://api.aliyundrive.com/v3/file/update", http.MethodPost, func(req *resty.Request) {
-		req.SetBody(base.Json{
-			"check_name_mode": "refuse",
-			"drive_id":        d.DriveId,
-			"file_id":         srcObj.GetID(),
-			"name":            newName,
-		})
-	}, nil)
-	return err
+
+	return virtual_file.Rename(d.ID, srcObj.GetPath(), srcObj.GetID(), newName)
+
 }
 
 func (d *AliDrive) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {

@@ -62,3 +62,8 @@ func MakeDir(storageId uint, param string) error {
 	return db.CreateVirtualFile(req)
 
 }
+
+func Rename(storageId uint, dir, oldName, newName string) error {
+
+	return db.Rename(storageId, dir, oldName, newName)
+}

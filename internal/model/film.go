@@ -43,3 +43,10 @@ type ReplaceItem struct {
 	StartNum   int    `json:"startNum"`
 	SourceName string `json:"sourceName"`
 }
+
+type Replacement struct {
+	StorageId uint   `json:"storage_id"`
+	DirName   string `json:"dir_name"`
+	OldName   string `json:"old_name"`
+	NewName   string `json:"new_name"`
+}

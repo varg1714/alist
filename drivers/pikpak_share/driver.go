@@ -2,7 +2,6 @@ package pikpak_share
 
 import (
 	"context"
-	"errors"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
@@ -63,7 +62,7 @@ func (d *PikPakShare) Link(ctx context.Context, file model.Obj, args model.LinkA
 
 	var resp ShareResp
 
-	virtualFile := db.QueryVirtualFilms(d.ID, file.GetPath())
+	virtualFile := db.QueryVirtualFilm(d.ID, file.GetPath())
 	sharePassToken, err := d.getSharePassToken(virtualFile)
 
 	if err != nil {
@@ -90,20 +89,7 @@ func (d *PikPakShare) Link(ctx context.Context, file model.Obj, args model.LinkA
 
 func (d *PikPakShare) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
 
-	var req model.VirtualFile
-	err := utils.Json.Unmarshal([]byte(dirName), &req)
-	if err != nil {
-		return err
-	}
-
-	virtualFiles := db.QueryVirtualFilms(d.ID, req.Name)
-	if virtualFiles.ShareID != "" {
-		return errors.New("文件夹已存在")
-	}
-
-	req.StorageId = d.ID
-
-	return db.CreateVirtualFile(req)
+	return virtual_file.MakeDir(d.ID, dirName)
 
 }
 

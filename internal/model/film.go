@@ -34,6 +34,7 @@ type VirtualFile struct {
 	ExcludeUnMatch  bool          `json:"excludeUnMatch"`
 	SourceName      string        `json:"sourceName"`
 	MinFileSize     int64         `json:"minFileSize"`
+	Modified        time.Time     `json:"modified"`
 	Replace         []ReplaceItem `json:"replace" gorm:"type:json;serializer:json"`
 }
 

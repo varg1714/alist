@@ -16,16 +16,16 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 	dirName := dir.GetName()
 	utils.Log.Infof("list file:[%s]\n", dirName)
 
-	virtualNames := db.QueryVirtualFileNames(strconv.Itoa(int(storageId)))
+	virtualFilms := db.QueryVirtualFilms(strconv.Itoa(int(storageId)))
 
 	if "root" == dirName {
 		// 1. 顶级目录
-		for category := range virtualNames {
+		for _, category := range virtualFilms {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
-					Name:     virtualNames[category],
+					Name:     category.Name,
 					IsFolder: true,
-					ID:       virtualNames[category],
+					ID:       category.Name,
 					Size:     622857143,
 					Modified: time.Now(),
 				},
@@ -34,9 +34,10 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 		return results, nil
 	}
 
-	if utils.SliceContains(virtualNames, dirName) {
+	virtualFile, exist := virtualFilms[dirName]
+
+	if exist {
 		// 分享文件夹
-		virtualFile := db.QueryVirtualFilms(storageId, dirName)
 		return fileFunc(virtualFile)
 	} else {
 		return results, nil
@@ -52,12 +53,13 @@ func MakeDir(storageId uint, param string) error {
 		return err
 	}
 
-	virtualFiles := db.QueryVirtualFilms(storageId, req.Name)
+	virtualFiles := db.QueryVirtualFilm(storageId, req.Name)
 	if virtualFiles.ShareID != "" {
 		return errors.New("文件夹已存在")
 	}
 
 	req.StorageId = storageId
+	req.Modified = time.Now()
 
 	return db.CreateVirtualFile(req)
 

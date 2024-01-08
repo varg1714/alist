@@ -6,7 +6,6 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/aliyundrive_open"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
@@ -103,27 +102,27 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 	dirName := dir.GetName()
 	utils.Log.Infof("list file:[%s]\n", dirName)
 
-	virtualNames := db.QueryVirtualFileNames(strconv.Itoa(int(d.ID)))
+	virtualFiles := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)))
 
 	if d.RootID.GetRootId() == dirName {
 		// 1. 顶级目录
-		for category := range virtualNames {
+		for _, category := range virtualFiles {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
-					Name:     virtualNames[category],
+					Name:     category.Name,
 					IsFolder: true,
-					ID:       virtualNames[category],
+					ID:       category.Name,
 					Size:     622857143,
-					Modified: time.Now(),
+					Modified: category.Modified,
 				},
 			})
 		}
 		return results, nil
 	}
 
-	if utils.SliceContains(virtualNames, dirName) {
+	if virtualFile, exist := virtualFiles[dirName]; exist {
+
 		// 分享文件夹
-		virtualFile := db.QueryVirtualFilms(d.ID, dirName)
 
 		files, err := d.getShareFiles(ctx, virtualFile)
 		if err != nil {
@@ -239,20 +238,7 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 
 func (d *AliDrive) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
 
-	var req model.VirtualFile
-	err := utils.Json.Unmarshal([]byte(dirName), &req)
-	if err != nil {
-		return err
-	}
-
-	virtualFiles := db.QueryVirtualFilms(d.ID, req.Name)
-	if virtualFiles.ShareID != "" {
-		return errors.New("文件夹已存在")
-	}
-
-	req.StorageId = d.ID
-
-	return db.CreateVirtualFile(req)
+	return virtual_file.MakeDir(d.ID, dirName)
 
 }
 

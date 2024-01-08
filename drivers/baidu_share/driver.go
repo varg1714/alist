@@ -113,18 +113,18 @@ func (d *BaiduShare) List(ctx context.Context, dir model.Obj, args model.ListArg
 	dirName := dir.GetName()
 	utils.Log.Infof("list file:[%s]\n", dirName)
 
-	virtualNames := db.QueryVirtualFileNames(strconv.Itoa(int(d.ID)))
+	virtualFilms := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)))
 
 	if "root" == dirName {
 		// 1. 顶级目录
-		for category := range virtualNames {
+		for _, category := range virtualFilms {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
-					Name:     virtualNames[category],
+					Name:     category.Name,
 					IsFolder: true,
-					ID:       virtualNames[category],
+					ID:       category.Name,
 					Size:     622857143,
-					Modified: time.Now(),
+					Modified: category.Modified,
 				},
 			})
 		}
@@ -132,13 +132,13 @@ func (d *BaiduShare) List(ctx context.Context, dir model.Obj, args model.ListArg
 	}
 
 	split := strings.Split(dir.GetPath(), "/")
+	virtualFile, exist := virtualFilms[split[1]]
 
-	if !utils.SliceContains(virtualNames, split[1]) {
+	if !exist {
 		// 分享文件夹
 		return results, nil
 	}
 
-	virtualFile := db.QueryVirtualFilms(d.ID, split[1])
 	var reqDir string
 	if len(split) == 2 {
 		reqDir = "/"
@@ -213,7 +213,7 @@ func (d *BaiduShare) Link(ctx context.Context, file model.Obj, args model.LinkAr
 	// TODO return link of file, required
 
 	split := strings.Split(file.GetPath(), "/")
-	virtualFile := db.QueryVirtualFilms(d.ID, split[1])
+	virtualFile := db.QueryVirtualFilm(d.ID, split[1])
 
 	_, secKey, shareId, uk, _ := d.getShareInfo(virtualFile.ShareID, virtualFile.SharePwd)
 

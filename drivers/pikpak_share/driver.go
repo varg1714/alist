@@ -45,7 +45,7 @@ func (d *PikPakShare) List(ctx context.Context, dir model.Obj, args model.ListAr
 
 	return virtual_file.List(d.ID, dir, func(virtualFile model.VirtualFile, dir model.Obj) ([]model.Obj, error) {
 
-		files, err := d.getFiles(virtualFile, filepath.Dir(filepath.Base(dir.GetPath())))
+		files, err := d.getFiles(virtualFile, filepath.Base(dir.GetPath()))
 		if err != nil {
 			return nil, err
 		}

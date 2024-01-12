@@ -108,112 +108,89 @@ func (d *BaiduShare) Drop(ctx context.Context) error {
 func (d *BaiduShare) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 	// TODO return the files list, required
 
-	results := make([]model.Obj, 0)
+	return virtual_file.List(d.ID, dir, func(virtualFile model.VirtualFile, dir model.Obj) ([]model.Obj, error) {
 
-	dirName := dir.GetName()
-	utils.Log.Infof("list file:[%s]\n", dirName)
+		var reqDir string
+		split := strings.Split(dir.GetPath(), "/")
 
-	virtualFilms := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)))
-
-	if "root" == dirName {
-		// 1. 顶级目录
-		for _, category := range virtualFilms {
-			results = append(results, &model.ObjThumb{
-				Object: model.Object{
-					Name:     category.Name,
-					IsFolder: true,
-					ID:       category.Name,
-					Size:     622857143,
-					Modified: category.Modified,
-				},
-			})
+		if len(split) <= 1 {
+			reqDir = "/"
+		} else {
+			reqDir = "/" + strings.Join(split[1:], "/")
 		}
-		return results, nil
-	}
 
-	split := strings.Split(dir.GetPath(), "/")
-	virtualFile, exist := virtualFilms[split[1]]
+		isRoot := "0"
+		if reqDir == d.RootFolderPath {
+			reqDir = path.Join(virtualFile.ParentDir, reqDir)
+		}
+		if reqDir == virtualFile.ParentDir || reqDir == "/" {
+			isRoot = "1"
+		}
 
-	if !exist {
-		// 分享文件夹
-		return results, nil
-	}
-
-	var reqDir string
-	if len(split) == 2 {
-		reqDir = "/"
-	} else {
-		reqDir = "/" + strings.Join(split[2:], "/")
-	}
-
-	isRoot := "0"
-	if reqDir == d.RootFolderPath {
-		reqDir = path.Join(virtualFile.ParentDir, reqDir)
-	}
-	if reqDir == virtualFile.ParentDir || reqDir == "/" {
-		isRoot = "1"
-	}
-	objs := []model.Obj{}
-	var err error
-	var page uint64 = 1
-	more := true
-	for more && err == nil {
-		respJson := struct {
-			Errno int64 `json:"errno"`
-			Data  struct {
-				More bool `json:"has_more"`
-				List []struct {
-					Fsid  json.Number `json:"fs_id"`
-					Isdir json.Number `json:"isdir"`
-					Path  string      `json:"path"`
-					Name  string      `json:"server_filename"`
-					Mtime json.Number `json:"server_mtime"`
-					Size  json.Number `json:"size"`
-				} `json:"list"`
-			} `json:"data"`
-		}{}
-		resp, e := d.client.R().
-			SetBody(url.Values{
-				"dir":      {reqDir},
-				"num":      {"1000"},
-				"order":    {"time"},
-				"page":     {fmt.Sprint(page)},
-				"pwd":      {virtualFile.SharePwd},
-				"root":     {isRoot},
-				"shorturl": {virtualFile.ShareID},
-			}.Encode()).
-			SetResult(&respJson).
-			Post("share/wxlist?channel=weixin&version=2.2.2&clienttype=25&web=1")
-		err = e
-		if err == nil {
-			if resp.IsSuccess() && respJson.Errno == 0 {
-				page++
-				more = respJson.Data.More
-				for _, v := range respJson.Data.List {
-					size, _ := v.Size.Int64()
-					mtime, _ := v.Mtime.Int64()
-					objs = append(objs, &model.Object{
-						ID:       v.Fsid.String(),
-						Path:     "/" + split[1] + v.Path,
-						Name:     v.Name,
-						Size:     size,
-						Modified: time.Unix(mtime, 0),
-						IsFolder: v.Isdir.String() == "1",
-					})
+		objs := []model.Obj{}
+		var err error
+		var page uint64 = 1
+		more := true
+		for more && err == nil {
+			respJson := struct {
+				Errno int64 `json:"errno"`
+				Data  struct {
+					More bool `json:"has_more"`
+					List []struct {
+						Fsid  json.Number `json:"fs_id"`
+						Isdir json.Number `json:"isdir"`
+						Path  string      `json:"path"`
+						Name  string      `json:"server_filename"`
+						Mtime json.Number `json:"server_mtime"`
+						Size  json.Number `json:"size"`
+					} `json:"list"`
+				} `json:"data"`
+			}{}
+			resp, e := d.client.R().
+				SetBody(url.Values{
+					"dir":      {reqDir},
+					"num":      {"1000"},
+					"order":    {"time"},
+					"page":     {fmt.Sprint(page)},
+					"pwd":      {virtualFile.SharePwd},
+					"root":     {isRoot},
+					"shorturl": {virtualFile.ShareID},
+				}.Encode()).
+				SetResult(&respJson).
+				Post("share/wxlist?channel=weixin&version=2.2.2&clienttype=25&web=1")
+			err = e
+			if err == nil {
+				if resp.IsSuccess() && respJson.Errno == 0 {
+					page++
+					more = respJson.Data.More
+					for _, v := range respJson.Data.List {
+						size, _ := v.Size.Int64()
+						mtime, _ := v.Mtime.Int64()
+						objs = append(objs, &model.Object{
+							ID:       v.Fsid.String(),
+							Path:     split[0] + v.Path,
+							Name:     v.Name,
+							Size:     size,
+							Modified: time.Unix(mtime, 0),
+							IsFolder: v.Isdir.String() == "1",
+						})
+					}
+				} else {
+					err = fmt.Errorf(" %s; %s; ", resp.Status(), resp.Body())
 				}
-			} else {
-				err = fmt.Errorf(" %s; %s; ", resp.Status(), resp.Body())
 			}
 		}
-	}
-	return objs, err
+		return objs, err
+
+	})
+
 }
 
 func (d *BaiduShare) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 	// TODO return link of file, required
 
 	split := strings.Split(file.GetPath(), "/")
-	virtualFile := db.QueryVirtualFilm(d.ID, split[1])
+	virtualFile := db.QueryVirtualFilm(d.ID, split[0])
 
 	_, secKey, shareId, uk, _ := d.getShareInfo(virtualFile.ShareID, virtualFile.SharePwd)
 

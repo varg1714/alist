@@ -535,7 +535,7 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []Fil
 
 }
 
-func (d *PikPak) Download(ctx context.Context, url string) error {
+func (d *PikPak) Download(ctx context.Context, url, downloadDir string) error {
 
 	var result CloudDownloadResp
 
@@ -550,7 +550,7 @@ func (d *PikPak) Download(ctx context.Context, url string) error {
 			"url": base.Json{
 				"url": url,
 			},
-			"parent_id": d.TempDir,
+			"parent_id": downloadDir,
 		})
 	}, &result)
 

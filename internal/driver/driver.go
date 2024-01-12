@@ -110,7 +110,7 @@ type PutResult interface {
 }
 
 type OfflineDownload interface {
-	Download(ctx context.Context, url string) error
+	Download(ctx context.Context, url, downloadDir string) error
 }
 
 type UpdateProgress func(percentage float64)

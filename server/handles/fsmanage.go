@@ -343,8 +343,9 @@ func Link(c *gin.Context) {
 }
 
 type OfflineDownloadReq struct {
-	Dir string `json:"dir" required:"true"`
-	Url string `json:"url" required:"true"`
+	Dir         string `json:"dir" required:"true"`
+	Url         string `json:"url" required:"true"`
+	DownloadDir string `json:"downloadDir" required:"true"`
 }
 
 func FsOfflineDownload(c *gin.Context) {
@@ -374,7 +375,7 @@ func FsOfflineDownload(c *gin.Context) {
 	}
 	c.Set("meta", meta)
 
-	err = fs.OfflineDownload(c, srcDir, req.Url)
+	err = fs.OfflineDownload(c, srcDir, req.Url, req.DownloadDir)
 	if err != nil {
 		common.ErrorResp(c, err, 500)
 	}

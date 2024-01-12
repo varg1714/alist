@@ -16,8 +16,8 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/alist-org/alist/v3/internal/stream"
@@ -97,97 +97,20 @@ func (d *AliDrive) Drop(ctx context.Context) error {
 
 func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 
-	results := make([]model.Obj, 0)
+	return virtual_file.List(d.ID, dir, func(virtualFile model.VirtualFile, dir model.Obj) ([]model.Obj, error) {
 
-	dirName := dir.GetName()
-	utils.Log.Infof("list file:[%s]\n", dirName)
-
-	virtualFiles := db.QueryVirtualFilms(strconv.Itoa(int(d.ID)))
-
-	if d.RootID.GetRootId() == dirName {
-		// 1. 顶级目录
-		for _, category := range virtualFiles {
-			results = append(results, &model.ObjThumb{
-				Object: model.Object{
-					Name:     category.Name,
-					IsFolder: true,
-					ID:       category.Name,
-					Size:     622857143,
-					Modified: category.Modified,
-				},
-			})
-		}
-		return results, nil
-	}
-
-	if virtualFile, exist := virtualFiles[dirName]; exist {
-
-		// 分享文件夹
-
-		files, err := d.getShareFiles(ctx, virtualFile)
+		files, err := d.getShareFiles(ctx, virtualFile, filepath.Dir(filepath.Base(dir.GetPath())))
 		if err != nil {
-			utils.Log.Warnf("list file error:[%s],msg:[%s]\n", dirName, err.Error())
-			return results, nil
+			return nil, err
 		}
 
-		replacements := db.QueryReplacements(d.ID, virtualFile.ShareID)
-		replaceMap := make(map[string]string)
-		for _, temp := range replacements {
-			replaceMap[temp.OldName] = temp.NewName
-		}
+		return utils.SliceConvert(files, func(src File) (model.Obj, error) {
+			obj := fileToObj(src)
+			obj.Path = filepath.Join(dir.GetPath(), obj.GetID())
+			return obj, nil
+		})
 
-		for fileIndex := range files {
-
-			// transfer file
-			obj := fileToObj(files[fileIndex])
-			obj.Path = virtualFile.ShareID
-
-			excludeFile := virtualFile.ExcludeUnMatch
-
-			for testIndex := range virtualFile.Replace {
-
-				if replace(virtualFile.Replace[testIndex], fileIndex) {
-
-					var suffix string
-					index := strings.LastIndex(obj.Name, ".")
-					if index != -1 {
-						suffix = obj.Name[index:]
-					}
-
-					tempNum := ""
-					if virtualFile.Replace[testIndex].StartNum != -1 {
-						tempNum = strconv.Itoa(virtualFile.Replace[testIndex].StartNum)
-						if len(tempNum) == 1 {
-							tempNum = "0" + tempNum
-						}
-					}
-
-					obj.Name = virtualFile.Replace[testIndex].SourceName + tempNum + suffix
-					virtualFile.Replace[testIndex].StartNum += 1
-
-					results = append(results, obj)
-					excludeFile = true
-
-					break
-				}
-
-			}
-
-			if !excludeFile {
-				results = append(results, obj)
-			}
-
-			if newName, ok := replaceMap[obj.GetID()]; ok {
-				obj.Name = newName
-			}
-
-		}
-
-		return results, nil
-
-	} else {
-		return results, nil
-	}
+	})
 
 }
 

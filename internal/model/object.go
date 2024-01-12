@@ -71,6 +71,10 @@ func (o *Object) GetHash() utils.HashInfo {
 	return o.HashInfo
 }
 
+func (o *Object) SetName(name string) {
+	o.Name = name
+}
+
 type Thumbnail struct {
 	Thumbnail string
 }

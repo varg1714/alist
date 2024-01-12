@@ -61,6 +61,10 @@ type SetPath interface {
 	SetPath(path string)
 }
 
+type SetName interface {
+	SetName(name string)
+}
+
 func SortFiles(objs []Obj, orderBy, orderDirection string) {
 	if orderBy == "" {
 		return

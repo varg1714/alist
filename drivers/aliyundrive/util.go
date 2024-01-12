@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/Xhofe/go-cache"
 	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/generic"
 	"net/http"
 	"time"
 
@@ -176,7 +175,7 @@ func (d *AliDrive) getFiles(fileId string) ([]File, error) {
 	return res, nil
 }
 
-func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualFile) ([]File, error) {
+func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualFile, parentDir string) ([]File, error) {
 
 	err := limiter.WaitN(ctx, 1)
 	if err != nil {
@@ -190,59 +189,33 @@ func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualF
 
 	res := make([]File, 0)
 
-	firstAccess := true
-	queue := generic.NewQueue[string]()
-	queue.Push(virtualFile.ParentDir)
-
-	for queue.Len() > 0 {
-
-		tempParentFileId := queue.Pop()
-		if !firstAccess {
-			time.Sleep(250 * time.Millisecond)
+	marker := "first"
+	for marker != "" {
+		if marker == "first" {
+			marker = ""
 		}
-
-		marker := "first"
-		for marker != "" {
-			if marker == "first" {
-				marker = ""
-			}
-			var resp Files
-			data := base.Json{
-				"share_id":                virtualFile.ShareID,
-				"parent_file_id":          tempParentFileId,
-				"limit":                   200,
-				"image_thumbnail_process": "image/resize,w_256/format,jpeg",
-				"image_url_process":       "image/resize,w_1920/format,jpeg/interlace,1",
-				"video_thumbnail_process": "video/snapshot,t_1000,f_jpg,ar_auto,w_256",
-				"order_by":                "name",
-				"order_direction":         "ASC",
-				"marker":                  marker,
-			}
-			_, err, _ = d.request("https://api.aliyundrive.com/adrive/v2/file/list_by_share", http.MethodPost, func(req *resty.Request) {
-				req.SetBody(data)
-				req.SetHeader("x-share-token", token)
-			}, &resp)
-
-			firstAccess = false
-
-			if err != nil {
-				return nil, err
-			}
-			marker = resp.NextMarker
-
-			for _, item := range resp.Items {
-				if (item.Type != "folder" && item.Size/(1024*1024) >= virtualFile.MinFileSize) || (item.Type == "folder" && !virtualFile.AppendSubFolder) {
-					res = append(res, item)
-				}
-
-				if item.Type == "folder" && virtualFile.AppendSubFolder {
-					utils.Log.Infof("递归遍历子文件夹：[%s]", item.Name)
-					queue.Push(item.FileId)
-				}
-
-			}
-
+		var resp Files
+		data := base.Json{
+			"share_id":                virtualFile.ShareID,
+			"parent_file_id":          parentDir,
+			"limit":                   200,
+			"image_thumbnail_process": "image/resize,w_256/format,jpeg",
+			"image_url_process":       "image/resize,w_1920/format,jpeg/interlace,1",
+			"video_thumbnail_process": "video/snapshot,t_1000,f_jpg,ar_auto,w_256",
+			"order_by":                "name",
+			"order_direction":         "ASC",
+			"marker":                  marker,
 		}
+		_, err, _ = d.request("https://api.aliyundrive.com/adrive/v2/file/list_by_share", http.MethodPost, func(req *resty.Request) {
+			req.SetBody(data)
+			req.SetHeader("x-share-token", token)
+		}, &resp)
+
+		if err != nil {
+			return nil, err
+		}
+		marker = resp.NextMarker
+
 	}
 
 	return res, nil

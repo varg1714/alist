@@ -9,6 +9,7 @@ import (
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"net/http"
+	"path/filepath"
 	"strconv"
 )
 
@@ -42,9 +43,9 @@ func (d *PikPakShare) Drop(ctx context.Context) error {
 
 func (d *PikPakShare) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 
-	return virtual_file.List(d.ID, dir, func(virtualFile model.VirtualFile) ([]model.Obj, error) {
+	return virtual_file.List(d.ID, dir, func(virtualFile model.VirtualFile, dir model.Obj) ([]model.Obj, error) {
 
-		files, err := d.aggeFiles(virtualFile)
+		files, err := d.getFiles(virtualFile, filepath.Dir(filepath.Base(dir.GetPath())))
 		if err != nil {
 			return nil, err
 		}
@@ -54,6 +55,7 @@ func (d *PikPakShare) List(ctx context.Context, dir model.Obj, args model.ListAr
 			obj.Path = virtualFile.Name
 			return obj, nil
 		})
+
 	})
 
 }

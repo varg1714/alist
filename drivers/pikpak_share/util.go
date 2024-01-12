@@ -4,10 +4,8 @@ import (
 	"errors"
 	"github.com/Xhofe/go-cache"
 	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/generic"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/alist-org/alist/v3/drivers/base"
@@ -172,50 +170,4 @@ func (d *PikPakShare) getFiles(virtualFile model.VirtualFile, parentId string) (
 		res = append(res, resp.Files...)
 	}
 	return res, nil
-}
-
-func (d *PikPakShare) aggeFiles(virtualFile model.VirtualFile) ([]File, error) {
-
-	res := make([]File, 0)
-
-	firstAccess := true
-	queue := generic.NewQueue[string]()
-	queue.Push(virtualFile.ParentDir)
-
-	for queue.Len() > 0 {
-
-		tempParentFileId := queue.Pop()
-		if !firstAccess {
-			time.Sleep(100 * time.Millisecond)
-		}
-
-		files, err := d.getFiles(virtualFile, tempParentFileId)
-		firstAccess = false
-
-		if err != nil {
-			return res, err
-		}
-
-		for _, item := range files {
-
-			size, err := strconv.ParseInt(item.Size, 10, 64)
-			if err != nil {
-				utils.Log.Info("convert file size error:", err)
-				return res, err
-			}
-
-			if size/(1024*1024) >= virtualFile.MinFileSize || (item.Kind == "drive#folder" && !virtualFile.AppendSubFolder) {
-				res = append(res, item)
-			}
-
-			if item.Kind == "drive#folder" && virtualFile.AppendSubFolder {
-				utils.Log.Infof("递归遍历子文件夹：[%s]", item.Name)
-				queue.Push(item.Id)
-			}
-
-		}
-	}
-
-	return res, nil
-
 }

@@ -99,7 +99,7 @@ func (d *AliDrive) List(ctx context.Context, dir model.Obj, args model.ListArgs)
 
 	return virtual_file.List(d.ID, dir, func(virtualFile model.VirtualFile, dir model.Obj) ([]model.Obj, error) {
 
-		files, err := d.getShareFiles(ctx, virtualFile, filepath.Dir(filepath.Base(dir.GetPath())))
+		files, err := d.getShareFiles(ctx, virtualFile, filepath.Base(dir.GetPath()))
 		if err != nil {
 			return nil, err
 		}

@@ -31,7 +31,7 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 					ID:       category.Name,
 					Size:     622857143,
 					Modified: time.Now(),
-					Path:     filepath.Join(category.Name),
+					Path:     filepath.Join(category.Name, category.ParentDir),
 				},
 			})
 		}
@@ -39,7 +39,7 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 	}
 
 	// top dir
-	paths := filepath.SplitList(dir.GetPath())
+	paths := strings.Split(dir.GetPath(), "/")
 	if len(paths) == 0 {
 		return results, nil
 	}

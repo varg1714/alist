@@ -216,6 +216,10 @@ func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualF
 		}
 		marker = resp.NextMarker
 
+		for _, item := range resp.Items {
+			res = append(res, item)
+		}
+
 	}
 
 	return res, nil

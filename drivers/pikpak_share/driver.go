@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type PikPakShare struct {
@@ -52,7 +53,7 @@ func (d *PikPakShare) List(ctx context.Context, dir model.Obj, args model.ListAr
 
 		return utils.SliceConvert(files, func(src File) (model.Obj, error) {
 			obj := fileToObj(src)
-			obj.Path = virtualFile.Name
+			obj.Path = filepath.Join(dir.GetPath(), obj.GetID())
 			return obj, nil
 		})
 
@@ -64,7 +65,9 @@ func (d *PikPakShare) Link(ctx context.Context, file model.Obj, args model.LinkA
 
 	var resp ShareResp
 
-	virtualFile := db.QueryVirtualFilm(d.ID, file.GetPath())
+	split := strings.Split(file.GetPath(), "/")
+	virtualFile := db.QueryVirtualFilm(d.ID, split[0])
+
 	sharePassToken, err := d.getSharePassToken(virtualFile)
 
 	if err != nil {

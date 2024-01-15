@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alist-org/alist/v3/internal/stream"
@@ -128,7 +129,11 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 	start := time.Now().UnixMilli()
 
 	utils.Log.Infof("开始转存文件:[%s]\n", file.GetName())
-	shareFileId, err := d.SaveShare(file.GetPath(), file.GetID(), d.TempFolderPath)
+
+	split := strings.Split(file.GetPath(), "/")
+	virtualFile := db.QueryVirtualFilm(d.ID, split[0])
+
+	shareFileId, err := d.SaveShare(virtualFile.ShareID, file.GetID(), d.TempFolderPath)
 	if err != nil {
 		return &model.Link{
 			URL: "",

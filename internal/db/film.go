@@ -147,18 +147,12 @@ func DeleteActor(source string, actor string) error {
 
 }
 
-func QueryVirtualFilms(storageId string) map[string]model.VirtualFile {
+func QueryVirtualFiles(storageId string) []model.VirtualFile {
 
 	names := make([]model.VirtualFile, 0)
 	db.Where("storage_id = ?", storageId).Order("modified DESC").Find(&names)
 
-	result := make(map[string]model.VirtualFile)
-
-	for _, film := range names {
-		result[film.Name] = film
-	}
-
-	return result
+	return names
 
 }
 

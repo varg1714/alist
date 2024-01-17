@@ -19,7 +19,13 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 	dirName := dir.GetName()
 	utils.Log.Infof("list file:[%s]\n", dirName)
 
-	virtualFilms := db.QueryVirtualFilms(strconv.Itoa(int(storageId)))
+	virtualFilms := db.QueryVirtualFiles(strconv.Itoa(int(storageId)))
+
+	virtualFileMap := make(map[string]model.VirtualFile)
+
+	for _, film := range virtualFilms {
+		virtualFileMap[film.Name] = film
+	}
 
 	if "root" == dirName {
 		// 1. 顶级目录
@@ -30,7 +36,7 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 					IsFolder: true,
 					ID:       category.Name,
 					Size:     622857143,
-					Modified: time.Now(),
+					Modified: category.Modified,
 					Path:     filepath.Join(category.Name, category.ParentDir),
 				},
 			})
@@ -44,7 +50,7 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 		return results, nil
 	}
 
-	virtualFile, exist := virtualFilms[paths[0]]
+	virtualFile, exist := virtualFileMap[paths[0]]
 
 	if exist {
 
@@ -96,10 +102,9 @@ func prettyFiles(storageId uint, virtualFile model.VirtualFile, tempResults []mo
 					if len(tempNum) == 1 {
 						tempNum = "0" + tempNum
 					}
+					renameObj.SetName(virtualFile.Replace[testIndex].SourceName + tempNum + suffix)
+					virtualFile.Replace[testIndex].StartNum += 1
 				}
-
-				renameObj.SetName(virtualFile.Replace[testIndex].SourceName + tempNum + suffix)
-				virtualFile.Replace[testIndex].StartNum += 1
 
 				results = append(results, obj)
 				excludeFile = true
@@ -176,7 +181,10 @@ func MakeDir(storageId uint, param string) error {
 
 func Rename(storageId uint, dir, oldName, newName string) error {
 
-	return db.Rename(storageId, dir, oldName, newName)
+	split := strings.Split(dir, "/")
+	virtualFile := db.QueryVirtualFilm(storageId, split[0])
+
+	return db.Rename(storageId, virtualFile.ShareID, oldName, newName)
 }
 
 func replace(test model.ReplaceItem, index int) bool {

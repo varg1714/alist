@@ -25,6 +25,7 @@ func CreateFilms(source string, actor string, models []model.ObjThumb) error {
 			Source:    source,
 			Actor:     actor,
 			CreatedAt: now,
+			Date:      obj.Modified,
 		})
 	}
 

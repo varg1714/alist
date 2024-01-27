@@ -1,7 +1,6 @@
 package miss_av
 
 import (
-	"fmt"
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -14,7 +13,7 @@ import (
 var subTitles, _ = regexp.Compile(".*<div class=\".*\">\\s*?<div class=\".*\">\\s*?<a href=\"(.*)\" title=\".*\">\\s*?<span class=\"name\">.*</span>\\s*?<br />\\s*?<span class=\"meta\">[\\s|\\S]*?</span>\\s*?<br/>\\s*?<div class=\"tags\">\\s*?<span class=\".*\">高清</span>\\s*?<span class=\".*\">字幕</span>\\s*?</div>\\s*?</a>\\s*?</div>")
 var hd, _ = regexp.Compile(".*<div class=\".*\">\\s*?<div class=\".*\">\\s*?<a href=\"(.*)\" title=\".*\">\\s*?<span class=\"name\">.*</span>\\s*?<br />\\s*?<span class=\"meta\">[\\s]*.*[\\s]*</span>\\s*?<br/>\\s*?<div class=\"tags\">\\s*?<span class=\".*\">高清</span>\\s*?</div>\\s*?</a>\\s*?</div>")
 
-func convertToModel(films []string, images []string, urls []string) []model.ObjThumb {
+func convertToModel(films []string, images []string, urls []string, dates []time.Time) []model.ObjThumb {
 
 	results := make([]model.ObjThumb, 0)
 
@@ -32,7 +31,7 @@ func convertToModel(films []string, images []string, urls []string) []model.ObjT
 				IsFolder: true,
 				ID:       urls[index],
 				Size:     622857143,
-				Modified: time.Now(),
+				Modified: dates[index],
 			},
 			Thumbnail: model.Thumbnail{Thumbnail: image},
 		})
@@ -61,10 +60,11 @@ func (d *MIssAV) getFilms(dirName string, urlFunc func(index int) string) ([]mod
 	films := make([]string, 0)
 	images := make([]string, 0)
 	urls := make([]string, 0)
+	dates := make([]time.Time, 0)
 	nextPage := false
 	var err error
 
-	films, images, urls, nextPage, err = d.getPageInfo(urlFunc, 1, films, images, urls)
+	films, images, urls, dates, nextPage, err = d.getPageInfo(urlFunc, 1, films, images, urls, dates)
 	if err != nil {
 		return results, err
 	}
@@ -74,7 +74,7 @@ func (d *MIssAV) getFilms(dirName string, urlFunc func(index int) string) ([]mod
 	// not exists
 	for index := 2; index <= 20 && nextPage && len(existFilms) == 0; index++ {
 
-		films, images, urls, nextPage, err = d.getPageInfo(urlFunc, index, films, images, urls)
+		films, images, urls, dates, nextPage, err = d.getPageInfo(urlFunc, index, films, images, urls, dates)
 		if err != nil {
 			return results, err
 		}
@@ -89,17 +89,19 @@ func (d *MIssAV) getFilms(dirName string, urlFunc func(index int) string) ([]mod
 				urls = []string{}
 				images = []string{}
 				films = []string{}
+				dates = []time.Time{}
 			} else {
 				urls = urls[:index]
 				images = images[:index]
 				films = films[:index]
+				dates = dates[:index]
 			}
 			break
 		}
 	}
 
 	if len(urls) != 0 {
-		err = db.CreateFilms("javdb", dirName, convertToModel(films, images, urls))
+		err = db.CreateFilms("javdb", dirName, convertToModel(films, images, urls, dates))
 		if err != nil {
 			return results, nil
 		}
@@ -110,25 +112,25 @@ func (d *MIssAV) getFilms(dirName string, urlFunc func(index int) string) ([]mod
 }
 
 func (d *MIssAV) convertFilm(dirName string, actor []model.Film, results []model.Obj) []model.Obj {
-	for index, film := range actor {
+	for _, film := range actor {
 		results = append(results, &model.ObjThumb{
 			Object: model.Object{
-				Name:     fmt.Sprintf("%04d", index) + " " + film.Name,
+				Name:     film.Name,
 				IsFolder: true,
 				ID:       film.Url,
 				Size:     622857143,
-				Modified: time.Now(),
+				Modified: film.Date,
 				Path:     dirName,
 			},
 			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 		})
 		results = append(results, &model.ObjThumb{
 			Object: model.Object{
-				Name:     fmt.Sprintf("%04d", index) + " " + film.Name + ".jpg",
+				Name:     film.Name + ".jpg",
 				IsFolder: false,
 				ID:       film.Image,
 				Size:     622857143,
-				Modified: time.Now(),
+				Modified: film.Date,
 				Path:     dirName,
 			},
 			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
@@ -162,11 +164,12 @@ func (d *MIssAV) getMagnet(file model.Obj) (string, error) {
 
 }
 
-func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []string, images []string, urls []string) ([]string, []string, []string, bool, error) {
+func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []string, images []string, urls []string, dates []time.Time) ([]string, []string, []string, []time.Time, bool, error) {
 
 	urlsRegexp, _ := regexp.Compile(".*<a href=\"(.*)\" class=\"box\" title=\".*\">.*")
 	filmsRegexp, _ := regexp.Compile(".*<div class=\"video-title\"><strong>(.*)</strong>(.*)</div>.*")
 	imageRegexp, _ := regexp.Compile(".*<img loading=\"lazy\" src=\"(.*)\" />.*")
+	dateRegexp, _ := regexp.Compile(".*<div class=\"meta\">\\s*(.*)\\s*</div>")
 	pagesRegexp, _ := regexp.Compile(".*<a rel=\"next\" class=\"pagination-next\" href=\".*\">下一頁</a>.*")
 
 	pageUrl := urlFunc(index)
@@ -174,7 +177,7 @@ func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []
 
 	res, err := d.findPage(pageUrl)
 	if err != nil {
-		return films, images, urls, false, nil
+		return films, images, urls, dates, false, nil
 	}
 
 	page := string(res.Body())
@@ -182,6 +185,7 @@ func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []
 	tempUrls := urlsRegexp.FindAllString(page, -1)
 	tempFilms := filmsRegexp.FindAllString(page, -1)
 	imageUrls := imageRegexp.FindAllString(page, -1)
+	tempDates := dateRegexp.FindAllString(page, -1)
 	pages := pagesRegexp.FindAllString(page, -1)
 
 	for _, file := range tempFilms {
@@ -193,7 +197,20 @@ func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, films []
 	for _, tempUrl := range tempUrls {
 		urls = append(urls, "https://javdb.com/"+urlsRegexp.ReplaceAllString(tempUrl, "$1"))
 	}
+	for _, date := range tempDates {
+		dateStr := dateRegexp.ReplaceAllString(date, "$1")
+		if dateStr == "" {
+			dates = append(dates, time.Now())
+		} else {
+			parse, err := time.Parse(time.DateOnly, dateStr)
+			if err != nil {
+				dates = append(dates, time.Now())
+			} else {
+				dates = append(dates, parse)
+			}
+		}
+	}
 
-	return films, images, urls, len(pages) != 0, nil
+	return films, images, urls, dates, len(pages) != 0, nil
 
 }

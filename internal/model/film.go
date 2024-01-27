@@ -8,6 +8,7 @@ type Film struct {
 	Image     string    `json:"image"`
 	Source    string    `json:"source"`
 	Actor     string    `json:"actor"`
+	Date      time.Time `json:"date"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

@@ -300,32 +300,31 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string
 	}
 
 	// 3.2 缓存文件
-	go func() {
-		if resultFile.Kind == "drive#file" {
-			// 3.2.1 下载结果为单文件，直接缓存
-			err = db.CreateCacheFile(magnet, resultFile.Id, name)
-			if err != nil {
-				return
-			}
-
-		} else {
-			// 3.2.2 下载结果为文件夹，进行文件夹清理
-			utils.Log.Info("开始重命名文件")
-			prettyFiles := d.prettyFile(fileDir, resultFile.Id, name)
-			utils.Log.Info("重命名文件完成")
-			var newFileId string
-			if len(prettyFiles) == 0 {
-			} else if len(prettyFiles) == 1 {
-				newFileId = prettyFiles[0].Id
-			} else {
-				newFileId = resultFile.Id
-			}
-			err = db.CreateCacheFile(magnet, newFileId, name)
-			if err != nil {
-			}
-
+	if resultFile.Kind == "drive#file" {
+		// 3.2.1 下载结果为单文件，直接缓存
+		err = db.CreateCacheFile(magnet, resultFile.Id, name)
+		if err != nil {
+			return []model.Obj{}, err
 		}
-	}()
+
+	} else {
+		// 3.2.2 下载结果为文件夹，进行文件夹清理
+		utils.Log.Info("开始重命名文件")
+		prettyFiles := d.prettyFile(fileDir, resultFile.Id, name)
+		utils.Log.Info("重命名文件完成")
+		var newFileId string
+		if len(prettyFiles) == 0 {
+		} else if len(prettyFiles) == 1 {
+			newFileId = prettyFiles[0].Id
+		} else {
+			newFileId = resultFile.Id
+		}
+		err = db.CreateCacheFile(magnet, newFileId, name)
+		if err != nil {
+			return []model.Obj{}, err
+		}
+
+	}
 
 	return utils.SliceConvert([]File{resultFile}, func(src File) (model.Obj, error) {
 		return fileToObj(src), nil
@@ -407,17 +406,15 @@ func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (F
 		}
 	}
 
-	go func() {
-		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files/"+resultFile.Id, http.MethodPatch, func(req *resty.Request) {
-			req.SetBody(base.Json{
-				"name": d.prettyName(name),
-			})
-		}, nil)
+	_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files/"+resultFile.Id, http.MethodPatch, func(req *resty.Request) {
+		req.SetBody(base.Json{
+			"name": d.prettyName(name),
+		})
+	}, nil)
 
-		if err != nil {
-
-		}
-	}()
+	if err != nil {
+		return resultFile, err
+	}
 
 	return resultFile, nil
 }

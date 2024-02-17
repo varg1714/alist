@@ -5,6 +5,8 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/gocolly/colly/v2"
 	"gorm.io/gorm/utils"
+	"net/http"
+	"strings"
 	"time"
 )
 
@@ -128,6 +130,7 @@ func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, data []m
 
 	collector := colly.NewCollector(func(c *colly.Collector) {
 		c.SetRequestTimeout(time.Second * 10)
+		_ = c.SetCookies("https://javdb.com", setCookieRaw(d.Cookie))
 	})
 
 	collector.OnHTML(".movie-list", func(element *colly.HTMLElement) {
@@ -159,4 +162,23 @@ func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, data []m
 
 	return data, nextPage, err
 
+}
+
+// set cookies raw
+func setCookieRaw(cookieRaw string) []*http.Cookie {
+	// 可以添加多个cookie
+	var cookies []*http.Cookie
+	cookieList := strings.Split(cookieRaw, "; ")
+	for _, item := range cookieList {
+		keyValue := strings.Split(item, "=")
+		// fmt.Println(keyValue)
+		name := keyValue[0]
+		valueList := keyValue[1:]
+		cookieItem := http.Cookie{
+			Name:  name,
+			Value: strings.Join(valueList, "="),
+		}
+		cookies = append(cookies, &cookieItem)
+	}
+	return cookies
 }

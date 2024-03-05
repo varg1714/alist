@@ -56,7 +56,7 @@ func (d *JableTV) findPage(url string) (*resty.Response, error) {
 
 	//log.Infof("开始查询:%s", url)
 
-	res, err := base.RestyClient.R().
+	res, err := base.RestyClient.SetProxy("http://127.0.0.1:7890").R().
 		Get(fmt.Sprintf("%s%s", d.Addition.SpiderServer, url))
 
 	return res, err
@@ -125,6 +125,20 @@ func (d *JableTV) getFilms(urlFunc func(index int) string) ([]model.Obj, error) 
 
 	return convertToModel(films, images, results), nil
 
+}
+
+func (d *JableTV) getFilmPage(name string) (string, error) {
+
+	code := strings.Split(name, " ")
+	url := fmt.Sprintf("https://jable.tv/videos/%s/", code[1])
+
+	res, err := d.findPage(url)
+	if err != nil {
+		log.Errorf("出错了：%s,%s\n", err, res)
+		return "", err
+	}
+	page := string(res.Body())
+	return page, nil
 }
 
 func convertToModel(films []string, images []string, results []model.Obj) []model.Obj {

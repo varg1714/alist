@@ -2,14 +2,16 @@ package jable_tv
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/cron"
 	json "github.com/json-iterator/go"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -46,19 +48,27 @@ func (d *JableTV) Drop(ctx context.Context) error {
 func (d *JableTV) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 
 	results := make([]model.Obj, 0)
-	//log.Infof("我自己的内容:dir:%s,args:%s,RefreshToken:%s,ShareId:%s\n", dir.GetName(), args, d.RefreshToken, d.ShareId)
 
-	actorsMap := make(map[string]string)
+	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
+
+	actorsMap := make(map[string]model.Actor)
+
+	for _, film := range actors {
+		actorsMap[film.Name] = film
+	}
 	categoriesMap := make(map[string]string)
 
-	err := json.Unmarshal([]byte(d.Actors), &actorsMap)
+	err := json.Unmarshal([]byte(d.Categories), &categoriesMap)
 	if err != nil {
 		return results, err
 	}
-	err = json.Unmarshal([]byte(d.Categories), &categoriesMap)
-	if err != nil {
-		return results, err
+
+	var categories []string
+	for category := range categoriesMap {
+		categories = append(categories, category)
 	}
+
+	sort.Strings(categories)
 
 	dirName := dir.GetName()
 
@@ -76,7 +86,7 @@ func (d *JableTV) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 		})
 
 		// 1.2 添加系统目录
-		for category := range categoriesMap {
+		for _, category := range categories {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
 					Name:     category,
@@ -88,7 +98,9 @@ func (d *JableTV) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 			})
 		}
 		return results, nil
-	} else if dirName == "关注演员" {
+	}
+
+	if dirName == "关注演员" {
 		for actor := range actorsMap {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
@@ -105,7 +117,7 @@ func (d *JableTV) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 
 		actor, exist := actorsMap[dirName]
 		if exist {
-			return d.getActorFilms(actor, results)
+			return d.getActorFilms(actor.Url, results)
 		}
 
 		category, exist := categoriesMap[dirName]
@@ -122,19 +134,13 @@ func (d *JableTV) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 
 func (d *JableTV) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
-	code := strings.Split(file.GetName(), " ")
-
-	url := fmt.Sprintf("https://jable.tv/videos/%s/", code[1])
-	//log.Infof("影片访问地址:%s\n", url)
-
-	res, err := d.findPage(url)
+	page, err := d.getFilmPage(file.GetName())
 	if err != nil {
-		log.Errorf("出错了：%s,%s\n", err, res)
 		return nil, err
 	}
 
 	videoRegexp, _ := regexp.Compile(".*var hlsUrl = '(.*)'.*")
-	videoUrl := videoRegexp.FindString(string(res.Body()))
+	videoUrl := videoRegexp.FindString(page)
 
 	//log.Infof("res:%s,url:%s\n", res, videoUrl)
 	return &model.Link{
@@ -144,6 +150,44 @@ func (d *JableTV) Link(ctx context.Context, file model.Obj, args model.LinkArgs)
 		URL: videoRegexp.ReplaceAllString(videoUrl, "$1"),
 	}, nil
 
+}
+
+func (d *JableTV) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
+
+	split := strings.Split(dirName, " ")
+	if len(split) != 2 {
+		return errors.New("illegal dirName")
+	}
+
+	return db.CreateActor(strconv.Itoa(int(d.ID)), split[0], split[1])
+
+}
+
+func (d *JableTV) Rename(ctx context.Context, srcObj model.Obj, newName string) error {
+
+	page, err := d.getFilmPage(srcObj.GetName())
+	if err != nil {
+		return err
+	}
+
+	actorRegexp, _ := regexp.Compile(".*<a class=\"model\" href=\"https://jable.tv/models/(.*)/\">.*")
+	actor := actorRegexp.FindString(page)
+
+	if actor == "" {
+		return errors.New("actor is null")
+	}
+
+	err = db.DeleteActor(strconv.Itoa(int(d.ID)), newName)
+	if err != nil {
+		return err
+	}
+
+	return db.CreateActor(strconv.Itoa(int(d.ID)), newName, actorRegexp.ReplaceAllString(actor, "$1"))
+
+}
+
+func (d *JableTV) Remove(ctx context.Context, obj model.Obj) error {
+	return db.DeleteVirtualFile(strconv.Itoa(int(d.ID)), obj.GetName())
 }
 
 var _ driver.Driver = (*JableTV)(nil)

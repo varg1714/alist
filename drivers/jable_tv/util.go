@@ -56,7 +56,7 @@ func (d *JableTV) findPage(url string) (*resty.Response, error) {
 
 	//log.Infof("开始查询:%s", url)
 
-	res, err := base.RestyClient.SetProxy("http://127.0.0.1:7890").R().
+	res, err := base.RestyClient.R().
 		Get(fmt.Sprintf("%s%s", d.Addition.SpiderServer, url))
 
 	return res, err

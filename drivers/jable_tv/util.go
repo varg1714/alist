@@ -54,10 +54,11 @@ func findFilms(pageResponse string) ([]string, []string, int) {
 
 func (d *JableTV) findPage(url string) (*resty.Response, error) {
 
-	//log.Infof("开始查询:%s", url)
+	res, err := base.RestyClient.R().Get(url)
 
-	res, err := base.RestyClient.R().
-		Get(fmt.Sprintf("%s%s", d.Addition.SpiderServer, url))
+	if res.StatusCode() != 200 {
+		res, err = base.RestyClient.R().Get(fmt.Sprintf("%s%s", d.Addition.SpiderServer, url))
+	}
 
 	return res, err
 }

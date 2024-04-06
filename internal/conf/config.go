@@ -17,6 +17,13 @@ type Database struct {
 	DBFile      string `json:"db_file" env:"FILE"`
 	TablePrefix string `json:"table_prefix" env:"TABLE_PREFIX"`
 	SSLMode     string `json:"ssl_mode" env:"SSL_MODE"`
+	DSN         string `json:"dsn" env:"DSN"`
+}
+
+type Meilisearch struct {
+	Host        string `json:"host" env:"HOST"`
+	APIKey      string `json:"api_key" env:"API_KEY"`
+	IndexPrefix string `json:"index_prefix" env:"INDEX_PREFIX"`
 }
 
 type Scheme struct {
@@ -57,6 +64,12 @@ type Cors struct {
 	AllowHeaders []string `json:"allow_headers" env:"ALLOW_HEADERS"`
 }
 
+type S3 struct {
+	Enable bool `json:"enable" env:"ENABLE"`
+	Port   int  `json:"port" env:"PORT"`
+	SSL    bool `json:"ssl" env:"SSL"`
+}
+
 type Config struct {
 	Force                 bool        `json:"force" env:"FORCE"`
 	SiteURL               string      `json:"site_url" env:"SITE_URL"`
@@ -64,6 +77,7 @@ type Config struct {
 	JwtSecret             string      `json:"jwt_secret" env:"JWT_SECRET"`
 	TokenExpiresIn        int         `json:"token_expires_in" env:"TOKEN_EXPIRES_IN"`
 	Database              Database    `json:"database" envPrefix:"DB_"`
+	Meilisearch           Meilisearch `json:"meilisearch" env:"MEILISEARCH"`
 	Scheme                Scheme      `json:"scheme"`
 	TempDir               string      `json:"temp_dir" env:"TEMP_DIR"`
 	BleveDir              string      `json:"bleve_dir" env:"BLEVE_DIR"`
@@ -74,6 +88,7 @@ type Config struct {
 	TlsInsecureSkipVerify bool        `json:"tls_insecure_skip_verify" env:"TLS_INSECURE_SKIP_VERIFY"`
 	Tasks                 TasksConfig `json:"tasks" envPrefix:"TASKS_"`
 	Cors                  Cors        `json:"cors" envPrefix:"CORS_"`
+	S3                    S3          `json:"s3" envPrefix:"S3_"`
 }
 
 func DefaultConfig() *Config {
@@ -99,6 +114,9 @@ func DefaultConfig() *Config {
 			Port:        0,
 			TablePrefix: "x_",
 			DBFile:      dbPath,
+		},
+		Meilisearch: Meilisearch{
+			Host: "http://localhost:7700",
 		},
 		BleveDir: indexDir,
 		Log: LogConfig{
@@ -131,6 +149,11 @@ func DefaultConfig() *Config {
 			AllowOrigins: []string{"*"},
 			AllowMethods: []string{"*"},
 			AllowHeaders: []string{"*"},
+		},
+		S3: S3{
+			Enable: false,
+			Port:   5246,
+			SSL:    false,
 		},
 	}
 }

@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://alist.nn.ci"><img height="100px" alt="logo" src="https://cdn.jsdelivr.net/gh/alist-org/logo@main/logo.svg"/></a>
+  <a href="https://alist.nn.ci"><img width="100px" alt="logo" src="https://cdn.jsdelivr.net/gh/alist-org/logo@main/logo.svg"/></a>
   <p><em>🗂️A file list program that supports multiple storages, powered by Gin and Solidjs.</em></p>
 <div>
   <a href="https://goreportcard.com/report/github.com/alist-org/alist/v3">
@@ -45,7 +45,7 @@ English | [中文](./README_cn.md)| [日本語](./README_ja.md) | [Contributing]
 
 - [x] Multiple storages
     - [x] Local storage
-    - [x] [Aliyundrive](https://www.aliyundrive.com/)
+    - [x] [Aliyundrive](https://www.alipan.com/)
     - [x] OneDrive / Sharepoint ([global](https://www.office.com/), [cn](https://portal.partner.microsoftonline.cn),de,us)
     - [x] [189cloud](https://cloud.189.cn) (Personal, Family)
     - [x] [GoogleDrive](https://drive.google.com/)
@@ -66,7 +66,8 @@ English | [中文](./README_cn.md)| [日本語](./README_ja.md) | [Contributing]
     - [x] [Quark](https://pan.quark.cn)
     - [x] [Thunder](https://pan.xunlei.com)
     - [x] [Lanzou](https://www.lanzou.com/)
-    - [x] [Aliyundrive share](https://www.aliyundrive.com/)
+    - [x] [ILanzou](https://www.ilanzou.com/)
+    - [x] [Aliyundrive share](https://www.alipan.com/)
     - [x] [Google photo](https://photos.google.com/)
     - [x] [Mega.nz](https://mega.nz)
     - [x] [Baidu photo](https://photo.baidu.com/)
@@ -74,6 +75,8 @@ English | [中文](./README_cn.md)| [日本語](./README_ja.md) | [Contributing]
     - [x] [115](https://115.com/)
     - [X] Cloudreve
     - [x] [Dropbox](https://www.dropbox.com/)
+    - [x] [FeijiPan](https://www.feijipan.com/)
+    - [x] [dogecloud](https://www.dogecloud.com/product/oss)
 - [x] Easy to deploy and out-of-the-box
 - [x] File preview (PDF, markdown, code, plain text, ...)
 - [x] Image preview in gallery mode

@@ -36,6 +36,7 @@ func Init(e *gin.Engine) {
 		g.Use(middlewares.MaxAllowed(conf.Conf.MaxConnections))
 	}
 	WebDav(g.Group("/dav"))
+	S3(g.Group("/s3"))
 
 	g.GET("/d/*path", middlewares.Down, handles.Down)
 	g.GET("/p/*path", middlewares.Down, handles.Proxy)
@@ -48,6 +49,7 @@ func Init(e *gin.Engine) {
 
 	api.POST("/auth/login", handles.Login)
 	api.POST("/auth/login/hash", handles.LoginHash)
+	api.POST("/auth/login/ldap", handles.LoginLdap)
 	auth.GET("/me", handles.CurrentUser)
 	auth.POST("/me/update", handles.UpdateCurrent)
 	auth.POST("/auth/2fa/generate", handles.Generate2FA)
@@ -169,4 +171,9 @@ func Cors(r *gin.Engine) {
 	config.AllowHeaders = conf.Conf.Cors.AllowHeaders
 	config.AllowMethods = conf.Conf.Cors.AllowMethods
 	r.Use(cors.New(config))
+}
+
+func InitS3(e *gin.Engine) {
+	Cors(e)
+	S3Server(e.Group("/"))
 }

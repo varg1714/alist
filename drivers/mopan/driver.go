@@ -43,23 +43,31 @@ func (d *MoPan) Init(ctx context.Context) error {
 	if d.uploadThread < 1 || d.uploadThread > 32 {
 		d.uploadThread, d.UploadThread = 3, "3"
 	}
-	login := func() error {
-		data, err := d.client.Login(d.Phone, d.Password)
+
+	defer func() { d.SMSCode = "" }()
+
+	login := func() (err error) {
+		var loginData *mopan.LoginResp
+		if d.SMSCode != "" {
+			loginData, err = d.client.LoginBySmsStep2(d.Phone, d.SMSCode)
+		} else {
+			loginData, err = d.client.Login(d.Phone, d.Password)
+		}
 		if err != nil {
 			return err
 		}
-		d.client.SetAuthorization(data.Token)
+		d.client.SetAuthorization(loginData.Token)
 
 		info, err := d.client.GetUserInfo()
 		if err != nil {
 			return err
 		}
 		d.userID = info.UserID
-		log.Debugf("[mopan] Phone: %s UserCloudStorageRelations: %+v", d.Phone, data.UserCloudStorageRelations)
+		log.Debugf("[mopan] Phone: %s UserCloudStorageRelations: %+v", d.Phone, loginData.UserCloudStorageRelations)
 		cloudCircleApp, _ := d.client.QueryAllCloudCircleApp()
 		log.Debugf("[mopan] Phone: %s CloudCircleApp: %+v", d.Phone, cloudCircleApp)
 		if d.RootFolderID == "" {
-			for _, userCloudStorage := range data.UserCloudStorageRelations {
+			for _, userCloudStorage := range loginData.UserCloudStorageRelations {
 				if userCloudStorage.Path == "/文件" {
 					d.RootFolderID = userCloudStorage.FolderID
 				}
@@ -76,8 +84,20 @@ func (d *MoPan) Init(ctx context.Context) error {
 				op.MustSaveDriverStorage(d)
 			}
 			return err
-		}).SetDeviceInfo(d.DeviceInfo)
-	d.DeviceInfo = d.client.GetDeviceInfo()
+		})
+
+	var deviceInfo mopan.DeviceInfo
+	if strings.TrimSpace(d.DeviceInfo) != "" && utils.Json.UnmarshalFromString(d.DeviceInfo, &deviceInfo) == nil {
+		d.client.SetDeviceInfo(&deviceInfo)
+	}
+	d.DeviceInfo, _ = utils.Json.MarshalToString(d.client.GetDeviceInfo())
+
+	if strings.Contains(d.SMSCode, "send") {
+		if _, err := d.client.LoginBySms(d.Phone); err != nil {
+			return err
+		}
+		return errors.New("please enter the SMS code")
+	}
 	return login()
 }
 
@@ -275,7 +295,7 @@ func (d *MoPan) Put(ctx context.Context, dstDir model.Obj, stream model.FileStre
 	}
 
 	if !initUpdload.FileDataExists {
-		utils.Log.Error(d.client.CloudDiskStartBusiness())
+		// utils.Log.Error(d.client.CloudDiskStartBusiness())
 
 		threadG, upCtx := errgroup.NewGroupWithContext(ctx, d.uploadThread,
 			retry.Attempts(3),
@@ -303,6 +323,7 @@ func (d *MoPan) Put(ctx context.Context, dstDir model.Obj, stream model.FileStre
 				if err != nil {
 					return err
 				}
+				req.ContentLength = byteSize
 				resp, err := base.HttpClient.Do(req)
 				if err != nil {
 					return err

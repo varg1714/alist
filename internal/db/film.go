@@ -68,14 +68,20 @@ func DeleteByActor(source string, actor string) error {
 
 }
 
-func QueryFileId(magnet string) string {
+func QueryFileId(name string) string {
 
-	magnetCache := model.MagnetCache{
-		Magnet: magnet,
+	var code string
+	split := strings.Split(name, " ")
+	if len(split) >= 3 {
+		code = split[0]
 	}
-	db.Where(magnetCache).First(&magnetCache)
 
-	return magnetCache.FileId
+	fileCache := model.MagnetCache{
+		Code: code,
+	}
+	db.Where(fileCache).First(&fileCache)
+
+	return fileCache.FileId
 
 }
 
@@ -84,7 +90,7 @@ func CreateCacheFile(magnet string, fileId string, name string) error {
 	var code string
 	split := strings.Split(name, " ")
 	if len(split) >= 3 {
-		code = split[1]
+		code = split[0]
 	}
 
 	magnetCache := model.MagnetCache{
@@ -113,7 +119,7 @@ func UpdateCacheFile(magnet string, fileId string, name string) error {
 		Code:   code,
 	}
 
-	return errors.WithStack(db.Where("magnet = ?", magnet).Save(magnetCache).Error)
+	return errors.WithStack(db.Where("code = ?", code).Save(magnetCache).Error)
 
 }
 

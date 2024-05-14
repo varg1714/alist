@@ -187,7 +187,7 @@ func (d *JableTV) Rename(ctx context.Context, srcObj model.Obj, newName string) 
 }
 
 func (d *JableTV) Remove(ctx context.Context, obj model.Obj) error {
-	return db.DeleteVirtualFile(strconv.Itoa(int(d.ID)), obj.GetName())
+	return db.DeleteActor(strconv.Itoa(int(d.ID)), obj.GetName())
 }
 
 var _ driver.Driver = (*JableTV)(nil)

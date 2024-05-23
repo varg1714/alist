@@ -9,9 +9,7 @@ import (
 	"time"
 
 	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/go-resty/resty/v2"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // do others that not defined in Driver interface
@@ -74,7 +72,13 @@ func (d *PikPakShare) refreshToken() error {
 
 func (d *PikPakShare) request(url string, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
 	req := base.RestyClient.R()
-	req.SetHeader("Authorization", "Bearer "+d.AccessToken)
+
+	token, err := d.oauth2Token.Token()
+	if err != nil {
+		return nil, err
+	}
+	req.SetAuthScheme(token.TokenType).SetAuthToken(token.AccessToken)
+
 	if callback != nil {
 		callback(req)
 	}
@@ -88,14 +92,6 @@ func (d *PikPakShare) request(url string, method string, callback base.ReqCallba
 		return nil, err
 	}
 	if e.ErrorCode != 0 {
-		if e.ErrorCode == 16 {
-			// login / refresh token
-			err = d.refreshToken()
-			if err != nil {
-				return nil, err
-			}
-			return d.request(url, method, callback, resp)
-		}
 		return nil, errors.New(e.Error)
 	}
 	return res.Body(), nil

@@ -16,60 +16,6 @@ import (
 
 var shareTokenCache = cache.NewMemCache(cache.WithShards[string](128))
 
-func (d *PikPakShare) login() error {
-	url := "https://user.mypikpak.com/v1/auth/signin"
-	var e RespErr
-	res, err := base.RestyClient.R().SetError(&e).SetBody(base.Json{
-		"captcha_token": "",
-		"client_id":     "YNxT9w7GMdWvEOKa",
-		"client_secret": "dbw2OtmVEeuUvIptb1Coyg",
-		"username":      d.Username,
-		"password":      d.Password,
-	}).Post(url)
-	if err != nil {
-		return err
-	}
-	if e.ErrorCode != 0 {
-		return errors.New(e.Error)
-	}
-	data := res.Body()
-	d.RefreshToken = jsoniter.Get(data, "refresh_token").ToString()
-	d.AccessToken = jsoniter.Get(data, "access_token").ToString()
-	return nil
-}
-
-func (d *PikPakShare) refreshToken() error {
-	url := "https://user.mypikpak.com/v1/auth/token"
-	var e RespErr
-	res, err := base.RestyClient.R().SetError(&e).
-		SetHeader("user-agent", "").SetBody(base.Json{
-		"client_id":     "YNxT9w7GMdWvEOKa",
-		"client_secret": "dbw2OtmVEeuUvIptb1Coyg",
-		"grant_type":    "refresh_token",
-		"refresh_token": d.RefreshToken,
-	}).Post(url)
-	if err != nil {
-		d.Status = err.Error()
-		op.MustSaveDriverStorage(d)
-		return err
-	}
-	if e.ErrorCode != 0 {
-		if e.ErrorCode == 4126 {
-			// refresh_token invalid, re-login
-			return d.login()
-		}
-		d.Status = e.Error
-		op.MustSaveDriverStorage(d)
-		return errors.New(e.Error)
-	}
-	data := res.Body()
-	d.Status = "work"
-	d.RefreshToken = jsoniter.Get(data, "refresh_token").ToString()
-	d.AccessToken = jsoniter.Get(data, "access_token").ToString()
-	op.MustSaveDriverStorage(d)
-	return nil
-}
-
 func (d *PikPakShare) request(url string, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
 	req := base.RestyClient.R()
 

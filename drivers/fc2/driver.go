@@ -90,7 +90,7 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 
 		index := strings.Index(dirName, " ")
 
-		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir.GetPath(), fmt.Sprintf("%s FC2-PPV-%s %s", dirName[:index], dir.GetID(), dirName[index+1:]), magnet)
+		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir.GetPath(), fmt.Sprintf("FC2-PPV-%s %s", dir.GetID(), dirName[index+1:]), magnet)
 	} else {
 		// pikPak文件
 		return results, nil

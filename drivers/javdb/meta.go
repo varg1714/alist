@@ -1,4 +1,4 @@
-package miss_av
+package javdb
 
 import (
 	"github.com/alist-org/alist/v3/internal/driver"
@@ -16,7 +16,7 @@ type Addition struct {
 }
 
 var config = driver.Config{
-	Name:        "MissAV",
+	Name:        "Javdb",
 	LocalSort:   false,
 	OnlyProxy:   false,
 	NoUpload:    true,
@@ -25,6 +25,6 @@ var config = driver.Config{
 
 func init() {
 	op.RegisterDriver(func() driver.Driver {
-		return &MIssAV{}
+		return &Javdb{}
 	})
 }

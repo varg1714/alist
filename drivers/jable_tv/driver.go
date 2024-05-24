@@ -8,6 +8,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/cron"
+	"github.com/emirpasic/gods/v2/maps/linkedhashmap"
 	json "github.com/json-iterator/go"
 	"net/http"
 	"regexp"
@@ -51,10 +52,10 @@ func (d *JableTV) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 
 	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
 
-	actorsMap := make(map[string]model.Actor)
+	actorsMap := linkedhashmap.New[string, model.Actor]()
 
-	for _, film := range actors {
-		actorsMap[film.Name] = film
+	for _, actor := range actors {
+		actorsMap.Put(actor.Name, actor)
 	}
 	categoriesMap := make(map[string]string)
 
@@ -101,21 +102,20 @@ func (d *JableTV) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 	}
 
 	if dirName == "关注演员" {
-		for actor := range actorsMap {
+		actorsMap.Each(func(name string, actor model.Actor) {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
-					Name:     actor,
+					Name:     name,
 					IsFolder: true,
-					ID:       actor,
+					ID:       name,
 					Size:     622857143,
-					Modified: time.Now(),
+					Modified: actor.Model.UpdatedAt,
 				},
 			})
-		}
+		})
 		return results, nil
 	} else {
-
-		actor, exist := actorsMap[dirName]
+		actor, exist := actorsMap.Get(dirName)
 		if exist {
 			return d.getActorFilms(actor.Url, results)
 		}

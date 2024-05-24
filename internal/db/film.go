@@ -72,7 +72,7 @@ func QueryFileId(name string) string {
 
 	var code string
 	split := strings.Split(name, " ")
-	if len(split) >= 3 {
+	if len(split) >= 2 {
 		code = split[0]
 	}
 
@@ -89,7 +89,7 @@ func CreateCacheFile(magnet string, fileId string, name string) error {
 
 	var code string
 	split := strings.Split(name, " ")
-	if len(split) >= 3 {
+	if len(split) >= 2 {
 		code = split[0]
 	}
 
@@ -108,8 +108,8 @@ func UpdateCacheFile(magnet string, fileId string, name string) error {
 
 	var code string
 	split := strings.Split(name, " ")
-	if len(split) >= 3 {
-		code = split[1]
+	if len(split) >= 2 {
+		code = split[0]
 	}
 
 	magnetCache := model.MagnetCache{
@@ -142,7 +142,7 @@ func QueryActor(source string) []model.Actor {
 		Dir: source,
 	}
 
-	db.Where(actor).Find(&actors)
+	db.Where(actor).Order("updated_at desc").Find(&actors)
 
 	return actors
 

@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"gorm.io/gorm"
+	"time"
+)
 
 type Film struct {
 	Url       string    `json:"url" gorm:"index"`
@@ -20,6 +23,7 @@ type MagnetCache struct {
 }
 
 type Actor struct {
+	gorm.Model
 	Dir  string `json:"dir" gorm:"index"`
 	Name string `json:"name"`
 	Url  string `json:"url"`

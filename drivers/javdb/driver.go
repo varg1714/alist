@@ -1,4 +1,4 @@
-package miss_av
+package javdb
 
 import (
 	"context"
@@ -10,12 +10,12 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/pkg/cron"
+	"github.com/emirpasic/gods/v2/maps/linkedhashmap"
 	"strconv"
 	"strings"
-	"time"
 )
 
-type MIssAV struct {
+type Javdb struct {
 	model.Storage
 	Addition
 	AccessToken string
@@ -24,28 +24,28 @@ type MIssAV struct {
 	cron        *cron.Cron
 }
 
-func (d *MIssAV) Config() driver.Config {
+func (d *Javdb) Config() driver.Config {
 	return config
 }
 
-func (d *MIssAV) GetAddition() driver.Additional {
+func (d *Javdb) GetAddition() driver.Additional {
 	return &d.Addition
 }
 
-func (d *MIssAV) Init(ctx context.Context) error {
+func (d *Javdb) Init(ctx context.Context) error {
 	return nil
 }
 
-func (d *MIssAV) Drop(ctx context.Context) error {
+func (d *Javdb) Drop(ctx context.Context) error {
 	if d.cron != nil {
 		d.cron.Stop()
 	}
 	return nil
 }
 
-func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
+func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 
-	categories := make(map[string]string)
+	categories := linkedhashmap.New[string, model.Actor]()
 	results := make([]model.Obj, 0)
 
 	storage := op.GetBalancedStorage(d.PikPakPath)
@@ -58,31 +58,31 @@ func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 
 	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
 	for _, actor := range actors {
-		url := actor.Url
-		if !strings.HasPrefix(url, "http") {
-			url = "https://javdb.com/actors/" + url + "?page=%d&sort_type=0&t=d"
-		}
-		categories[actor.Name] = url
+		categories.Put(actor.Name, actor)
 	}
 
 	if d.RootID.GetRootId() == dirName {
 		// 1. 顶级目录
-		for category := range categories {
+		categories.Each(func(name string, actor model.Actor) {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
-					Name:     category,
+					Name:     name,
 					IsFolder: true,
-					ID:       category,
+					ID:       name,
 					Size:     622857143,
-					Modified: time.Now(),
+					Modified: actor.Model.UpdatedAt,
 				},
 			})
-		}
+		})
 		return results, nil
-	} else if categories[dirName] != "" {
+	} else if actor, exist := categories.Get(dirName); exist {
 		// 自定义目录
+		url := actor.Url
+		if !strings.HasPrefix(url, "http") {
+			url = "https://javdb.com/actors/" + url + "?page=%d&sort_type=0&t=d"
+		}
 		return d.getFilms(dirName, func(index int) string {
-			return fmt.Sprintf(categories[dirName], index)
+			return fmt.Sprintf(url, index)
 		})
 	} else if strings.Contains(dir.GetID(), "https://") && !strings.Contains(dir.GetID(), ".jpg") {
 		// 临时文件
@@ -98,7 +98,7 @@ func (d *MIssAV) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 
 }
 
-func (d *MIssAV) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
+func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
 	if strings.Contains(file.GetID(), ".jpg") {
 		return &model.Link{
@@ -118,7 +118,7 @@ func (d *MIssAV) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 
 }
 
-func (d *MIssAV) Remove(ctx context.Context, obj model.Obj) error {
+func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 
 	err := db.DeleteActor(strconv.Itoa(int(d.ID)), obj.GetName())
 	if err != nil {
@@ -129,7 +129,7 @@ func (d *MIssAV) Remove(ctx context.Context, obj model.Obj) error {
 
 }
 
-func (d *MIssAV) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
+func (d *Javdb) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
 
 	split := strings.Split(dirName, " ")
 	if len(split) != 2 {
@@ -140,4 +140,4 @@ func (d *MIssAV) MakeDir(ctx context.Context, parentDir model.Obj, dirName strin
 
 }
 
-var _ driver.Driver = (*MIssAV)(nil)
+var _ driver.Driver = (*Javdb)(nil)

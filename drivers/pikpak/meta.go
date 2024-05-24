@@ -11,8 +11,9 @@ type Addition struct {
 	Password           string `json:"password" required:"true"`
 	DisableMediaLink   bool   `json:"disable_media_link"`
 	FileNameBlackChars string `json:"file_name_black_chars"`
-	ClientID         string `json:"client_id" required:"true" default:"YNxT9w7GMdWvEOKa"`
-	ClientSecret     string `json:"client_secret" required:"true" default:"dbw2OtmVEeuUvIptb1Coyg"`
+	ClientID           string `json:"client_id" required:"true" default:"YNxT9w7GMdWvEOKa"`
+	ClientSecret       string `json:"client_secret" required:"true" default:"dbw2OtmVEeuUvIptb1Coyg"`
+	LinkIndex          uint   `json:"link_index" type:"number" default:"0"`
 }
 
 var config = driver.Config{

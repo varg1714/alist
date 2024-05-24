@@ -93,7 +93,7 @@ func (d *PikPak) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 	}
 	if !d.DisableMediaLink && len(resp.Medias) > 0 && resp.Medias[0].Link.Url != "" {
 		log.Debugln("use media link")
-		link.URL = resp.Medias[0].Link.Url
+		link.URL = resp.Medias[d.LinkIndex].Link.Url
 	}
 	return &link, nil
 }

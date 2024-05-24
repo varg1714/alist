@@ -1,4 +1,4 @@
-package miss_av
+package javdb
 
 import (
 	"github.com/alist-org/alist/v3/internal/db"
@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func (d *MIssAV) getFilms(dirName string, urlFunc func(index int) string) ([]model.Obj, error) {
+func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]model.Obj, error) {
 
 	results := make([]model.Obj, 0)
 	data := make([]model.ObjThumb, 0)
@@ -66,7 +66,7 @@ func (d *MIssAV) getFilms(dirName string, urlFunc func(index int) string) ([]mod
 
 }
 
-func (d *MIssAV) convertFilm(dirName string, actor []model.Film, results []model.Obj) []model.Obj {
+func (d *Javdb) convertFilm(dirName string, actor []model.Film, results []model.Obj) []model.Obj {
 	for _, film := range actor {
 		results = append(results, &model.ObjThumb{
 			Object: model.Object{
@@ -94,7 +94,7 @@ func (d *MIssAV) convertFilm(dirName string, actor []model.Film, results []model
 	return results
 }
 
-func (d *MIssAV) getMagnet(file model.Obj) (string, error) {
+func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 	magnet := ""
 	subTitles := false
@@ -124,7 +124,7 @@ func (d *MIssAV) getMagnet(file model.Obj) (string, error) {
 
 }
 
-func (d *MIssAV) getPageInfo(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+func (d *Javdb) getPageInfo(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 
 	var nextPage bool
 

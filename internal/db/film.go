@@ -29,7 +29,7 @@ func CreateFilms(source string, actor string, models []model.ObjThumb) error {
 		})
 	}
 
-	return errors.WithStack(db.CreateInBatches(films, 100).Error)
+	return errors.WithStack(db.CreateInBatches(&films, 100).Error)
 
 }
 
@@ -100,7 +100,7 @@ func CreateCacheFile(magnet string, fileId string, name string) error {
 		Code:   code,
 	}
 
-	return errors.WithStack(db.Create(magnetCache).Error)
+	return errors.WithStack(db.Create(&magnetCache).Error)
 
 }
 
@@ -119,7 +119,7 @@ func UpdateCacheFile(magnet string, fileId string, name string) error {
 		Code:   code,
 	}
 
-	return errors.WithStack(db.Where("code = ?", code).Save(magnetCache).Error)
+	return errors.WithStack(db.Where("code = ?", code).Save(&magnetCache).Error)
 
 }
 
@@ -131,7 +131,8 @@ func CreateActor(dir string, name string, url string) error {
 		Url:  url,
 	}
 
-	return errors.WithStack(db.Create(actor).Error)
+	err := db.Create(&actor).Error
+	return errors.WithStack(err)
 
 }
 
@@ -178,7 +179,7 @@ func QueryVirtualFilm(storageId uint, name string) model.VirtualFile {
 
 func CreateVirtualFile(virtualFile model.VirtualFile) error {
 
-	return errors.WithStack(db.Create(virtualFile).Error)
+	return errors.WithStack(db.Create(&virtualFile).Error)
 
 }
 
@@ -202,7 +203,7 @@ func Rename(storageId uint, dir, oldName, newName string) error {
 		return db.Where("storage_id = ? and dir_name = ? and old_name = ?", storageId, dir, oldName).Save(replacement).Error
 	} else {
 		replacement.NewName = newName
-		return errors.WithStack(db.Create(replacement).Error)
+		return errors.WithStack(db.Create(&replacement).Error)
 	}
 
 }

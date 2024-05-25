@@ -78,7 +78,6 @@ func (d *FC2) getPageInfo(urlFunc func(index int) string, index int, data []mode
 
 	collector := colly.NewCollector(func(c *colly.Collector) {
 		c.SetRequestTimeout(time.Second * 10)
-		_ = c.SetProxy("http://127.0.0.1:7890")
 	})
 
 	tableContainer := ""

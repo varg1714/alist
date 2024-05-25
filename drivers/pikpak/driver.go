@@ -1,8 +1,10 @@
 package pikpak
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"golang.org/x/exp/slices"
 	"net/http"
 	"strings"
 
@@ -240,36 +242,10 @@ func (d *PikPak) Put(ctx context.Context, dstDir model.Obj, stream model.FileStr
 
 func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string, name string, magnet string) ([]model.Obj, error) {
 
-	// 1. 获取临时目录下所有文件
-	var fileDir string
-	parentFiles, err := d.getFiles(parentDir)
-	if err != nil {
+	// 1. 获取临时目录下的文件夹
+	fileDir, err := d.getDir(parentDir, dir)
+	if fileDir == "" || err != nil {
 		return []model.Obj{}, err
-	}
-
-	// 1.1 在临时目录下寻找待下载的文件夹
-	for _, parentFile := range parentFiles {
-		if parentFile.Name == dir {
-			fileDir = parentFile.Id
-			break
-		}
-	}
-
-	// 2.2 正在下载的文件所属文件夹不存在，新建文件夹
-	if fileDir == "" {
-		utils.Log.Infof("新建文件夹:[%s]\n", dir)
-		var newDir CloudDownloadResp
-		_, err := d.request("https://api-drive.mypikpak.com/drive/v1/files", http.MethodPost, func(req *resty.Request) {
-			req.SetBody(base.Json{
-				"kind":      "drive#folder",
-				"parent_id": parentDir,
-				"name":      dir,
-			})
-		}, &newDir)
-		if err != nil || newDir.File.Id == "" {
-			return []model.Obj{}, err
-		}
-		fileDir = newDir.File.Id
 	}
 
 	// 2. 尝试获取缓存文件
@@ -290,77 +266,103 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string
 		}
 	}
 
-	// 2.3 该文件在云盘已存在，直接返回该文件
-	if resultFile.Id != "" {
-
-		// 2.3.1 缓存此文件
-		if fileIdCache == "" {
-			err = db.CreateCacheFile(magnet, resultFile.Id, name)
-			if err != nil {
-				return []model.Obj{}, err
-			}
-		} else if fileIdCache != resultFile.Id {
-			err = db.UpdateCacheFile(magnet, resultFile.Id, name)
-			if err != nil {
-				return []model.Obj{}, err
-			}
+	// 2.3 该文件在云盘不存在，下载该文件
+	newDownloaded := false
+	if resultFile.Id == "" {
+		resultFile, err = d.downloadMagnet(fileDir, magnet)
+		if err != nil || resultFile.Id == "" {
+			return []model.Obj{}, err
 		}
-
-		// 2.3.2 返回结果
-		if resultFile.Kind == "drive#file" {
-			return utils.SliceConvert([]File{resultFile}, func(src File) (model.Obj, error) {
-				return fileToObj(src), nil
-			})
-		} else {
-			return d.List(ctx, &model.Object{
-				ID: resultFile.Id,
-			}, model.ListArgs{})
-		}
-
+		newDownloaded = true
 	}
 
-	// 3. 文件不存在，下载文件
-
-	// 3.1 下载文件
-	resultFile, err = d.downloadMagnet(fileDir, name, magnet)
-	if err != nil || resultFile.Id == "" {
-		return []model.Obj{}, err
-	}
-
-	// 3.2 缓存文件
-	if resultFile.Kind == "drive#file" {
-		// 3.2.1 下载结果为单文件，直接缓存
+	// 2.4.1 缓存此文件
+	if fileIdCache == "" {
 		err = db.CreateCacheFile(magnet, resultFile.Id, name)
 		if err != nil {
 			return []model.Obj{}, err
 		}
-
-	} else {
-		// 3.2.2 下载结果为文件夹，进行文件夹清理
-		utils.Log.Info("开始重命名文件")
-		prettyFiles := d.prettyFile(fileDir, resultFile.Id, name)
-		utils.Log.Info("重命名文件完成")
-		var newFileId string
-		if len(prettyFiles) == 0 {
-		} else if len(prettyFiles) == 1 {
-			newFileId = prettyFiles[0].Id
-		} else {
-			newFileId = resultFile.Id
-		}
-		err = db.CreateCacheFile(magnet, newFileId, name)
+	} else if fileIdCache != resultFile.Id {
+		err = db.UpdateCacheFile(magnet, resultFile.Id, name)
 		if err != nil {
 			return []model.Obj{}, err
 		}
-
 	}
 
-	return utils.SliceConvert([]File{resultFile}, func(src File) (model.Obj, error) {
-		return fileToObj(src), nil
-	})
+	if newDownloaded {
+		// 2.4.3 新下载的文件，进行文件夹清理
+		go func() {
+			// 2.4.3. 下载结果为文件夹，进行文件夹清理
+			utils.Log.Info("开始重命名文件")
+			prettyFileId := d.prettyFile(fileDir, resultFile.Id, name, resultFile.Name, resultFile.Kind != "drive#file")
+			utils.Log.Info("重命名文件完成")
+
+			err = db.UpdateCacheFile(magnet, prettyFileId, name)
+		}()
+	}
+
+	// 2.4.2 返回结果
+	if resultFile.Kind == "drive#file" {
+		// 2.4.2.1 单文件，直接返回
+		return utils.SliceConvert([]File{resultFile}, func(src File) (model.Obj, error) {
+			return fileToObj(src), nil
+		})
+	} else {
+		// 2.4.2.2 文件夹，返回文件大小最大的文件
+		fileList, err := d.List(ctx, &model.Object{
+			ID: resultFile.Id,
+		}, model.ListArgs{})
+		if err != nil {
+			return fileList, err
+		}
+		slices.SortFunc(fileList, func(a, b model.Obj) int {
+			return cmp.Compare(b.GetSize(), a.GetSize())
+		})
+
+		return fileList, err
+	}
 
 }
 
-func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (File, error) {
+func (d *PikPak) getDir(parentDirId string, dirName string) (string, error) {
+
+	var fileDir string
+
+	// 1. 获取父级文件夹下的文件
+	parentFiles, err := d.getFiles(parentDirId)
+	if err != nil {
+		return "", err
+	}
+
+	// 1.1 在临时目录下寻找待下载的文件夹
+	for _, parentFile := range parentFiles {
+		if parentFile.Name == dirName {
+			fileDir = parentFile.Id
+			break
+		}
+	}
+
+	// 2. 正在下载的文件所属文件夹不存在，新建文件夹
+	if fileDir == "" {
+		utils.Log.Infof("新建文件夹:[%s]\n", dirName)
+		var newDir CloudDownloadResp
+		_, err := d.request("https://api-drive.mypikpak.com/drive/v1/files", http.MethodPost, func(req *resty.Request) {
+			req.SetBody(base.Json{
+				"kind":      "drive#folder",
+				"parent_id": parentDirId,
+				"name":      dirName,
+			})
+		}, &newDir)
+		if err != nil || newDir.File.Id == "" {
+			return "", err
+		}
+		fileDir = newDir.File.Id
+	}
+
+	return fileDir, nil
+}
+
+func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, error) {
 
 	var resultFile File
 	var result CloudDownloadResp
@@ -385,19 +387,21 @@ func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (F
 	}
 
 	var count int
+	var downloadedFiles []File
+
 	for resultFile.Id == "" && count < 10 {
 
-		utils.Log.Infof("文件未下载完毕，第[%d]次等待\n", count)
 		if count != 0 {
-			time.Sleep(3 * time.Second)
+			time.Sleep(2 * time.Second)
 		}
 
+		utils.Log.Infof("文件未下载完毕，第[%d]次等待", count)
 		count++
-		files, err := d.getFiles(parentDir)
+		downloadedFiles, err = d.getFiles(parentDir)
 		if err != nil {
 			return resultFile, err
 		}
-		for _, tempFile := range files {
+		for _, tempFile := range downloadedFiles {
 			if tempFile.Id == result.Task.FileID {
 				resultFile = tempFile
 				break
@@ -405,49 +409,45 @@ func (d *PikPak) downloadMagnet(parentDir string, name string, magnet string) (F
 		}
 	}
 
+	fileDownloadCheck := func(checkingFiles []File) bool {
+
+		for _, tempFile := range checkingFiles {
+
+			size, err := strconv.Atoi(tempFile.Size)
+			if err != nil {
+				utils.Log.Info("get file size error:", err)
+				return false
+			}
+
+			if size/(1024*1024) > 100 {
+				return true
+			}
+
+		}
+
+		return false
+	}
+
 	count = 0
-	completed := false
-	for resultFile.Kind != "drive#file" && !completed && count < 10 {
+	for resultFile.Kind != "drive#file" && !fileDownloadCheck(downloadedFiles) && count < 10 {
 
 		if count != 0 {
 			time.Sleep(1 * time.Second)
 		}
 
 		count++
-		files, err := d.getFiles(resultFile.Id)
+		downloadedFiles, err = d.getFiles(resultFile.Id)
 		if err != nil {
 			return resultFile, err
 		}
-		for _, tempFile := range files {
 
-			size, err := strconv.Atoi(tempFile.Size)
-			if err != nil {
-				utils.Log.Info("pretty file error:", err)
-				return resultFile, err
-			}
-
-			if size/(1024*1024) > 100 {
-				completed = true
-				break
-			}
-
-		}
-	}
-
-	_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files/"+resultFile.Id, http.MethodPatch, func(req *resty.Request) {
-		req.SetBody(base.Json{
-			"name": d.prettyName(name),
-		})
-	}, nil)
-
-	if err != nil {
-		return resultFile, err
 	}
 
 	return resultFile, nil
 }
 
-func (d *PikPak) prettyName(name string) string {
+// clearIllegalChar 清理文件名中的非法字符
+func (d *PikPak) clearIllegalChar(name string) string {
 
 	pattern := d.FileNameBlackChars
 	if pattern == "" {
@@ -463,14 +463,36 @@ func (d *PikPak) prettyName(name string) string {
 	return renamePattern.ReplaceAllString(name, "")
 }
 
-func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []File {
+// prettyFile 清零下载的文件：删除垃圾文件；单个文件不保留文件夹；文件夹重命名；
+func (d *PikPak) prettyFile(parentDirId string, prettyFileId string, prettyName, oldName string, isDir bool) string {
 
-	files, err := d.getFiles(dirId)
-	if err != nil {
-		utils.Log.Info("get file error:", err)
-		return []File{}
+	clearFunc := func(fileId, name string) {
+		_, err := d.request("https://api-drive.mypikpak.com/drive/v1/files/"+fileId, http.MethodPatch, func(req *resty.Request) {
+			req.SetBody(base.Json{
+				"name": d.clearIllegalChar(name),
+			})
+		}, nil)
+		if err != nil {
+			utils.Log.Warn("文件重命名失败", err)
+		}
+		utils.Log.Infof("重名名文件:[%s]", oldName)
 	}
 
+	if !isDir {
+		// 1. 不是文件夹，直接重命名该文件
+		index := strings.LastIndex(oldName, ".")
+		clearFunc(prettyFileId, fmt.Sprintf("%s.%s", prettyName, oldName[:index]))
+		return prettyFileId
+	}
+
+	// 2. 文件夹，开始清理文件
+	files, err := d.getFiles(prettyFileId)
+	if err != nil {
+		utils.Log.Info("get file error:", err)
+		return prettyFileId
+	}
+
+	// 2.1 扫描出要保留及要删除的文件
 	deletingFileIds := make([]string, 0)
 	savedFiles := make([]File, 0)
 	for _, file := range files {
@@ -478,7 +500,7 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []Fil
 		size, err := strconv.Atoi(file.Size)
 		if err != nil {
 			utils.Log.Info("pretty file error:", err)
-			return files
+			return prettyFileId
 		}
 
 		if size/(1024*1024) < 150 {
@@ -489,27 +511,20 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []Fil
 
 	}
 
+	// 2.2 开始清理文件
 	if len(savedFiles) == 1 {
-		// rename file
+
+		// 2.2.1 文件夹下只有一个文件，开始清理文件夹
 		oldName := savedFiles[0].Name
 		index := strings.LastIndex(oldName, ".")
-		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files/"+savedFiles[0].Id, http.MethodPatch, func(req *resty.Request) {
-			req.SetBody(base.Json{
-				"name": fmt.Sprintf("%s.%s", d.prettyName(name), oldName[index+1:]),
-			})
-		}, nil)
+		newFileId := savedFiles[0].Id
 
-		if err != nil {
-			utils.Log.Info("file rename error:", err)
-			return savedFiles
-		}
+		clearFunc(newFileId, fmt.Sprintf("%s.%s", d.clearIllegalChar(prettyName), oldName[index+1:]))
 
-		utils.Log.Infof("重名名文件:[%s]\n", oldName)
-
-		// move file
+		// 2.2.2 移动文件到指定文件夹
 		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchMove", http.MethodPost, func(req *resty.Request) {
 			req.SetBody(base.Json{
-				"ids": []string{savedFiles[0].Id},
+				"ids": []string{newFileId},
 				"to": base.Json{
 					"parent_id": parentDirId,
 				},
@@ -518,27 +533,27 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []Fil
 
 		if err != nil {
 			utils.Log.Info("move file error:", err)
-			return savedFiles
+			return newFileId
 		}
+		utils.Log.Infof("移动文件:[%s]", oldName)
 
-		utils.Log.Infof("移动文件:[%s]\n", oldName)
-
-		// delete garbage file
+		// 2.3.3 删除保留单个文件外的其他文件
 		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchTrash", http.MethodPost, func(req *resty.Request) {
 			req.SetBody(base.Json{
-				"ids": []string{dirId},
+				"ids": []string{prettyFileId},
 			})
 		}, nil)
 		if err != nil {
 			utils.Log.Info("delete file error:", err)
-			return savedFiles
+			return newFileId
 		}
 
-		time.Sleep(1 * time.Second)
+		return newFileId
 
-		return savedFiles
+	}
 
-	} else if len(deletingFileIds) > 0 {
+	// 3. 文件夹下不止一个文件，保留文件夹并清理文件夹下其他的垃圾文件
+	if len(deletingFileIds) > 0 {
 
 		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchTrash", http.MethodPost, func(req *resty.Request) {
 			req.SetBody(base.Json{
@@ -549,14 +564,11 @@ func (d *PikPak) prettyFile(parentDirId string, dirId string, name string) []Fil
 			utils.Log.Info("pretty file error:", err)
 		}
 
-		time.Sleep(1 * time.Second)
-
-		return savedFiles
+		return prettyFileId
 	}
+	utils.Log.Infof("重名名文件失败:[%v]", files)
 
-	utils.Log.Infof("重名名文件失败:[%v]\n", files)
-
-	return []File{}
+	return prettyFileId
 
 }
 

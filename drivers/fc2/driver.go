@@ -100,21 +100,31 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 
 func (d *FC2) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
-	if strings.Contains(file.GetID(), ".jpg") {
-		return &model.Link{
-			URL: file.GetID(),
-		}, nil
+	emptyFile := &model.Link{
+		URL: "",
 	}
 
 	storage := op.GetBalancedStorage(d.PikPakPath)
 	pikPak, ok := storage.(*pikpak.PikPak)
 	if !ok {
-		return &model.Link{
-			URL: "",
-		}, nil
+		return emptyFile, nil
 	}
 
-	return pikPak.Link(ctx, file, args)
+	magnet, err := d.getMagnet(file)
+	if err != nil || magnet == "" {
+		return emptyFile, errors.New("磁力链接爬取结果为空！")
+	}
+
+	index := strings.LastIndex(file.GetName(), ".")
+
+	pikPakFile, err := pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, file.GetPath(), file.GetName()[:index], magnet)
+	if err != nil || len(pikPakFile) == 0 {
+		return emptyFile, err
+	}
+
+	return pikPak.Link(ctx, &model.Object{
+		ID: pikPakFile[0].GetID(),
+	}, args)
 
 }
 

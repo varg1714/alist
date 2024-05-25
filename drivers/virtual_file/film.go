@@ -89,20 +89,9 @@ func convertFilm(dirName string, actor []model.Film, results []model.Obj) []mode
 	for _, film := range actor {
 		results = append(results, &model.ObjThumb{
 			Object: model.Object{
-				Name:     film.Name,
-				IsFolder: true,
-				ID:       film.Url,
-				Size:     622857143,
-				Modified: film.Date,
-				Path:     dirName,
-			},
-			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
-		})
-		results = append(results, &model.ObjThumb{
-			Object: model.Object{
-				Name:     film.Name + ".jpg",
+				Name:     film.Name + ".mp4",
 				IsFolder: false,
-				ID:       film.Image,
+				ID:       film.Url,
 				Size:     622857143,
 				Modified: film.Date,
 				Path:     dirName,
@@ -117,20 +106,9 @@ func convertObj(dirName string, actor []model.ObjThumb, results []model.Obj) []m
 	for _, film := range actor {
 		results = append(results, &model.ObjThumb{
 			Object: model.Object{
-				Name:     film.Name,
-				IsFolder: true,
-				ID:       film.ID,
-				Size:     622857143,
-				Modified: film.Modified,
-				Path:     dirName,
-			},
-			Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
-		})
-		results = append(results, &model.ObjThumb{
-			Object: model.Object{
-				Name:     film.Name + ".jpg",
+				Name:     film.Name + ".mp4",
 				IsFolder: false,
-				ID:       film.Thumb(),
+				ID:       film.ID,
 				Size:     622857143,
 				Modified: film.Modified,
 				Path:     dirName,

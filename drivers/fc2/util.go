@@ -14,7 +14,7 @@ import (
 var subTitles, _ = regexp.Compile(".*<a href=\"(.*)\" title=\".*</a>.*")
 var magnetUrl, _ = regexp.Compile(".*<a href=\"(.*)\" class=\".*\"><i class=\".*\"></i>Magnet</a>.*")
 
-var actorUrlsRegexp, _ = regexp.Compile(".*/article_search.php\\?id=(.*).")
+var actorUrlsRegexp, _ = regexp.Compile(".*/article_search.php\\?id=(.*)")
 
 func (d *FC2) findMagnet(url string) (string, error) {
 
@@ -109,11 +109,12 @@ func (d *FC2) getPageInfo(urlFunc func(index int) string, index int, data []mode
 			title := element.ChildText(filmTitleSelector)
 			image := "https:" + element.ChildAttr(filmImageSelector, "src")
 
+			id := actorUrlsRegexp.ReplaceAllString(href, "$1")
 			data = append(data, model.ObjThumb{
 				Object: model.Object{
-					Name:     title,
+					Name:     fmt.Sprintf("FC2-PPV-%s %s", id, title),
 					IsFolder: true,
-					ID:       actorUrlsRegexp.ReplaceAllString(href, "$1"),
+					ID:       id,
 					Size:     622857143,
 				},
 				Thumbnail: model.Thumbnail{Thumbnail: image},

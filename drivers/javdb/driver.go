@@ -90,7 +90,9 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 		if err != nil || magnet == "" {
 			return results, err
 		}
-		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir.GetPath(), dir.GetName(), magnet)
+		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir, func(obj model.Obj) (string, error) {
+			return d.getMagnet(obj)
+		})
 	} else {
 		// pikPak文件
 		return results, nil
@@ -109,12 +111,9 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 		return emptyFile, nil
 	}
 
-	magnet, err := d.getMagnet(file)
-	if err != nil || magnet == "" {
-		return emptyFile, err
-	}
-
-	pikPakFile, err := pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, file.GetPath(), file.GetName(), magnet)
+	pikPakFile, err := pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, file, func(obj model.Obj) (string, error) {
+		return d.getMagnet(obj)
+	})
 	if err != nil || len(pikPakFile) == 0 {
 		return emptyFile, err
 	}

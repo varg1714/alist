@@ -83,14 +83,9 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 		})
 	} else if !strings.Contains(dir.GetID(), ".jpg") {
 		// 临时文件
-		magnet, err := d.getMagnet(dir)
-		if err != nil || magnet == "" {
-			return results, err
-		}
-
-		index := strings.Index(dirName, " ")
-
-		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir.GetPath(), fmt.Sprintf("FC2-PPV-%s %s", dir.GetID(), dirName[index+1:]), magnet)
+		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir, func(obj model.Obj) (string, error) {
+			return d.getMagnet(dir)
+		})
 	} else {
 		// pikPak文件
 		return results, nil
@@ -110,14 +105,10 @@ func (d *FC2) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*m
 		return emptyFile, nil
 	}
 
-	magnet, err := d.getMagnet(file)
-	if err != nil || magnet == "" {
-		return emptyFile, errors.New("磁力链接爬取结果为空！")
-	}
+	pikPakFile, err := pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, file, func(obj model.Obj) (string, error) {
+		return d.getMagnet(obj)
+	})
 
-	index := strings.LastIndex(file.GetName(), ".")
-
-	pikPakFile, err := pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, file.GetPath(), file.GetName()[:index], magnet)
 	if err != nil || len(pikPakFile) == 0 {
 		return emptyFile, err
 	}

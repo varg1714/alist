@@ -3,10 +3,12 @@ package pikpak
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"golang.org/x/exp/slices"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/db"
@@ -240,27 +242,46 @@ func (d *PikPak) Put(ctx context.Context, dstDir model.Obj, stream model.FileStr
 	return err
 }
 
-func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string, name string, magnet string) ([]model.Obj, error) {
+func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.Obj, magnetGetter func(obj model.Obj) (string, error)) ([]model.Obj, error) {
 
-	// 1. 获取临时目录下的文件夹
-	fileDir, err := d.getDir(parentDir, dir)
-	if fileDir == "" || err != nil {
-		return []model.Obj{}, err
-	}
+	// 1. 异步获取磁力链接
+	magnet := ""
+	var magnetWaiter sync.WaitGroup
+	magnetWaiter.Add(1)
+	go func() {
+		start := time.Now().UnixMilli()
+		defer magnetWaiter.Done()
+		tempMagnet, err := magnetGetter(dir)
+		if err != nil {
+			utils.Log.Info("磁力链接获取失败", err)
+		}
+		magnet = tempMagnet
+		utils.Log.Infof("获取磁力链接耗时:[%d]", time.Now().UnixMilli()-start)
+	}()
 
 	// 2. 尝试获取缓存文件
+	index := strings.LastIndex(dir.GetName(), ".")
+	name := dir.GetName()[:index]
 	var resultFile File
 
 	// 2.1 获取缓存的文件ID
 	fileIdCache := db.QueryFileId(name)
 
 	// 2.2 判断该文件是否已下载
+	// 2.2.1. 获取临时目录下的文件夹
+	fileDir, err := d.getDir(parentDir, dir.GetPath())
+	if fileDir == "" || err != nil {
+		utils.Log.Info("文件夹创建失败", err)
+		return []model.Obj{}, err
+	}
+
 	files, err := d.getFiles(fileDir)
 	if err != nil {
-		return nil, err
+		utils.Log.Info("文件夹信息获取失败", err)
+		return []model.Obj{}, err
 	}
 	for _, tempFile := range files {
-		if tempFile.Id == fileIdCache || strings.HasPrefix(magnet, tempFile.Params.URL) {
+		if tempFile.Id == fileIdCache {
 			resultFile = tempFile
 			break
 		}
@@ -268,37 +289,39 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir string
 
 	// 2.3 该文件在云盘不存在，下载该文件
 	newDownloaded := false
+	var newFileDir File
 	if resultFile.Id == "" {
-		resultFile, err = d.downloadMagnet(fileDir, magnet)
+		magnetWaiter.Wait()
+		if magnet == "" {
+			return []model.Obj{}, errors.New("磁力链接爬取结果为空！")
+		}
+
+		newFileDir, resultFile, err = d.downloadMagnet(fileDir, magnet)
 		if err != nil || resultFile.Id == "" {
 			return []model.Obj{}, err
 		}
 		newDownloaded = true
 	}
 
-	// 2.4.1 缓存此文件
-	if fileIdCache == "" {
-		err = db.CreateCacheFile(magnet, resultFile.Id, name)
-		if err != nil {
-			return []model.Obj{}, err
-		}
-	} else if fileIdCache != resultFile.Id {
-		err = db.UpdateCacheFile(magnet, resultFile.Id, name)
-		if err != nil {
-			return []model.Obj{}, err
-		}
-	}
-
 	if newDownloaded {
 		// 2.4.3 新下载的文件，进行文件夹清理
 		go func() {
-			// 2.4.3. 下载结果为文件夹，进行文件夹清理
 			utils.Log.Info("开始重命名文件")
-			prettyFileId := d.prettyFile(fileDir, resultFile.Id, name, resultFile.Name, resultFile.Kind != "drive#file")
+			prettyFileId := d.prettyFile(fileDir, newFileDir.Id, name, newFileDir.Name, newFileDir.Kind != "drive#file")
 			utils.Log.Info("重命名文件完成")
 
-			err = db.UpdateCacheFile(magnet, prettyFileId, name)
+			err = db.CreateCacheFile(magnet, prettyFileId, name)
+			if err != nil {
+				utils.Log.Infof("缓存文件更新失败:%s-%s", name, newFileDir.Id)
+			}
+
 		}()
+	} else if fileIdCache != resultFile.Id {
+		utils.Log.Infof("更新缓存文件:%s-%s", name, resultFile.Id)
+		err = db.UpdateCacheFile(magnet, resultFile.Id, name)
+		if err != nil {
+			utils.Log.Infof("缓存文件更新失败:%s-%s", name, resultFile.Id)
+		}
 	}
 
 	// 2.4.2 返回结果
@@ -362,9 +385,11 @@ func (d *PikPak) getDir(parentDirId string, dirName string) (string, error) {
 	return fileDir, nil
 }
 
-func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, error) {
+func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, File, error) {
 
 	var resultFile File
+	var realFile File
+
 	var result CloudDownloadResp
 
 	_, err := d.request("https://api-drive.mypikpak.com/drive/v1/files", http.MethodPost, func(req *resty.Request) {
@@ -383,7 +408,7 @@ func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, error) {
 	}, &result)
 
 	if err != nil {
-		return resultFile, err
+		return resultFile, realFile, err
 	}
 
 	var count int
@@ -395,11 +420,11 @@ func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, error) {
 			time.Sleep(2 * time.Second)
 		}
 
-		utils.Log.Infof("文件未下载完毕，第[%d]次等待", count)
+		utils.Log.Infof("文件下载任务尚未提交完成，第[%d]次等待", count)
 		count++
 		downloadedFiles, err = d.getFiles(parentDir)
 		if err != nil {
-			return resultFile, err
+			return resultFile, realFile, err
 		}
 		for _, tempFile := range downloadedFiles {
 			if tempFile.Id == result.Task.FileID {
@@ -409,41 +434,45 @@ func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, error) {
 		}
 	}
 
-	fileDownloadCheck := func(checkingFiles []File) bool {
+	fileDownloadCheck := func(checkingFiles []File) File {
 
 		for _, tempFile := range checkingFiles {
 
 			size, err := strconv.Atoi(tempFile.Size)
 			if err != nil {
 				utils.Log.Info("get file size error:", err)
-				return false
+				return realFile
 			}
 
 			if size/(1024*1024) > 100 {
-				return true
+				return tempFile
 			}
 
 		}
 
-		return false
+		return realFile
 	}
 
 	count = 0
-	for resultFile.Kind != "drive#file" && !fileDownloadCheck(downloadedFiles) && count < 10 {
+	realFile = fileDownloadCheck(downloadedFiles)
+
+	for resultFile.Kind != "drive#file" && realFile.Id == "" && count < 10 {
 
 		if count != 0 {
 			time.Sleep(1 * time.Second)
 		}
 
+		utils.Log.Infof("文件未下载完毕，第[%d]次等待", count)
 		count++
 		downloadedFiles, err = d.getFiles(resultFile.Id)
 		if err != nil {
-			return resultFile, err
+			return resultFile, realFile, err
 		}
+		realFile = fileDownloadCheck(downloadedFiles)
 
 	}
 
-	return resultFile, nil
+	return resultFile, realFile, nil
 }
 
 // clearIllegalChar 清理文件名中的非法字符
@@ -566,7 +595,6 @@ func (d *PikPak) prettyFile(parentDirId string, prettyFileId string, prettyName,
 
 		return prettyFileId
 	}
-	utils.Log.Infof("重名名文件失败:[%v]", files)
 
 	return prettyFileId
 

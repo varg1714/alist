@@ -1,10 +1,9 @@
 package javdb
 
 import (
-	"github.com/alist-org/alist/v3/internal/db"
+	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/gocolly/colly/v2"
-	"gorm.io/gorm/utils"
 	"net/http"
 	"strings"
 	"time"
@@ -12,86 +11,11 @@ import (
 
 func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]model.Obj, error) {
 
-	results := make([]model.Obj, 0)
-	data := make([]model.ObjThumb, 0)
-
-	data, nextPage, err := d.getPageInfo(urlFunc, 1, data)
-	if err != nil {
-		return results, err
-	}
-
-	var urls []string
-	for _, item := range data {
-		urls = append(urls, item.ID)
-	}
-
-	existFilms := db.QueryByUrls(dirName, urls)
-
-	// not exists
-	for index := 2; index <= 20 && nextPage && len(existFilms) == 0; index++ {
-
-		data, nextPage, err = d.getPageInfo(urlFunc, index, data)
-		//films, images, urls, dates, nextPage, err = d.getPageInfo(urlFunc, index, films, images, urls, dates)
-		if err != nil {
-			return results, err
-		}
-		clear(urls)
-		for _, item := range data {
-			urls = append(urls, item.ID)
-		}
-
-		existFilms = db.QueryByUrls(dirName, urls)
-
-	}
-	// exist
-	for index, item := range data {
-		if utils.Contains(existFilms, item.ID) {
-			if index == 0 {
-				data = []model.ObjThumb{}
-			} else {
-				data = data[:index]
-			}
-			break
-		}
-	}
-
-	if len(data) != 0 {
-		err = db.CreateFilms("javdb", dirName, data)
-		if err != nil {
-			return results, nil
-		}
-	}
-
-	return d.convertFilm(dirName, db.QueryByActor("javdb", dirName), results), nil
-
-}
-
-func (d *Javdb) convertFilm(dirName string, actor []model.Film, results []model.Obj) []model.Obj {
-	for _, film := range actor {
-		results = append(results, &model.ObjThumb{
-			Object: model.Object{
-				Name:     film.Name,
-				IsFolder: true,
-				ID:       film.Url,
-				Size:     622857143,
-				Modified: film.Date,
-				Path:     dirName,
-			},
-			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
+	return virtual_file.GetFilmsWitchStorage("javdb", dirName, urlFunc,
+		func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+			return d.getPageInfo(urlFunc, index, data)
 		})
-		results = append(results, &model.ObjThumb{
-			Object: model.Object{
-				Name:     film.Name + ".jpg",
-				IsFolder: false,
-				ID:       film.Image,
-				Size:     622857143,
-				Modified: film.Date,
-				Path:     dirName,
-			},
-			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
-		})
-	}
-	return results
+
 }
 
 func (d *Javdb) getMagnet(file model.Obj) (string, error) {

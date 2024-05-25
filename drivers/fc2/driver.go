@@ -144,7 +144,7 @@ func (d *FC2) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) 
 	var url string
 	if actorType == 0 {
 		// 0 演员
-		url = fmt.Sprintf("https://adult.contents.fc2.com/users/%s/articles?sort=popular&order=desc&deal=", split[1]) + "&page=%d"
+		url = fmt.Sprintf("https://adult.contents.fc2.com/users/%s/articles?sort=assess&order=desc&deal=", split[1]) + "&page=%d"
 	} else if actorType == 1 {
 		// yearly
 		url = fmt.Sprintf("https://adult.contents.fc2.com/ranking/article/yearly?year=%s", split[1]) + "&page=%d"

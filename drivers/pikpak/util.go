@@ -2,6 +2,8 @@ package pikpak
 
 import (
 	"errors"
+	"fmt"
+	"github.com/alist-org/alist/v3/pkg/utils"
 	"net/http"
 
 	"github.com/alist-org/alist/v3/drivers/base"
@@ -64,4 +66,16 @@ func (d *PikPak) getFiles(id string) ([]File, error) {
 		res = append(res, resp.Files...)
 	}
 	return res, nil
+}
+
+func (d *PikPak) getFile(id string) File {
+
+	var resp File
+	_, err := d.request(fmt.Sprintf("https://api-drive.mypikpak.com/drive/v1/files/%s", id), http.MethodGet, nil, &resp)
+
+	if err != nil {
+		utils.Log.Infof("获取文件信息失败：%s,错误原因：%s", id, err)
+	}
+
+	return resp
 }

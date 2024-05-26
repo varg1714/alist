@@ -265,7 +265,13 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 	var resultFile File
 
 	// 2.1 获取缓存的文件ID
-	fileIdCache := db.QueryFileId(name)
+	fileCache := db.QueryFileId(name)
+	if fileCache.FileId != "" {
+		existFile := d.getFile(fileCache.FileId)
+		if existFile.Id != "" {
+			return d.buildDownloadResult(ctx, existFile)
+		}
+	}
 
 	// 2.2 判断该文件是否已下载
 	// 2.2.1. 获取临时目录下的文件夹
@@ -281,7 +287,7 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 		return []model.Obj{}, err
 	}
 	for _, tempFile := range files {
-		if tempFile.Id == fileIdCache {
+		if tempFile.Id == fileCache.FileId || fileCache.Magnet == tempFile.Params.URL || strings.Split(tempFile.Name, " ")[0] == fileCache.Code {
 			resultFile = tempFile
 			break
 		}
@@ -310,13 +316,17 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 			prettyFileId := d.prettyFile(fileDir, newFileDir.Id, name, newFileDir.Name, newFileDir.Kind != "drive#file")
 			utils.Log.Info("重命名文件完成")
 
-			err = db.CreateCacheFile(magnet, prettyFileId, name)
+			if fileCache.FileId != "" {
+				err = db.UpdateCacheFile(magnet, prettyFileId, name)
+			} else {
+				err = db.CreateCacheFile(magnet, prettyFileId, name)
+			}
 			if err != nil {
 				utils.Log.Infof("缓存文件更新失败:%s-%s", name, newFileDir.Id)
 			}
 
 		}()
-	} else if fileIdCache != resultFile.Id {
+	} else if fileCache.FileId != resultFile.Id {
 		utils.Log.Infof("更新缓存文件:%s-%s", name, resultFile.Id)
 		err = db.UpdateCacheFile(magnet, resultFile.Id, name)
 		if err != nil {
@@ -325,13 +335,19 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 	}
 
 	// 2.4.2 返回结果
+	return d.buildDownloadResult(ctx, resultFile)
+
+}
+
+func (d *PikPak) buildDownloadResult(ctx context.Context, resultFile File) ([]model.Obj, error) {
+
 	if resultFile.Kind == "drive#file" {
-		// 2.4.2.1 单文件，直接返回
+		// 1. 单文件，直接返回
 		return utils.SliceConvert([]File{resultFile}, func(src File) (model.Obj, error) {
 			return fileToObj(src), nil
 		})
 	} else {
-		// 2.4.2.2 文件夹，返回文件大小最大的文件
+		// 2. 文件夹，返回文件大小最大的文件
 		fileList, err := d.List(ctx, &model.Object{
 			ID: resultFile.Id,
 		}, model.ListArgs{})

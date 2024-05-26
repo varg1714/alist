@@ -68,7 +68,7 @@ func DeleteByActor(source string, actor string) error {
 
 }
 
-func QueryFileId(name string) string {
+func QueryFileId(name string) model.MagnetCache {
 
 	var code string
 	split := strings.Split(name, " ")
@@ -81,7 +81,7 @@ func QueryFileId(name string) string {
 	}
 	db.Where(fileCache).First(&fileCache)
 
-	return fileCache.FileId
+	return fileCache
 
 }
 

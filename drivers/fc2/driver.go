@@ -10,6 +10,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/pkg/cron"
+	"github.com/alist-org/alist/v3/pkg/utils"
 	"strconv"
 	"strings"
 	"time"
@@ -78,8 +79,14 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 		return results, nil
 	} else if categories[dirName] != "" {
 		// 自定义目录
-		return d.getFilms(dirName, func(index int) string {
+		films, err := d.getFilms(dirName, func(index int) string {
 			return fmt.Sprintf(categories[dirName], index)
+		})
+		if err != nil {
+			return nil, err
+		}
+		return utils.SliceConvert(films, func(src model.ObjThumb) (model.Obj, error) {
+			return &src, nil
 		})
 	} else if !strings.Contains(dir.GetID(), ".jpg") {
 		// 临时文件

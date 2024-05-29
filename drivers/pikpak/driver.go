@@ -597,7 +597,7 @@ func (d *PikPak) prettyFile(parentDirId string, prettyFileId string, prettyName,
 
 	// 3. 文件夹下不止一个文件，保留文件夹并清理文件夹下其他的垃圾文件
 	if len(deletingFileIds) > 0 {
-
+		utils.Log.Infof("文件夹下有多个视频文件，仅重命名文件夹:[%v]", savedFiles)
 		_, err = d.request("https://api-drive.mypikpak.com/drive/v1/files:batchTrash", http.MethodPost, func(req *resty.Request) {
 			req.SetBody(base.Json{
 				"ids": deletingFileIds,

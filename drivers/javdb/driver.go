@@ -10,6 +10,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/pkg/cron"
+	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/emirpasic/gods/v2/maps/linkedhashmap"
 	"strconv"
 	"strings"
@@ -81,9 +82,17 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 		if !strings.HasPrefix(url, "http") {
 			url = "https://javdb.com/actors/" + url + "?page=%d&sort_type=0&t=d"
 		}
-		return d.getFilms(dirName, func(index int) string {
+
+		films, err := d.getFilms(dirName, func(index int) string {
 			return fmt.Sprintf(url, index)
 		})
+		if err != nil {
+			return nil, err
+		}
+		return utils.SliceConvert(films, func(src model.ObjThumb) (model.Obj, error) {
+			return &src, nil
+		})
+
 	} else if strings.Contains(dir.GetID(), "https://") && !strings.Contains(dir.GetID(), ".jpg") {
 		// 临时文件
 		magnet, err := d.getMagnet(dir)

@@ -6,9 +6,9 @@ import (
 	"github.com/alist-org/alist/v3/pkg/utils"
 )
 
-func GetFilms(dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.Obj, error) {
+func GetFilms(dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.ObjThumb, error) {
 
-	results := make([]model.Obj, 0)
+	results := make([]model.ObjThumb, 0)
 	films := make([]model.ObjThumb, 0)
 
 	films, nextPage, err := pageFunc(urlFunc, 1, films)
@@ -30,9 +30,9 @@ func GetFilms(dirName string, urlFunc func(index int) string, pageFunc func(urlF
 
 }
 
-func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.Obj, error) {
+func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.ObjThumb, error) {
 
-	results := make([]model.Obj, 0)
+	results := make([]model.ObjThumb, 0)
 	films := make([]model.ObjThumb, 0)
 
 	films, nextPage, err := pageFunc(urlFunc, 1, films)
@@ -85,9 +85,9 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 
 }
 
-func convertFilm(dirName string, actor []model.Film, results []model.Obj) []model.Obj {
+func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) []model.ObjThumb {
 	for _, film := range actor {
-		results = append(results, &model.ObjThumb{
+		results = append(results, model.ObjThumb{
 			Object: model.Object{
 				Name:     film.Name + ".mp4",
 				IsFolder: false,
@@ -102,9 +102,9 @@ func convertFilm(dirName string, actor []model.Film, results []model.Obj) []mode
 	return results
 }
 
-func convertObj(dirName string, actor []model.ObjThumb, results []model.Obj) []model.Obj {
+func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb) []model.ObjThumb {
 	for _, film := range actor {
-		results = append(results, &model.ObjThumb{
+		results = append(results, model.ObjThumb{
 			Object: model.Object{
 				Name:     film.Name + ".mp4",
 				IsFolder: false,

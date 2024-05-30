@@ -71,7 +71,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 		})
 	})
-	err := collector.Visit(file.GetID())
+	err := collector.Visit(d.SpiderServer + file.GetID())
 
 	return magnet, err
 

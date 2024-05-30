@@ -8,7 +8,7 @@ import (
 type Addition struct {
 	PikPakPath           string `json:"pik_pak_path" required:"true"`
 	PikPakCacheDirectory string `json:"pik_pak_cache_directory" required:"true"`
-	SpiderServer         string `json:"spider_server" required:"true"`
+	SpiderServer         string `json:"spider_server"`
 	Cookie               string `json:"cookie" required:"true"`
 	driver.RootID
 	OrderBy        string `json:"order_by" type:"select" options:"name,size,updated_at,created_at"`

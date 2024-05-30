@@ -7,6 +7,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/gocolly/colly/v2"
+	"github.com/gocolly/colly/v2/extensions"
 	"net/http"
 	"strconv"
 	"strings"
@@ -83,6 +84,7 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 		c.SetRequestTimeout(time.Second * 10)
 		_ = c.SetCookies("https://javdb.com", setCookieRaw(d.Cookie))
 	})
+	extensions.RandomUserAgent(collector)
 
 	collector.OnHTML(".movie-list", func(element *colly.HTMLElement) {
 		element.ForEach(".item", func(i int, element *colly.HTMLElement) {
@@ -110,6 +112,7 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 	})
 
 	err := collector.Visit(urlFunc(index))
+	utils.Log.Info("开始爬取javdb页面", err)
 
 	return data, nextPage, err
 
@@ -122,6 +125,7 @@ func (d *Javdb) getNajavPageInfo(urlFunc func(index int) string, index int, data
 	collector := colly.NewCollector(func(c *colly.Collector) {
 		c.SetRequestTimeout(time.Second * 10)
 	})
+	extensions.RandomUserAgent(collector)
 
 	collector.OnHTML(".row.box-item-list.gutter-20", func(element *colly.HTMLElement) {
 		element.ForEach(".box-item", func(i int, element *colly.HTMLElement) {
@@ -158,6 +162,7 @@ func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data
 	collector := colly.NewCollector(func(c *colly.Collector) {
 		c.SetRequestTimeout(time.Second * 10)
 	})
+	extensions.RandomUserAgent(collector)
 
 	collector.OnHTML(".row.row-cols-2.row-cols-lg-4.g-2.mt-0", func(element *colly.HTMLElement) {
 		element.ForEach(".col.oneVideo", func(i int, element *colly.HTMLElement) {

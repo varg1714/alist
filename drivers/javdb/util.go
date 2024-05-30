@@ -24,25 +24,19 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 		return javFilms, err
 	}
 
-	// 2. 取第一部影片的编码查询获取到所有miss-av的影片
-	addr := d.getNamingAddr(javFilms)
-	if addr == "" {
-		return javFilms, err
-	}
-
-	// 3. 根据影片名字映射名称
-	// 3.1 获取所有映射名称
+	// 2. 根据影片名字映射名称
+	// 2.1 获取所有映射名称
 	namingFilms, err := d.getAiravNamingFilms(javFilms, dirName)
 	if err != nil || len(namingFilms) == 0 {
 		utils.Log.Info("中文影片名称获取失败", err)
 		return javFilms, nil
 	}
 
-	// 3.2 进行映射
+	// 2.2 进行映射
 	for index, film := range javFilms {
-		code := strings.Split(film.Name, " ")[0]
+		code := splitCode(film.Name)
 		if newName, exist := namingFilms[code]; exist {
-			newName = newName[strings.Index(newName, " ")+1:]
+			_, newName = splitName(newName)
 			javFilms[index].Name = fmt.Sprintf("%s %s", code, strings.ReplaceAll(newName, "-", ""))
 		}
 	}
@@ -121,7 +115,7 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 
 }
 
-func (d *Javdb) getNamingPageInfo(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+func (d *Javdb) getNajavPageInfo(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 
 	preLen := len(data)
 
@@ -149,7 +143,9 @@ func (d *Javdb) getNamingPageInfo(urlFunc func(index int) string, index int, dat
 
 	})
 
-	err := collector.Visit(urlFunc(index))
+	url := urlFunc(index)
+	utils.Log.Infof("开始爬取njav页面：%s", url)
+	err := collector.Visit(url)
 
 	return data, preLen != len(data), err
 
@@ -191,10 +187,10 @@ func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data
 		}
 	})
 
-	err := collector.Visit(urlFunc(index))
-	if err != nil {
-		err = collector.Visit(urlFunc(index))
-	}
+	url := urlFunc(index)
+
+	utils.Log.Infof("开始爬取airav页面：%s", url)
+	err := collector.Visit(url)
 
 	return data, nextPage, err
 
@@ -219,21 +215,21 @@ func setCookieRaw(cookieRaw string) []*http.Cookie {
 	return cookies
 }
 
-func (d *Javdb) getNamingAddr(films []model.ObjThumb) string {
+func (d *Javdb) getNjavAddr(films []model.ObjThumb) string {
 
 	actorUrl := ""
 	actorPageUrl := ""
 
 	for i := range 3 {
-		code := strings.Split(films[i].Name, " ")[0]
+		code := splitCode(films[i].Name)
 
-		searchResult, _, err := d.getNamingPageInfo(func(index int) string {
+		searchResult, _, err := d.getNajavPageInfo(func(index int) string {
 			return fmt.Sprintf("https://njav.tv/zh/search?keyword=%s", code)
 		}, 1, []model.ObjThumb{})
 		if err != nil {
 			return ""
 		}
-		if len(searchResult) > 0 && strings.Split(searchResult[0].Name, " ")[0] == code {
+		if len(searchResult) > 0 && splitCode(searchResult[0].Name) == code {
 			actorUrl = searchResult[0].ID
 			break
 		}
@@ -270,7 +266,7 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 	actorUrl := ""
 	actorPageUrl := ""
 
-	code := strings.Split(film.Name, " ")[0]
+	code := splitCode(film.Name)
 
 	searchResult, _, err := d.getAiravPageInfo(func(index int) string {
 		return fmt.Sprintf("https://airav.io/cn/search_result?kw=%s", code)
@@ -278,7 +274,7 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 	if err != nil {
 		return actorPageUrl, model.ObjThumb{}
 	}
-	if len(searchResult) > 0 && strings.Split(searchResult[0].Name, " ")[0] == code {
+	if len(searchResult) > 0 && splitCode(searchResult[0].Name) == code {
 		actorUrl = searchResult[0].ID
 	}
 	if actorUrl == "" {
@@ -309,22 +305,30 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 
 func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map[string]string, error) {
 
+	init := false
 	nameCache := make(map[string]string)
+
+	// 1. 获取库中已爬取结果
 	actors := db.QueryByActor("airav", dirName)
 	for index := range actors {
 		name := actors[index].Name
-		nameCache[strings.Split(name, " ")[0]] = name
+		nameCache[splitCode(name)] = name + ".mp4"
+	}
+	if len(nameCache) != 0 {
+		init = true
 	}
 
-	var result []model.ObjThumb
-
+	// 2. 爬取新的数据
 	for index := range films {
 
-		fileCode := strings.Split(films[index].Name, " ")
+		code := splitCode(films[index].Name)
 
-		if nameCache[fileCode[0]] == "" {
+		// 2.1 仅当未爬取到才爬取，对于非第一条数据，若未爬取到则不再爬取
+		if nameCache[code] == "" && (init == false || index == 0) {
+			// 2.2 首先爬取airav站点到
 			addr, searchResult := d.getAiravNamingAddr(films[index])
 			if addr != "" {
+				// 2.2.1 爬取该主演所有作品
 				namingFilms, err := virtual_file.GetFilmsWitchStorage("airav", dirName, func(index int) string {
 					return addr + strconv.Itoa(index)
 				},
@@ -337,15 +341,28 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 				}
 
 				for nameFileIndex := range namingFilms {
-					nameCache[strings.Split(namingFilms[nameFileIndex].Name, " ")[0]] = namingFilms[nameFileIndex].Name
-					result = append(result, namingFilms[nameFileIndex])
+					nameCache[splitCode(namingFilms[nameFileIndex].Name)] = namingFilms[nameFileIndex].Name
 				}
 
 			} else if searchResult.ID != "" {
-				nameCache[strings.Split(searchResult.Name, " ")[0]] = searchResult.Name
-				result = append(result, searchResult)
+				// 2.2.2 该作品没有主演标签，但有该作品信息
+				nameCache[splitCode(searchResult.Name)] = searchResult.Name + ".mp4"
 			} else {
-				nameCache[fileCode[0]] = films[index].Name
+
+				// 2.2.3 airav没有该作品信息，尝试爬取其它站点的
+				njavSearchResult, _, err := d.getNajavPageInfo(func(index int) string {
+					return fmt.Sprintf("https://njav.tv/zh/search?keyword=%s", code)
+				}, 1, []model.ObjThumb{})
+
+				if err != nil {
+					utils.Log.Info("njav搜索影片失败", err)
+				}
+				if len(njavSearchResult) > 0 && splitCode(njavSearchResult[0].Name) == code {
+					nameCache[code] = njavSearchResult[0].Name + ".mp4"
+				} else {
+					nameCache[code] = films[index].Name
+				}
+
 			}
 
 		}
@@ -353,5 +370,23 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 	}
 
 	return nameCache, nil
+
+}
+
+func splitName(sourceName string) (string, string) {
+
+	index := strings.Index(sourceName, " ")
+	if index <= 0 || index == len(sourceName)-1 {
+		return sourceName, sourceName
+	}
+
+	return sourceName[:index], sourceName[index+1:]
+
+}
+
+func splitCode(sourceName string) string {
+
+	code, _ := splitName(sourceName)
+	return code
 
 }

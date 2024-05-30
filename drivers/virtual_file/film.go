@@ -37,7 +37,7 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 
 	films, nextPage, err := pageFunc(urlFunc, 1, films)
 	if err != nil {
-		return results, err
+		return convertFilm(dirName, db.QueryByActor(source, dirName), results), err
 	}
 
 	var urls []string
@@ -52,7 +52,7 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 
 		films, nextPage, err = pageFunc(urlFunc, index, films)
 		if err != nil {
-			return results, err
+			return convertFilm(dirName, db.QueryByActor(source, dirName), results), err
 		}
 		clear(urls)
 		for _, item := range films {
@@ -77,7 +77,7 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 	if len(films) != 0 {
 		err = db.CreateFilms(source, dirName, films)
 		if err != nil {
-			return results, nil
+			return convertFilm(dirName, db.QueryByActor(source, dirName), results), nil
 		}
 	}
 

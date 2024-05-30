@@ -21,7 +21,8 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 		func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 			return d.getJavPageInfo(urlFunc, index, data)
 		})
-	if err != nil || len(javFilms) == 0 {
+	if err != nil && len(javFilms) == 0 {
+		utils.Log.Info("javdb影片获取失败", err)
 		return javFilms, err
 	}
 
@@ -111,8 +112,9 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 		nextPage = len(element.Attr("href")) != 0
 	})
 
-	err := collector.Visit(urlFunc(index))
-	utils.Log.Info("开始爬取javdb页面", err)
+	url := d.SpiderServer + urlFunc(index)
+	err := collector.Visit(url)
+	utils.Log.Infof("开始爬取javdb页面：%s，错误：%v", url, err)
 
 	return data, nextPage, err
 

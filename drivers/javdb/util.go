@@ -1,6 +1,7 @@
 package javdb
 
 import (
+	"cmp"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
@@ -9,6 +10,7 @@ import (
 	"github.com/gocolly/colly/v2"
 	"github.com/gocolly/colly/v2/extensions"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -49,31 +51,45 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 
 func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
-	magnet := ""
-	subTitles := false
-
 	collector := colly.NewCollector(func(c *colly.Collector) {
 		c.SetRequestTimeout(time.Second * 10)
 	})
 
+	var magnets []Magnet
+
 	collector.OnHTML(".magnet-links", func(element *colly.HTMLElement) {
-		element.ForEach(".item", func(i int, element *colly.HTMLElement) {
+		element.ForEach(".item", func(i int, magnetEle *colly.HTMLElement) {
 
-			text := element.ChildText(".is-warning")
-			if text != "" && (magnet == "" || !subTitles) {
-				magnet = element.ChildAttr("a", "href")
-				subTitles = true
-			}
+			var tags []string
 
-			if magnet == "" {
-				magnet = element.ChildAttr("a", "href")
-			}
+			magnetEle.ForEach(".tag", func(i int, tag *colly.HTMLElement) {
+				tags = append(tags, tag.Text)
+			})
+			magnets = append(magnets, Magnet{
+				MagnetUrl: magnetEle.ChildAttr("a", "href"),
+				Tag:       tags,
+				FileSize:  magnetEle.ChildText(".meta"),
+			})
 
 		})
 	})
 	err := collector.Visit(d.SpiderServer + file.GetID())
 
-	return magnet, err
+	if len(magnets) == 0 {
+		return "", err
+	}
+
+	slices.SortFunc(magnets, func(a, b Magnet) int {
+		tagCmp := cmp.Compare(len(b.Tag), len(a.Tag))
+		if tagCmp != 0 {
+			return tagCmp
+		}
+
+		return cmp.Compare(a.FileSize, b.FileSize)
+
+	})
+
+	return magnets[0].MagnetUrl, nil
 
 }
 
@@ -234,6 +250,7 @@ func (d *Javdb) getNjavAddr(films []model.ObjThumb) string {
 			return fmt.Sprintf("https://njav.tv/zh/search?keyword=%s", code)
 		}, 1, []model.ObjThumb{})
 		if err != nil {
+			utils.Log.Info("njav页面爬取错误", err)
 			return ""
 		}
 		if len(searchResult) > 0 && splitCode(searchResult[0].Name) == code {
@@ -279,6 +296,7 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 		return fmt.Sprintf("https://airav.io/cn/search_result?kw=%s", code)
 	}, 1, []model.ObjThumb{})
 	if err != nil {
+		utils.Log.Info("airav页面爬取错误", err)
 		return actorPageUrl, model.ObjThumb{}
 	}
 	if len(searchResult) > 0 && splitCode(searchResult[0].Name) == code {
@@ -334,27 +352,29 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 		if nameCache[code] == "" && (init == false || index == 0) {
 			// 2.2 首先爬取airav站点到
 			addr, searchResult := d.getAiravNamingAddr(films[index])
+
+			if searchResult.ID != "" {
+				// 2.2.1 有该作品信息
+				nameCache[splitCode(searchResult.Name)] = searchResult.Name + ".mp4"
+			}
+
 			if addr != "" {
-				// 2.2.1 爬取该主演所有作品
+				// 2.2.2 爬取该主演所有作品
 				namingFilms, err := virtual_file.GetFilmsWitchStorage("airav", dirName, func(index int) string {
 					return addr + strconv.Itoa(index)
 				},
 					func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 						return d.getAiravPageInfo(urlFunc, index, data)
 					})
+
 				if err != nil {
 					utils.Log.Info("airav影片列表爬取失败", err)
-					return nameCache, err
 				}
-
 				for nameFileIndex := range namingFilms {
 					nameCache[splitCode(namingFilms[nameFileIndex].Name)] = namingFilms[nameFileIndex].Name
 				}
 
-			} else if searchResult.ID != "" {
-				// 2.2.2 该作品没有主演标签，但有该作品信息
-				nameCache[splitCode(searchResult.Name)] = searchResult.Name + ".mp4"
-			} else {
+			} else if addr == "" && searchResult.ID == "" {
 
 				// 2.2.3 airav没有该作品信息，尝试爬取其它站点的
 				njavSearchResult, _, err := d.getNajavPageInfo(func(index int) string {
@@ -375,6 +395,8 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 		}
 
 	}
+
+	utils.Log.Info("影片名称映射结束")
 
 	return nameCache, nil
 

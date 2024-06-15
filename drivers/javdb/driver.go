@@ -14,6 +14,7 @@ import (
 	"github.com/emirpasic/gods/v2/maps/linkedhashmap"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Javdb struct {
@@ -49,12 +50,6 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 	categories := linkedhashmap.New[string, model.Actor]()
 	results := make([]model.Obj, 0)
 
-	storage := op.GetBalancedStorage(d.PikPakPath)
-	pikPak, ok := storage.(*pikpak.PikPak)
-	if !ok {
-		return results, nil
-	}
-
 	dirName := dir.GetName()
 
 	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
@@ -63,7 +58,26 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 	}
 
 	if d.RootID.GetRootId() == dirName {
-		// 1. 顶级目录
+		results = append(results, &model.ObjThumb{
+			Object: model.Object{
+				Name:     "关注演员",
+				IsFolder: true,
+				ID:       "关注演员",
+				Size:     622857143,
+				Modified: time.Now(),
+			},
+		}, &model.ObjThumb{
+			Object: model.Object{
+				Name:     "个人收藏",
+				IsFolder: true,
+				ID:       "个人收藏",
+				Size:     622857143,
+				Modified: time.Now(),
+			},
+		})
+		return results, nil
+	} else if dirName == "关注演员" {
+		// 1. 关注演员
 		categories.Each(func(name string, actor model.Actor) {
 			results = append(results, &model.ObjThumb{
 				Object: model.Object{
@@ -76,6 +90,11 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 			})
 		})
 		return results, nil
+	} else if dirName == "个人收藏" {
+		// 2. 个人收藏
+		return utils.SliceConvert(d.getStars(), func(src model.ObjThumb) (model.Obj, error) {
+			return &src, nil
+		})
 	} else if actor, exist := categories.Get(dirName); exist {
 		// 自定义目录
 		url := actor.Url
@@ -93,15 +112,6 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 			return &src, nil
 		})
 
-	} else if strings.Contains(dir.GetID(), "https://") && !strings.Contains(dir.GetID(), ".jpg") {
-		// 临时文件
-		magnet, err := d.getMagnet(dir)
-		if err != nil || magnet == "" {
-			return results, err
-		}
-		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir, func(obj model.Obj) (string, error) {
-			return d.getMagnet(obj)
-		})
 	} else {
 		// pikPak文件
 		return results, nil
@@ -135,12 +145,16 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 
 func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 
-	err := db.DeleteActor(strconv.Itoa(int(d.ID)), obj.GetName())
-	if err != nil {
-		return err
-	}
+	if obj.IsDir() {
+		err := db.DeleteActor(strconv.Itoa(int(d.ID)), obj.GetName())
+		if err != nil {
+			return err
+		}
 
-	return db.DeleteByActor("javdb", obj.GetName())
+		return db.DeleteFilmsByActor("javdb", obj.GetName())
+	} else {
+		return db.DeleteFilmsByUrl("javdb", "个人收藏", obj.GetID())
+	}
 
 }
 
@@ -152,6 +166,17 @@ func (d *Javdb) MakeDir(ctx context.Context, parentDir model.Obj, dirName string
 	}
 
 	return db.CreateActor(strconv.Itoa(int(d.ID)), split[0], split[1])
+
+}
+
+func (d *Javdb) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
+
+	if len(db.QueryByUrls("个人收藏", []string{srcObj.GetID()})) == 0 {
+		thumb := srcObj.(*model.ObjThumb)
+		return db.CreateFilms("javdb", "个人收藏", []model.ObjThumb{*thumb})
+	}
+
+	return nil
 
 }
 

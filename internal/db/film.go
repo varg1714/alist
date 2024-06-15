@@ -62,9 +62,15 @@ func QueryByUrls(actor string, urls []string) []string {
 
 }
 
-func DeleteByActor(source string, actor string) error {
+func DeleteFilmsByActor(source string, actor string) error {
 
 	return errors.WithStack(db.Where("source = ?", source).Where("actor = ?", actor).Delete(&model.Film{}).Error)
+
+}
+
+func DeleteFilmsByUrl(source, actor, url string) error {
+
+	return errors.WithStack(db.Where("source = ?", source).Where("actor = ?", actor).Where("url = ?", url).Delete(&model.Film{}).Error)
 
 }
 

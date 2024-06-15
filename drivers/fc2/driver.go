@@ -133,7 +133,7 @@ func (d *FC2) Remove(ctx context.Context, obj model.Obj) error {
 		return err
 	}
 
-	return db.DeleteByActor("fc2", obj.GetName())
+	return db.DeleteFilmsByActor("fc2", obj.GetName())
 
 }
 

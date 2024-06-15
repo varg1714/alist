@@ -49,6 +49,10 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 
 }
 
+func (d *Javdb) getStars() []model.ObjThumb {
+	return virtual_file.GeoStorageFilms("javdb", "个人收藏")
+}
+
 func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 	collector := colly.NewCollector(func(c *colly.Collector) {

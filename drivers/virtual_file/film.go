@@ -85,6 +85,11 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 
 }
 
+func GeoStorageFilms(source, dirName string) []model.ObjThumb {
+	films := db.QueryByActor(source, dirName)
+	return convertFilm(dirName, films, []model.ObjThumb{})
+}
+
 func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) []model.ObjThumb {
 	for _, film := range actor {
 		results = append(results, model.ObjThumb{

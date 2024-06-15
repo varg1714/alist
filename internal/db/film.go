@@ -74,7 +74,7 @@ func DeleteFilmsByUrl(source, actor, url string) error {
 
 }
 
-func QueryFileId(name string) model.MagnetCache {
+func QueryCacheFileId(name string) model.MagnetCache {
 
 	var code string
 	split := strings.Split(name, " ")
@@ -126,6 +126,16 @@ func UpdateCacheFile(magnet string, fileId string, name string) error {
 	}
 
 	return errors.WithStack(db.Where("code = ?", code).Save(&magnetCache).Error)
+
+}
+
+func DeleteCacheFile(fileId string) error {
+
+	magnetCache := model.MagnetCache{
+		FileId: fileId,
+	}
+
+	return errors.WithStack(db.Where(magnetCache).Delete(&magnetCache).Error)
 
 }
 

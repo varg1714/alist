@@ -153,8 +153,37 @@ func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 
 		return db.DeleteFilmsByActor("javdb", obj.GetName())
 	} else {
-		return db.DeleteFilmsByUrl("javdb", "个人收藏", obj.GetID())
+
+		if obj.GetPath() == "个人收藏" {
+			return db.DeleteFilmsByUrl("javdb", "个人收藏", obj.GetID())
+		} else {
+			cache := db.QueryCacheFileId(obj.GetName())
+			if cache.FileId != "" {
+				go func() {
+					storage := op.GetBalancedStorage(d.PikPakPath)
+					pikPak, ok := storage.(*pikpak.PikPak)
+					// 1. 删除pikpak文件
+					if ok {
+						err := pikPak.Remove(ctx, &model.Object{
+							ID: cache.FileId,
+						})
+						if err != nil {
+							utils.Log.Infof("删除pikpak文件:[%s]失败，失败原因:%v", cache.FileId, err)
+						}
+
+					}
+					// 2. 删除缓存文件
+					err := db.DeleteCacheFile(cache.FileId)
+					if err != nil {
+						utils.Log.Info("缓存文件删除失败", err)
+					}
+				}()
+			}
+		}
+
 	}
+
+	return nil
 
 }
 

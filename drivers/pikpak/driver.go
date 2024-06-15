@@ -267,7 +267,7 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 	var resultFile File
 
 	// 2.1 获取缓存的文件ID
-	fileCache := db.QueryFileId(name)
+	fileCache := db.QueryCacheFileId(name)
 	if fileCache.FileId != "" {
 		existFile := d.getFile(fileCache.FileId)
 		if existFile.Id != "" {

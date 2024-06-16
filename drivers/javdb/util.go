@@ -2,6 +2,7 @@ package javdb
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
@@ -51,6 +52,39 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 
 func (d *Javdb) getStars() []model.ObjThumb {
 	return virtual_file.GeoStorageFilms("javdb", "个人收藏")
+}
+
+func (d *Javdb) addStar(code string) (model.ObjThumb, error) {
+
+	javFilms, _, err := d.getJavPageInfo(func(index int) string {
+		return fmt.Sprintf("https://javdb.com/search?f=download&q=%s", code)
+	}, 1, []model.ObjThumb{})
+	if err != nil {
+		utils.Log.Info("jav影片查询失败:", err)
+		return model.ObjThumb{}, err
+	}
+
+	if len(javFilms) == 0 || strings.ToLower(code) != strings.ToLower(splitCode(javFilms[0].Name)) {
+		return model.ObjThumb{}, errors.New(fmt.Sprintf("影片:%s未查询到", code))
+	}
+
+	cachingFilm := javFilms[0]
+	_, airavFilm := d.getAiravNamingAddr(cachingFilm)
+	if airavFilm.Name != "" {
+		cachingFilm.Name = airavFilm.Name
+	} else {
+		_, njavFilm := d.getNjavAddr(cachingFilm)
+		if njavFilm.Name != "" {
+			cachingFilm.Name = njavFilm.Name
+		}
+	}
+
+	err = db.CreateFilms("javdb", "个人收藏", []model.ObjThumb{cachingFilm})
+	cachingFilm.Name = cachingFilm.Name + ".mp4"
+	cachingFilm.Path = "个人收藏"
+
+	return cachingFilm, err
+
 }
 
 func (d *Javdb) getMagnet(file model.Obj) (string, error) {
@@ -118,7 +152,7 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 			data = append(data, model.ObjThumb{
 				Object: model.Object{
 					Name:     title,
-					IsFolder: true,
+					IsFolder: false,
 					ID:       "https://javdb.com/" + href,
 					Size:     622857143,
 					Modified: parse,
@@ -159,7 +193,7 @@ func (d *Javdb) getNajavPageInfo(urlFunc func(index int) string, index int, data
 			data = append(data, model.ObjThumb{
 				Object: model.Object{
 					Name:     title,
-					IsFolder: true,
+					IsFolder: false,
 					ID:       "https://njav.tv/zh/" + href,
 					Size:     622857143,
 					Modified: parse,
@@ -196,7 +230,7 @@ func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data
 			data = append(data, model.ObjThumb{
 				Object: model.Object{
 					Name:     title,
-					IsFolder: true,
+					IsFolder: false,
 					ID:       "https://airav.io" + href,
 					Size:     622857143,
 					Modified: parse,
@@ -242,26 +276,24 @@ func setCookieRaw(cookieRaw string) []*http.Cookie {
 	return cookies
 }
 
-func (d *Javdb) getNjavAddr(films []model.ObjThumb) string {
+func (d *Javdb) getNjavAddr(films model.ObjThumb) (string, model.ObjThumb) {
 
 	actorUrl := ""
 	actorPageUrl := ""
 
-	for i := range 3 {
-		code := splitCode(films[i].Name)
+	code := splitCode(films.Name)
 
-		searchResult, _, err := d.getNajavPageInfo(func(index int) string {
-			return fmt.Sprintf("https://njav.tv/zh/search?keyword=%s", code)
-		}, 1, []model.ObjThumb{})
-		if err != nil {
-			utils.Log.Info("njav页面爬取错误", err)
-			return ""
-		}
-		if len(searchResult) > 0 && splitCode(searchResult[0].Name) == code {
-			actorUrl = searchResult[0].ID
-			break
-		}
+	searchResult, _, err := d.getNajavPageInfo(func(index int) string {
+		return fmt.Sprintf("https://njav.tv/zh/search?keyword=%s", code)
+	}, 1, []model.ObjThumb{})
 
+	if err != nil {
+		utils.Log.Info("njav页面爬取错误", err)
+		return "", model.ObjThumb{}
+	}
+
+	if len(searchResult) > 0 && splitCode(searchResult[0].Name) == code {
+		actorUrl = searchResult[0].ID
 	}
 
 	if actorUrl != "" {
@@ -278,14 +310,15 @@ func (d *Javdb) getNjavAddr(films []model.ObjThumb) string {
 
 		})
 
-		err := collector.Visit(actorUrl)
+		err = collector.Visit(actorUrl)
 		if err != nil {
 			utils.Log.Info("演员主页爬取失败", err)
 		}
 
+		return actorPageUrl, searchResult[0]
 	}
 
-	return actorPageUrl
+	return "", model.ObjThumb{}
 
 }
 

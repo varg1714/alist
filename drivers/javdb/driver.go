@@ -154,33 +154,36 @@ func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 		return db.DeleteFilmsByActor("javdb", obj.GetName())
 	} else {
 
-		if obj.GetPath() == "个人收藏" {
-			return db.DeleteFilmsByUrl("javdb", "个人收藏", obj.GetID())
-		} else {
-			cache := db.QueryCacheFileId(obj.GetName())
-			if cache.FileId != "" {
-				go func() {
-					storage := op.GetBalancedStorage(d.PikPakPath)
-					pikPak, ok := storage.(*pikpak.PikPak)
-					// 1. 删除pikpak文件
-					if ok {
-						err := pikPak.Remove(ctx, &model.Object{
-							ID: cache.FileId,
-						})
-						if err != nil {
-							utils.Log.Infof("删除pikpak文件:[%s]失败，失败原因:%v", cache.FileId, err)
-						}
-
-					}
-					// 2. 删除缓存文件
-					err := db.DeleteCacheFile(cache.FileId)
-					if err != nil {
-						utils.Log.Info("缓存文件删除失败", err)
-					}
-				}()
-			}
+		err := db.DeleteFilmsByUrl("javdb", "个人收藏", obj.GetID())
+		if err != nil {
+			utils.Log.Info("收藏影片删除失败", err)
+			return err
 		}
 
+		cache := db.QueryCacheFileId(obj.GetName())
+		if cache.FileId != "" {
+			go func() {
+				storage := op.GetBalancedStorage(d.PikPakPath)
+				pikPak, ok := storage.(*pikpak.PikPak)
+				// 1. 删除pikpak文件
+				if ok {
+					err := pikPak.Remove(ctx, &model.Object{
+						ID: cache.FileId,
+					})
+					if err != nil {
+						utils.Log.Infof("删除pikpak文件:[%s]失败，失败原因:%v", cache.FileId, err)
+					} else {
+						utils.Log.Infof("pikpak文件:[%s]删除完成", cache.Name)
+					}
+				}
+
+				// 2. 删除缓存文件
+				err = db.DeleteCacheFile(cache.FileId)
+				if err != nil {
+					utils.Log.Info("缓存文件删除失败", err)
+				}
+			}()
+		}
 	}
 
 	return nil
@@ -206,6 +209,12 @@ func (d *Javdb) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
 	}
 
 	return nil
+
+}
+
+func (d *Javdb) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) (model.Obj, error) {
+	star, err := d.addStar(stream.GetName())
+	return &star, err
 
 }
 

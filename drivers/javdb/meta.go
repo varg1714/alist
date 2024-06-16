@@ -19,7 +19,7 @@ var config = driver.Config{
 	Name:        "Javdb",
 	LocalSort:   false,
 	OnlyProxy:   false,
-	NoUpload:    true,
+	NoUpload:    false,
 	DefaultRoot: "root",
 }
 

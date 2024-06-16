@@ -289,7 +289,7 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 		return []model.Obj{}, err
 	}
 	for _, tempFile := range files {
-		if tempFile.Id == fileCache.FileId || fileCache.Magnet == tempFile.Params.URL || strings.Split(tempFile.Name, " ")[0] == fileCache.Code {
+		if tempFile.Id == fileCache.FileId || strings.HasPrefix(fileCache.Magnet, tempFile.Params.URL) || strings.Split(tempFile.Name, " ")[0] == fileCache.Code {
 			resultFile = tempFile
 			break
 		}
@@ -405,10 +405,10 @@ func (d *PikPak) getDir(parentDirId string, dirName string) (string, error) {
 
 func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, File, error) {
 
-	var resultFile File
-	var realFile File
+	var downloadFile File
+	var downloadMaxFile File
 
-	var result CloudDownloadResp
+	var downloadResp CloudDownloadResp
 
 	_, err := d.request("https://api-drive.mypikpak.com/drive/v1/files", http.MethodPost, func(req *resty.Request) {
 		req.SetBody(base.Json{
@@ -423,16 +423,16 @@ func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, File, er
 			},
 			"parent_id": parentDir,
 		})
-	}, &result)
+	}, &downloadResp)
 
 	if err != nil {
-		return resultFile, realFile, err
+		return downloadFile, downloadMaxFile, err
 	}
 
 	var count int
 	var downloadedFiles []File
 
-	for resultFile.Id == "" && count < 10 {
+	for downloadFile.Id == "" && count < 10 {
 
 		if count != 0 {
 			time.Sleep(2 * time.Second)
@@ -442,11 +442,11 @@ func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, File, er
 		count++
 		downloadedFiles, err = d.getFiles(parentDir)
 		if err != nil {
-			return resultFile, realFile, err
+			return downloadFile, downloadMaxFile, err
 		}
 		for _, tempFile := range downloadedFiles {
-			if tempFile.Id == result.Task.FileID {
-				resultFile = tempFile
+			if tempFile.Id == downloadResp.Task.FileID {
+				downloadFile = tempFile
 				break
 			}
 		}
@@ -459,22 +459,22 @@ func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, File, er
 			size, err := strconv.Atoi(tempFile.Size)
 			if err != nil {
 				utils.Log.Info("get file size error:", err)
-				return realFile
+				return downloadMaxFile
 			}
 
-			if size/(1024*1024) > 100 {
+			if size/(1024*1024) > 100 && strings.HasPrefix(magnet, tempFile.Params.URL) {
 				return tempFile
 			}
 
 		}
 
-		return realFile
+		return downloadMaxFile
 	}
 
 	count = 0
-	realFile = fileDownloadCheck(downloadedFiles)
+	downloadMaxFile = fileDownloadCheck(downloadedFiles)
 
-	for resultFile.Kind != "drive#file" && realFile.Id == "" && count < 10 {
+	for downloadFile.Kind != "drive#file" && downloadMaxFile.Id == "" && count < 10 {
 
 		if count != 0 {
 			time.Sleep(1 * time.Second)
@@ -482,15 +482,15 @@ func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, File, er
 
 		utils.Log.Infof("文件未下载完毕，第[%d]次等待", count)
 		count++
-		downloadedFiles, err = d.getFiles(resultFile.Id)
+		downloadedFiles, err = d.getFiles(downloadFile.Id)
 		if err != nil {
-			return resultFile, realFile, err
+			return downloadFile, downloadMaxFile, err
 		}
-		realFile = fileDownloadCheck(downloadedFiles)
+		downloadMaxFile = fileDownloadCheck(downloadedFiles)
 
 	}
 
-	return resultFile, realFile, nil
+	return downloadFile, downloadMaxFile, nil
 }
 
 // clearIllegalChar 清理文件名中的非法字符

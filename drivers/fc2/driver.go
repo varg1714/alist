@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/pikpak"
+	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -64,6 +65,25 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 	}
 
 	if d.RootID.GetRootId() == dirName {
+		results = append(results, &model.ObjThumb{
+			Object: model.Object{
+				Name:     "关注演员",
+				IsFolder: true,
+				ID:       "关注演员",
+				Size:     622857143,
+				Modified: time.Now(),
+			},
+		}, &model.ObjThumb{
+			Object: model.Object{
+				Name:     "个人收藏",
+				IsFolder: true,
+				ID:       "个人收藏",
+				Size:     622857143,
+				Modified: time.Now(),
+			},
+		})
+		return results, nil
+	} else if dirName == "关注演员" {
 		// 1. 顶级目录
 		for category := range categories {
 			results = append(results, &model.ObjThumb{
@@ -77,6 +97,10 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 			})
 		}
 		return results, nil
+	} else if dirName == "个人收藏" {
+		return utils.SliceConvert(virtual_file.GeoStorageFilms("fc2", "个人收藏"), func(src model.ObjThumb) (model.Obj, error) {
+			return &src, nil
+		})
 	} else if categories[dirName] != "" {
 		// 自定义目录
 		films, err := d.getFilms(dirName, func(index int) string {
@@ -128,12 +152,16 @@ func (d *FC2) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*m
 
 func (d *FC2) Remove(ctx context.Context, obj model.Obj) error {
 
-	err := db.DeleteActor(strconv.Itoa(int(d.ID)), obj.GetName())
-	if err != nil {
-		return err
-	}
+	if obj.IsDir() {
+		err := db.DeleteActor(strconv.Itoa(int(d.ID)), obj.GetName())
+		if err != nil {
+			return err
+		}
 
-	return db.DeleteFilmsByActor("fc2", obj.GetName())
+		return db.DeleteFilmsByActor("fc2", obj.GetName())
+	} else {
+		return db.DeleteFilmsByUrl("fc2", "个人收藏", obj.GetID())
+	}
 
 }
 
@@ -168,6 +196,17 @@ func (d *FC2) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) 
 	}
 
 	return db.CreateActor(strconv.Itoa(int(d.ID)), split[0], url)
+
+}
+
+func (d *FC2) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
+
+	if len(db.QueryByUrls("个人收藏", []string{srcObj.GetID()})) == 0 {
+		thumb := srcObj.(*model.ObjThumb)
+		return db.CreateFilms("fc2", "个人收藏", []model.ObjThumb{*thumb})
+	}
+
+	return nil
 
 }
 

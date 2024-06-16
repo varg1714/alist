@@ -4,6 +4,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
+	"strings"
 )
 
 func GetFilms(dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.ObjThumb, error) {
@@ -92,9 +93,8 @@ func GeoStorageFilms(source, dirName string) []model.ObjThumb {
 
 func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) []model.ObjThumb {
 	for _, film := range actor {
-		results = append(results, model.ObjThumb{
+		thumb := model.ObjThumb{
 			Object: model.Object{
-				Name:     film.Name + ".mp4",
 				IsFolder: false,
 				ID:       film.Url,
 				Size:     622857143,
@@ -102,7 +102,14 @@ func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) [
 				Path:     dirName,
 			},
 			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
-		})
+		}
+
+		if strings.HasSuffix(film.Name, "mp4") {
+			thumb.Name = film.Name
+		} else {
+			thumb.Name = film.Name + ".mp4"
+		}
+		results = append(results, thumb)
 	}
 	return results
 }

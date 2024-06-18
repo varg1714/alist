@@ -258,7 +258,7 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 			utils.Log.Info("磁力链接获取失败", err)
 		}
 		magnet = tempMagnet
-		utils.Log.Infof("获取磁力链接耗时:[%d]", time.Now().UnixMilli()-start)
+		utils.Log.Infof("获取:%s的磁力链接耗时:[%d]", dir.GetName(), time.Now().UnixMilli()-start)
 	}()
 
 	// 2. 尝试获取缓存文件

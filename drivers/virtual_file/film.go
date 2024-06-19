@@ -1,6 +1,7 @@
 package virtual_file
 
 import (
+	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
@@ -120,7 +121,7 @@ func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) [
 				IsFolder: false,
 				ID:       film.Image,
 				Name:     sourceName + ".jpg",
-				Size:     1 * 1024 * 1024,
+				Size:     cacheImage(film.Image),
 				Modified: film.Date,
 				Path:     dirName,
 			},
@@ -150,7 +151,7 @@ func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb
 			Object: model.Object{
 				IsFolder: false,
 				ID:       film.Thumb(),
-				Size:     1 * 1024 * 1024,
+				Size:     cacheImage(film.Thumb()),
 				Modified: parse,
 				Path:     dirName,
 			},
@@ -158,5 +159,17 @@ func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb
 		})
 	}
 	return results
+
+}
+
+func cacheImage(img string) int64 {
+
+	imgResp, err := base.RestyClient.R().Get(img)
+	if err != nil {
+		utils.Log.Info("图片下载失败", err)
+		return 0
+	}
+
+	return int64(len(imgResp.Body()))
 
 }

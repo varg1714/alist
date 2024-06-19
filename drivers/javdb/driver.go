@@ -121,6 +121,12 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 
 func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
+	if strings.HasSuffix(file.GetID(), "jpg") {
+		return &model.Link{
+			URL: file.GetID(),
+		}, nil
+	}
+
 	emptyFile := &model.Link{
 		URL: "",
 	}

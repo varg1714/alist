@@ -5,6 +5,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"strings"
+	"time"
 )
 
 func GetFilms(dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.ObjThumb, error) {
@@ -93,6 +94,7 @@ func GeoStorageFilms(source, dirName string) []model.ObjThumb {
 
 func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) []model.ObjThumb {
 	for _, film := range actor {
+
 		thumb := model.ObjThumb{
 			Object: model.Object{
 				IsFolder: false,
@@ -104,29 +106,57 @@ func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) [
 			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 		}
 
+		sourceName := film.Name
 		if strings.HasSuffix(film.Name, "mp4") {
 			thumb.Name = film.Name
+			strings.LastIndex(film.Name, ".")
+			sourceName = film.Name[0:strings.LastIndex(film.Name, ".")]
 		} else {
 			thumb.Name = film.Name + ".mp4"
 		}
-		results = append(results, thumb)
+
+		jpg := model.ObjThumb{
+			Object: model.Object{
+				IsFolder: false,
+				ID:       film.Image,
+				Name:     sourceName + ".jpg",
+				Size:     1 * 1024 * 1024,
+				Modified: film.Date,
+				Path:     dirName,
+			},
+			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
+		}
+
+		results = append(results, thumb, jpg)
 	}
 	return results
 }
 
 func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb) []model.ObjThumb {
+
 	for _, film := range actor {
+		parse, _ := time.Parse(time.DateTime, "2024-01-02 15:04:05")
 		results = append(results, model.ObjThumb{
 			Object: model.Object{
 				Name:     film.Name + ".mp4",
 				IsFolder: false,
 				ID:       film.ID,
 				Size:     622857143,
-				Modified: film.Modified,
+				Modified: parse,
+				Path:     dirName,
+			},
+			Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
+		}, model.ObjThumb{
+			Object: model.Object{
+				IsFolder: false,
+				ID:       film.Thumb(),
+				Size:     1 * 1024 * 1024,
+				Modified: parse,
 				Path:     dirName,
 			},
 			Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
 		})
 	}
 	return results
+
 }

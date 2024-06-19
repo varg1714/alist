@@ -103,7 +103,7 @@ func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) [
 			Object: model.Object{
 				IsFolder: false,
 				ID:       film.Url,
-				Size:     622857143,
+				Size:     23014356,
 				Modified: film.Date,
 				Path:     dirName,
 			},
@@ -111,6 +111,7 @@ func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) [
 		}
 
 		film.Name = strings.ReplaceAll(film.Name, "/", "")
+		film.Name = CutString(film.Name)
 		sourceName := film.Name
 
 		if strings.HasSuffix(film.Name, "mp4") {
@@ -132,12 +133,13 @@ func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb
 
 	for _, film := range actor {
 		parse, _ := time.Parse(time.DateTime, "2024-01-02 15:04:05")
+		film.Name = CutString(film.Name)
 		results = append(results, model.ObjThumb{
 			Object: model.Object{
 				Name:     strings.ReplaceAll(film.Name, "/", "") + ".mp4",
 				IsFolder: false,
 				ID:       film.ID,
-				Size:     622857143,
+				Size:     23014356,
 				Modified: parse,
 				Path:     dirName,
 			},
@@ -176,5 +178,22 @@ func CacheImage(dir, name, img string) {
 	if err != nil {
 		utils.Log.Info("图片缓存失败", err)
 	}
+
+}
+
+func CutString(name string) string {
+
+	// 将字符串转换为 rune 切片
+	runes := []rune(name)
+
+	if len(runes) <= 90 {
+		return name
+	}
+
+	// 检查长度并截取
+	runes = runes[:90]
+
+	// 将 rune 切片转换回字符串
+	return string(runes)
 
 }

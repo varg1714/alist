@@ -24,6 +24,7 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 		func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 			return d.getJavPageInfo(urlFunc, index, data)
 		})
+
 	if err != nil && len(javFilms) == 0 {
 		utils.Log.Info("javdb影片获取失败", err)
 		return javFilms, err
@@ -42,6 +43,7 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 		code := splitCode(film.Name)
 		if newName, exist := namingFilms[code]; exist && strings.HasSuffix(javFilms[index].Name, "mp4") {
 			_, newName = splitName(newName)
+			newName = virtual_file.CutString(newName)
 			javFilms[index].Name = strings.ReplaceAll(fmt.Sprintf("%s %s", code, strings.ReplaceAll(newName, "-", "")), "/", "")
 			virtual_file.CacheImage(dirName, fmt.Sprintf("%s.jpg", javFilms[index].Name[0:strings.LastIndex(javFilms[index].Name, ".")]), javFilms[index].Thumb())
 

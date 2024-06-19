@@ -103,7 +103,7 @@ func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) [
 			Object: model.Object{
 				IsFolder: false,
 				ID:       film.Url,
-				Size:     23014356,
+				Size:     1417381701,
 				Modified: film.Date,
 				Path:     dirName,
 			},
@@ -139,7 +139,7 @@ func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb
 				Name:     strings.ReplaceAll(film.Name, "/", "") + ".mp4",
 				IsFolder: false,
 				ID:       film.ID,
-				Size:     23014356,
+				Size:     1417381701,
 				Modified: parse,
 				Path:     dirName,
 			},

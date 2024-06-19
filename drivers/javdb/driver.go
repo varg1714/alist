@@ -135,6 +135,12 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 	if !ok {
 		return emptyFile, nil
 	}
+	if pikPak.MockedLink != "" {
+		utils.Log.Infof("jdvdb返回的地址: %s", pikPak.MockedLink)
+		return &model.Link{
+			URL: pikPak.MockedLink,
+		}, nil
+	}
 
 	pikPakFile, err := pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, file, func(obj model.Obj) (string, error) {
 		return d.getMagnet(obj)

@@ -42,8 +42,9 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 		code := splitCode(film.Name)
 		if newName, exist := namingFilms[code]; exist && strings.HasSuffix(javFilms[index].Name, "mp4") {
 			_, newName = splitName(newName)
-			javFilms[index].Name = fmt.Sprintf("%s %s", code, strings.ReplaceAll(newName, "-", ""))
-			javFilms[index+1].Name = fmt.Sprintf("%s.jpg", javFilms[index].Name[0:strings.LastIndex(javFilms[index].Name, ".")])
+			javFilms[index].Name = strings.ReplaceAll(fmt.Sprintf("%s %s", code, strings.ReplaceAll(newName, "-", "")), "/", "")
+			virtual_file.CacheImage(dirName, fmt.Sprintf("%s.jpg", javFilms[index].Name[0:strings.LastIndex(javFilms[index].Name, ".")]), javFilms[index].Thumb())
+
 		}
 	}
 

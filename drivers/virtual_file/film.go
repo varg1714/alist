@@ -1,10 +1,13 @@
 package virtual_file
 
 import (
+	"github.com/alist-org/alist/v3/cmd/flags"
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -107,7 +110,9 @@ func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) [
 			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 		}
 
+		film.Name = strings.ReplaceAll(film.Name, "/", "")
 		sourceName := film.Name
+
 		if strings.HasSuffix(film.Name, "mp4") {
 			thumb.Name = film.Name
 			strings.LastIndex(film.Name, ".")
@@ -116,19 +121,9 @@ func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) [
 			thumb.Name = film.Name + ".mp4"
 		}
 
-		jpg := model.ObjThumb{
-			Object: model.Object{
-				IsFolder: false,
-				ID:       film.Image,
-				Name:     sourceName + ".jpg",
-				Size:     cacheImage(film.Image),
-				Modified: film.Date,
-				Path:     dirName,
-			},
-			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
-		}
+		CacheImage(dirName, sourceName+".jpg", film.Image)
 
-		results = append(results, thumb, jpg)
+		results = append(results, thumb)
 	}
 	return results
 }
@@ -139,7 +134,7 @@ func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb
 		parse, _ := time.Parse(time.DateTime, "2024-01-02 15:04:05")
 		results = append(results, model.ObjThumb{
 			Object: model.Object{
-				Name:     film.Name + ".mp4",
+				Name:     strings.ReplaceAll(film.Name, "/", "") + ".mp4",
 				IsFolder: false,
 				ID:       film.ID,
 				Size:     622857143,
@@ -147,29 +142,39 @@ func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb
 				Path:     dirName,
 			},
 			Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
-		}, model.ObjThumb{
-			Object: model.Object{
-				IsFolder: false,
-				ID:       film.Thumb(),
-				Size:     cacheImage(film.Thumb()),
-				Modified: parse,
-				Path:     dirName,
-			},
-			Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
 		})
+
+		CacheImage(dirName, strings.ReplaceAll(film.Name, "/", "")+".jpg", film.Thumb())
+
 	}
 	return results
 
 }
 
-func cacheImage(img string) int64 {
+func CacheImage(dir, name, img string) {
+
+	if img == "" {
+		return
+	}
+
+	if utils.Exists(filepath.Join(flags.DataDir, "emby", dir, name)) {
+		return
+	}
 
 	imgResp, err := base.RestyClient.R().Get(img)
 	if err != nil {
 		utils.Log.Info("图片下载失败", err)
-		return 0
+		return
 	}
 
-	return int64(len(imgResp.Body()))
+	err = os.MkdirAll(filepath.Join(flags.DataDir, "emby", dir), 0777)
+	if err != nil {
+		utils.Log.Info("图片缓存文件夹创建失败", err)
+	}
+
+	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", dir, name), imgResp.Body(), 0777)
+	if err != nil {
+		utils.Log.Info("图片缓存失败", err)
+	}
 
 }

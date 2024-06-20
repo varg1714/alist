@@ -1,6 +1,7 @@
 package virtual_file
 
 import (
+	"fmt"
 	"github.com/alist-org/alist/v3/cmd/flags"
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/db"
@@ -155,6 +156,8 @@ func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb
 
 func CacheImage(dir, name, img string) {
 
+	cacheActorNfo(dir, name)
+
 	if img == "" {
 		return
 	}
@@ -177,6 +180,46 @@ func CacheImage(dir, name, img string) {
 	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", dir, name), imgResp.Body(), 0777)
 	if err != nil {
 		utils.Log.Info("图片缓存失败", err)
+	}
+
+}
+
+func cacheActorNfo(dir, name string) {
+
+	if name == "" {
+		return
+	}
+
+	sourceName := name[0:strings.LastIndex(name, ".")]
+
+	if utils.Exists(filepath.Join(flags.DataDir, "emby", dir, sourceName+".nfo")) {
+		return
+	}
+
+	err := os.MkdirAll(filepath.Join(flags.DataDir, "emby", dir), 0777)
+	if err != nil {
+		utils.Log.Info("nfo缓存文件夹创建失败", err)
+		return
+	}
+
+	media := Media{
+		Plot:  Inner{Inner: fmt.Sprintf("<![CDATA[%s]]>", sourceName)},
+		Title: Inner{Inner: sourceName},
+		Actor: []Actor{
+			{
+				Name: dir,
+			},
+		},
+	}
+
+	xml, err := mediaToXML(&media)
+	if err != nil {
+		utils.Log.Info("xml格式转换失败", err)
+		return
+	}
+	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", dir, sourceName+".nfo"), xml, 0777)
+	if err != nil {
+		utils.Log.Infof("文件:%s的xml缓存失败:%v", name, err)
 	}
 
 }

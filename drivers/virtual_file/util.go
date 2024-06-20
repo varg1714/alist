@@ -1,6 +1,7 @@
 package virtual_file
 
 import (
+	"encoding/xml"
 	"errors"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -201,4 +202,19 @@ func replace(test model.ReplaceItem, index int) bool {
 
 	return false
 
+}
+
+// 转换为xml
+func mediaToXML(m *Media) ([]byte, error) {
+	// 转换
+	x, err := xml.MarshalIndent(m, "", "  ")
+	// 检查
+	if err != nil {
+		return nil, err
+	}
+
+	// 转码为[]byte
+	x = []byte(xml.Header + string(x))
+
+	return x, nil
 }

@@ -106,6 +106,7 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 			return fmt.Sprintf(url, index)
 		})
 		if err != nil {
+			utils.Log.Info("影片获取失败", err)
 			return nil, err
 		}
 		return utils.SliceConvert(films, func(src model.ObjThumb) (model.Obj, error) {

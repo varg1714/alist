@@ -229,12 +229,12 @@ func CutString(name string) string {
 	// 将字符串转换为 rune 切片
 	runes := []rune(name)
 
-	if len(runes) <= 90 {
+	if len(runes) <= 70 {
 		return name
 	}
 
 	// 检查长度并截取
-	runes = runes[:90]
+	runes = runes[:70]
 
 	// 将 rune 切片转换回字符串
 	return string(runes)

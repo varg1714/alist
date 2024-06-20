@@ -45,7 +45,7 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 			_, newName = splitName(newName)
 			newName = virtual_file.CutString(newName)
 			javFilms[index].Name = strings.ReplaceAll(fmt.Sprintf("%s %s", code, strings.ReplaceAll(newName, "-", "")), "/", "")
-			virtual_file.CacheImage(dirName, fmt.Sprintf("%s.jpg", javFilms[index].Name[0:strings.LastIndex(javFilms[index].Name, ".")]), javFilms[index].Thumb())
+			virtual_file.CacheImage("javdb", dirName, fmt.Sprintf("%s.jpg", javFilms[index].Name[0:strings.LastIndex(javFilms[index].Name, ".")]), javFilms[index].Thumb())
 
 		}
 	}

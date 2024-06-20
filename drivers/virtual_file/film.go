@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func GetFilms(dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.ObjThumb, error) {
+func GetFilms(source, dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.ObjThumb, error) {
 
 	results := make([]model.ObjThumb, 0)
 	films := make([]model.ObjThumb, 0)
@@ -33,7 +33,7 @@ func GetFilms(dirName string, urlFunc func(index int) string, pageFunc func(urlF
 
 	}
 
-	return convertObj(dirName, films, results), nil
+	return convertObj(source, dirName, films, results), nil
 
 }
 
@@ -44,7 +44,7 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 
 	films, nextPage, err := pageFunc(urlFunc, 1, films)
 	if err != nil {
-		return convertFilm(dirName, db.QueryByActor(source, dirName), results), err
+		return convertFilm(source, dirName, db.QueryByActor(source, dirName), results), err
 	}
 
 	var urls []string
@@ -59,7 +59,7 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 
 		films, nextPage, err = pageFunc(urlFunc, index, films)
 		if err != nil {
-			return convertFilm(dirName, db.QueryByActor(source, dirName), results), err
+			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results), err
 		}
 		clear(urls)
 		for _, item := range films {
@@ -84,20 +84,20 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 	if len(films) != 0 {
 		err = db.CreateFilms(source, dirName, films)
 		if err != nil {
-			return convertFilm(dirName, db.QueryByActor(source, dirName), results), nil
+			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results), nil
 		}
 	}
 
-	return convertFilm(dirName, db.QueryByActor(source, dirName), results), nil
+	return convertFilm(source, dirName, db.QueryByActor(source, dirName), results), nil
 
 }
 
 func GeoStorageFilms(source, dirName string) []model.ObjThumb {
 	films := db.QueryByActor(source, dirName)
-	return convertFilm(dirName, films, []model.ObjThumb{})
+	return convertFilm(source, dirName, films, []model.ObjThumb{})
 }
 
-func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) []model.ObjThumb {
+func convertFilm(source, dirName string, actor []model.Film, results []model.ObjThumb) []model.ObjThumb {
 	for _, film := range actor {
 
 		thumb := model.ObjThumb{
@@ -123,14 +123,14 @@ func convertFilm(dirName string, actor []model.Film, results []model.ObjThumb) [
 			thumb.Name = film.Name + ".mp4"
 		}
 
-		CacheImage(dirName, sourceName+".jpg", film.Image)
+		CacheImage(source, dirName, sourceName+".jpg", film.Image)
 
 		results = append(results, thumb)
 	}
 	return results
 }
 
-func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb) []model.ObjThumb {
+func convertObj(source, dirName string, actor []model.ObjThumb, results []model.ObjThumb) []model.ObjThumb {
 
 	for _, film := range actor {
 		parse, _ := time.Parse(time.DateTime, "2024-01-02 15:04:05")
@@ -147,22 +147,22 @@ func convertObj(dirName string, actor []model.ObjThumb, results []model.ObjThumb
 			Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
 		})
 
-		CacheImage(dirName, strings.ReplaceAll(film.Name, "/", "")+".jpg", film.Thumb())
+		CacheImage(source, dirName, strings.ReplaceAll(film.Name, "/", "")+".jpg", film.Thumb())
 
 	}
 	return results
 
 }
 
-func CacheImage(dir, name, img string) {
+func CacheImage(source, dir, name, img string) {
 
-	cacheActorNfo(dir, name)
+	cacheActorNfo(dir, name, source)
 
 	if img == "" {
 		return
 	}
 
-	if utils.Exists(filepath.Join(flags.DataDir, "emby", dir, name)) {
+	if utils.Exists(filepath.Join(flags.DataDir, "emby", source, dir, name)) {
 		return
 	}
 
@@ -172,19 +172,19 @@ func CacheImage(dir, name, img string) {
 		return
 	}
 
-	err = os.MkdirAll(filepath.Join(flags.DataDir, "emby", dir), 0777)
+	err = os.MkdirAll(filepath.Join(flags.DataDir, "emby", source, dir), 0777)
 	if err != nil {
 		utils.Log.Info("图片缓存文件夹创建失败", err)
 	}
 
-	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", dir, name), imgResp.Body(), 0777)
+	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", source, dir, name), imgResp.Body(), 0777)
 	if err != nil {
 		utils.Log.Info("图片缓存失败", err)
 	}
 
 }
 
-func cacheActorNfo(dir, name string) {
+func cacheActorNfo(dir, name, source string) {
 
 	if name == "" {
 		return
@@ -192,11 +192,11 @@ func cacheActorNfo(dir, name string) {
 
 	sourceName := name[0:strings.LastIndex(name, ".")]
 
-	if utils.Exists(filepath.Join(flags.DataDir, "emby", dir, sourceName+".nfo")) {
+	if utils.Exists(filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo")) {
 		return
 	}
 
-	err := os.MkdirAll(filepath.Join(flags.DataDir, "emby", dir), 0777)
+	err := os.MkdirAll(filepath.Join(flags.DataDir, "emby", source, dir), 0777)
 	if err != nil {
 		utils.Log.Info("nfo缓存文件夹创建失败", err)
 		return
@@ -217,7 +217,7 @@ func cacheActorNfo(dir, name string) {
 		utils.Log.Info("xml格式转换失败", err)
 		return
 	}
-	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", dir, sourceName+".nfo"), xml, 0777)
+	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo"), xml, 0777)
 	if err != nil {
 		utils.Log.Infof("文件:%s的xml缓存失败:%v", name, err)
 	}

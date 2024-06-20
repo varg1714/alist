@@ -39,7 +39,7 @@ func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.
 				return d.getPageInfo(urlFunc, index, data)
 			})
 	} else {
-		return virtual_file.GetFilms(dirName, urlFunc,
+		return virtual_file.GetFilms("fc2", dirName, urlFunc,
 			func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 				return d.getPageInfo(urlFunc, index, data)
 			})

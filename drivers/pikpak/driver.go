@@ -98,8 +98,10 @@ func (d *PikPak) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 	if err != nil {
 		return nil, err
 	}
+	exp := time.Minute
 	link := model.Link{
-		URL: resp.WebContentLink,
+		URL:        resp.WebContentLink,
+		Expiration: &exp,
 	}
 	if !d.DisableMediaLink && len(resp.Medias) > 0 && resp.Medias[0].Link.Url != "" {
 		log.Debugln("use media link")

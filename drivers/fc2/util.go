@@ -107,7 +107,14 @@ func (d *FC2) getPageInfo(urlFunc func(index int) string, index int, data []mode
 
 			href := element.ChildAttr(filmUrlSelector, "href")
 			title := element.ChildText(filmTitleSelector)
-			image := "https:" + element.ChildAttr(filmImageSelector, "src")
+
+			var image string
+			imageAttr := element.ChildAttr(filmImageSelector, "src")
+			if strings.HasPrefix(imageAttr, "http") {
+				image = imageAttr
+			} else {
+				image = "https:" + imageAttr
+			}
 
 			id := actorUrlsRegexp.ReplaceAllString(href, "$1")
 			data = append(data, model.ObjThumb{

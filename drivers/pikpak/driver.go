@@ -85,7 +85,7 @@ func (d *PikPak) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 
 func (d *PikPak) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
-	if d.MockedLink != "" {
+	if d.Mocked && d.MockedLink != "" {
 		utils.Log.Infof("pikpak返回的地址: %s", d.MockedLink)
 		return &model.Link{
 			URL: d.MockedLink,

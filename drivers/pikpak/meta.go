@@ -14,6 +14,7 @@ type Addition struct {
 	ClientID           string `json:"client_id" required:"true" default:"YNxT9w7GMdWvEOKa"`
 	ClientSecret       string `json:"client_secret" required:"true" default:"dbw2OtmVEeuUvIptb1Coyg"`
 	LinkIndex          uint   `json:"link_index" type:"number" default:"0"`
+	Mocked             bool   `json:"mocked"`
 	MockedLink         string `json:"mocked_link" `
 }
 

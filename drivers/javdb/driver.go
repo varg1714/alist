@@ -136,7 +136,7 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 	if !ok {
 		return emptyFile, nil
 	}
-	if pikPak.MockedLink != "" {
+	if pikPak.Mocked && pikPak.MockedLink != "" {
 		utils.Log.Infof("jdvdb返回的地址: %s", pikPak.MockedLink)
 		return &model.Link{
 			URL: pikPak.MockedLink,

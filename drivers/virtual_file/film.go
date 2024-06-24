@@ -9,6 +9,7 @@ import (
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -120,10 +121,10 @@ func convertFilm(source, dirName string, actor []model.Film, results []model.Obj
 			strings.LastIndex(film.Name, ".")
 			sourceName = film.Name[0:strings.LastIndex(film.Name, ".")]
 		} else {
-			thumb.Name = film.Name + ".mp4"
+			thumb.Name = AppendFilmName(film.Name)
 		}
 
-		CacheImage(source, dirName, sourceName+".jpg", film.Image)
+		CacheImage(source, dirName, AppendImageName(sourceName), film.Image)
 
 		results = append(results, thumb)
 	}
@@ -137,7 +138,7 @@ func convertObj(source, dirName string, actor []model.ObjThumb, results []model.
 		film.Name = CutString(film.Name)
 		results = append(results, model.ObjThumb{
 			Object: model.Object{
-				Name:     strings.ReplaceAll(film.Name, "/", "") + ".mp4",
+				Name:     AppendFilmName(film.Name),
 				IsFolder: false,
 				ID:       film.ID,
 				Size:     1417381701,
@@ -147,7 +148,7 @@ func convertObj(source, dirName string, actor []model.ObjThumb, results []model.
 			Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
 		})
 
-		CacheImage(source, dirName, strings.ReplaceAll(film.Name, "/", "")+".jpg", film.Thumb())
+		CacheImage(source, dirName, AppendImageName(film.Name), film.Thumb())
 
 	}
 	return results
@@ -226,6 +227,9 @@ func cacheActorNfo(dir, name, source string) {
 
 func CutString(name string) string {
 
+	prettyNameRegexp, _ := regexp.Compile("[*?:\"<>|\\/]")
+	name = prettyNameRegexp.ReplaceAllString(name, "")
+
 	// 将字符串转换为 rune 切片
 	runes := []rune(name)
 
@@ -238,5 +242,42 @@ func CutString(name string) string {
 
 	// 将 rune 切片转换回字符串
 	return string(runes)
+
+}
+
+func AppendFilmName(name string) string {
+
+	if strings.HasSuffix(name, ".mp4") {
+		return name
+	}
+
+	if strings.HasSuffix(name, ".") {
+		// 仅有.
+		return name + "mp4"
+	}
+
+	// 返回原始文件名
+	return name + ".mp4"
+
+}
+
+func AppendImageName(name string) string {
+
+	if strings.HasSuffix(name, ".jpg") {
+		return name
+	}
+
+	if strings.HasSuffix(name, ".") {
+		// 仅有.
+		return name + "jpg"
+	}
+
+	// 是影片结尾的图片名
+	if strings.HasSuffix(name, ".mp4") {
+		return name[0:strings.LastIndex(name, ".")] + ".jpg"
+	}
+
+	// 返回原始文件名
+	return name + ".jpg"
 
 }

@@ -43,16 +43,10 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 		code := splitCode(film.Name)
 		if newName, exist := namingFilms[code]; exist && strings.HasSuffix(javFilms[index].Name, "mp4") {
 			_, newName = splitName(newName)
-			newName = virtual_file.CutString(newName)
-			if !strings.HasSuffix(newName, "mp4") {
-				newName = newName + ".mp4"
-			}
-			javFilms[index].Name = strings.ReplaceAll(fmt.Sprintf("%s %s", code, strings.ReplaceAll(newName, "-", "")), "/", "")
+			newName = virtual_file.AppendFilmName(virtual_file.CutString(newName))
+			javFilms[index].Name = fmt.Sprintf("%s %s", code, strings.ReplaceAll(newName, "-", ""))
 
-			lastIndex := strings.LastIndex(javFilms[index].Name, ".")
-			sprintf := fmt.Sprintf("%s.jpg", javFilms[index].Name[0:lastIndex])
-
-			virtual_file.CacheImage("javdb", dirName, sprintf, javFilms[index].Thumb())
+			virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(javFilms[index].Name), javFilms[index].Thumb())
 
 		}
 	}
@@ -91,7 +85,7 @@ func (d *Javdb) addStar(code string) (model.ObjThumb, error) {
 	}
 
 	err = db.CreateFilms("javdb", "个人收藏", []model.ObjThumb{cachingFilm})
-	cachingFilm.Name = cachingFilm.Name + ".mp4"
+	cachingFilm.Name = virtual_file.AppendFilmName(cachingFilm.Name)
 	cachingFilm.Path = "个人收藏"
 
 	return cachingFilm, err
@@ -385,7 +379,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 	actors := db.QueryByActor("airav", dirName)
 	for index := range actors {
 		name := actors[index].Name
-		nameCache[splitCode(name)] = name + ".mp4"
+		nameCache[splitCode(name)] = virtual_file.AppendFilmName(name)
 	}
 	if len(nameCache) != 0 {
 		init = true
@@ -403,7 +397,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 
 			if searchResult.ID != "" {
 				// 2.2.1 有该作品信息
-				nameCache[splitCode(searchResult.Name)] = searchResult.Name + ".mp4"
+				nameCache[splitCode(searchResult.Name)] = virtual_file.AppendFilmName(searchResult.Name)
 			}
 
 			if addr != "" {
@@ -433,7 +427,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 					utils.Log.Info("njav搜索影片失败", err)
 				}
 				if len(njavSearchResult) > 0 && splitCode(njavSearchResult[0].Name) == code {
-					nameCache[code] = njavSearchResult[0].Name + ".mp4"
+					nameCache[code] = virtual_file.AppendFilmName(njavSearchResult[0].Name)
 				} else {
 					nameCache[code] = films[index].Name
 				}

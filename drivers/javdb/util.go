@@ -8,6 +8,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/dustin/go-humanize"
 	"github.com/gocolly/colly/v2"
 	"github.com/gocolly/colly/v2/extensions"
 	"net/http"
@@ -94,6 +95,12 @@ func (d *Javdb) addStar(code string) (model.ObjThumb, error) {
 
 func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
+	magnetCache := db.QueryCacheFileId(file.GetName())
+	if magnetCache.Magnet != "" {
+		utils.Log.Infof("返回缓存中的磁力地址:%s", magnetCache.Magnet)
+		return magnetCache.Magnet, nil
+	}
+
 	collector := colly.NewCollector(func(c *colly.Collector) {
 		c.SetRequestTimeout(time.Second * 10)
 	})
@@ -108,10 +115,18 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 			magnetEle.ForEach(".tag", func(i int, tag *colly.HTMLElement) {
 				tags = append(tags, tag.Text)
 			})
+
+			fileSizeText := magnetEle.ChildText(".meta")
+			fileSize := strings.Split(fileSizeText, ",")[0]
+			bytes, err := humanize.ParseBytes(fileSize)
+			if err != nil {
+				utils.Log.Infof("格式化文件大小失败:%s,错误原因:%v", fileSizeText, err)
+			}
+
 			magnets = append(magnets, Magnet{
 				MagnetUrl: magnetEle.ChildAttr("a", "href"),
 				Tag:       tags,
-				FileSize:  magnetEle.ChildText(".meta"),
+				FileSize:  bytes,
 			})
 
 		})
@@ -132,7 +147,16 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 	})
 
-	return magnets[0].MagnetUrl, nil
+	maxLen := len(magnets[0].Tag)
+	magnetGroup := utils.GroupByProperty(magnets, func(t Magnet) int {
+		return len(t.Tag)
+	})
+	mostTagMagnets := magnetGroup[maxLen]
+	magnet := mostTagMagnets[len(mostTagMagnets)/2]
+
+	err = db.CreateCacheFile(magnet.MagnetUrl, "", file.GetName())
+
+	return magnet.MagnetUrl, err
 
 }
 

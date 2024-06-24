@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
+	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/gocolly/colly/v2"
 	"regexp"
 	"strings"
@@ -49,6 +51,12 @@ func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.
 
 func (d *FC2) getMagnet(file model.Obj) (string, error) {
 
+	magnetCache := db.QueryCacheFileId(file.GetName())
+	if magnetCache.Magnet != "" {
+		utils.Log.Infof("返回缓存中的磁力地址:%s", magnetCache.Magnet)
+		return magnetCache.Magnet, nil
+	}
+
 	id := file.GetID()
 
 	res, err := d.findMagnet(fmt.Sprintf("https://sukebei.nyaa.si/?f=0&c=0_0&q=%s&s=downloads&o=desc", id))
@@ -67,7 +75,13 @@ func (d *FC2) getMagnet(file model.Obj) (string, error) {
 	}
 
 	tempMagnet := magnetUrl.FindString(magPage)
-	return magnetUrl.ReplaceAllString(tempMagnet, "$1"), nil
+	magnet := magnetUrl.ReplaceAllString(tempMagnet, "$1")
+
+	if magnet != "" {
+		err = db.CreateCacheFile(magnet, "", file.GetName())
+	}
+
+	return magnet, err
 
 }
 

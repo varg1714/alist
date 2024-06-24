@@ -22,6 +22,7 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/djherbis/times v1.6.0
 	github.com/dlclark/regexp2 v1.10.0
+	github.com/dustin/go-humanize v1.0.1
 	github.com/dustinxie/ecc v0.0.0-20210511000915-959544187564
 	github.com/emirpasic/gods/v2 v2.0.0-alpha
 	github.com/foxxorcat/mopan-sdk-go v0.1.6

@@ -3,7 +3,6 @@ package pikpak
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"golang.org/x/exp/slices"
 	"net/http"
@@ -269,7 +268,7 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 			utils.Log.Info("磁力链接获取失败", err)
 		}
 		magnet = tempMagnet
-		utils.Log.Infof("获取:%s的磁力链接耗时:[%d]", dir.GetName(), time.Now().UnixMilli()-start)
+		utils.Log.Infof("获取:%s的磁力链接结果为:[%s]耗时:[%d]", dir.GetName(), magnet, time.Now().UnixMilli()-start)
 	}()
 
 	// 2. 尝试获取缓存文件
@@ -312,7 +311,7 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 	if resultFile.Id == "" {
 		magnetWaiter.Wait()
 		if magnet == "" {
-			return []model.Obj{}, errors.New("磁力链接爬取结果为空！")
+			return []model.Obj{}, nil
 		}
 
 		newFileDir, resultFile, err = d.downloadMagnet(fileDir, magnet)

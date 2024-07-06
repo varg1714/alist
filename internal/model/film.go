@@ -44,10 +44,13 @@ type VirtualFile struct {
 }
 
 type ReplaceItem struct {
-	Start      int    `json:"start"`
-	End        int    `json:"end"`
-	StartNum   int    `json:"startNum"`
-	SourceName string `json:"sourceName"`
+	// 替换类型： 0：顺序重命名；1：正则重命名；
+	Type          int    `json:"type"`
+	Start         int    `json:"start"`
+	End           int    `json:"end"`
+	StartNum      int    `json:"startNum"`
+	OldNameRegexp string `json:"oldNameRegexp"`
+	SourceName    string `json:"sourceName"`
 }
 
 type Replacement struct {

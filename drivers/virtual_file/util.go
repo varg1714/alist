@@ -3,10 +3,12 @@ package virtual_file
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/generic"
 	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/dlclark/regexp2"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -56,12 +58,12 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 	if exist {
 
 		// list files
-		tempResults, err := recursiveListFile(dir, fileFunc, virtualFile)
+		queriedFiles, err := recursiveListFile(dir, fileFunc, virtualFile)
 		if err != nil {
-			return tempResults, err
+			return queriedFiles, err
 		}
 
-		return prettyFiles(storageId, virtualFile, tempResults), nil
+		return prettyFiles(storageId, virtualFile, queriedFiles), nil
 
 	} else {
 		return results, nil
@@ -69,58 +71,47 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 
 }
 
-func prettyFiles(storageId uint, virtualFile model.VirtualFile, tempResults []model.Obj) []model.Obj {
+func prettyFiles(storageId uint, virtualFile model.VirtualFile, queriedFiles []model.Obj) []model.Obj {
 
 	results := make([]model.Obj, 0)
 
-	// name mapping
+	// 手动修改的名称，优先级最高
 	replacements := db.QueryReplacements(storageId, virtualFile.ShareID)
 	replaceMap := make(map[string]string)
 	for _, temp := range replacements {
 		replaceMap[temp.OldName] = temp.NewName
 	}
 
-	for fileIndex, obj := range tempResults {
+	for fileIndex, obj := range queriedFiles {
 
-		renameObj, canRename := obj.(model.SetName)
-
-		// transfer file
 		excludeFile := virtualFile.ExcludeUnMatch
+		objNameSetter, canRename := obj.(model.SetName)
+		if !canRename && !excludeFile {
+			results = append(results, obj)
+			continue
+		}
 
-		for testIndex := range virtualFile.Replace {
+		// 规则重命名
+		for replacedIndex := range virtualFile.Replace {
 
-			if replace(virtualFile.Replace[testIndex], fileIndex) && canRename {
-
-				var suffix string
-				index := strings.LastIndex(obj.GetName(), ".")
-				if index != -1 {
-					suffix = obj.GetName()[index:]
-				}
-
-				tempNum := ""
-				if virtualFile.Replace[testIndex].StartNum != -1 {
-					tempNum = strconv.Itoa(virtualFile.Replace[testIndex].StartNum)
-					if len(tempNum) == 1 {
-						tempNum = "0" + tempNum
-					}
-					renameObj.SetName(virtualFile.Replace[testIndex].SourceName + tempNum + suffix)
-					virtualFile.Replace[testIndex].StartNum += 1
-				}
-
-				results = append(results, obj)
+			// 匹配上规则，进行重命名
+			replace := tryReplace(&virtualFile.Replace[replacedIndex], fileIndex, obj.GetName(), objNameSetter)
+			if replace {
 				excludeFile = true
-
+				results = append(results, obj)
 				break
 			}
 
 		}
 
+		// 未匹配上重命名规则且不需要排除
 		if !excludeFile {
 			results = append(results, obj)
 		}
 
-		if newName, ok := replaceMap[obj.GetID()]; ok && canRename {
-			renameObj.SetName(newName)
+		// 手动重命名
+		if newName, ok := replaceMap[obj.GetID()]; ok {
+			objNameSetter.SetName(newName)
 		}
 
 	}
@@ -137,7 +128,7 @@ func recursiveListFile(dir model.Obj, fileFunc func(virtualFile model.VirtualFil
 
 		tempDir := queue.Pop()
 
-		// get files
+		// 获取该文件夹下的文件
 		objs, err := fileFunc(virtualFile, tempDir)
 		if err != nil {
 			return tempResults, err
@@ -145,10 +136,12 @@ func recursiveListFile(dir model.Obj, fileFunc func(virtualFile model.VirtualFil
 
 		for _, item := range objs {
 
+			// 添加文件到结果集中，若是文件夹，则根据是否递归子文件夹来决定是否显示该文件夹
 			if (!item.IsDir() && item.GetSize()/(1024*1024) >= virtualFile.MinFileSize) || (item.IsDir() && !virtualFile.AppendSubFolder) {
 				tempResults = append(tempResults, item)
 			}
 
+			// 递归遍历子文件夹
 			if item.IsDir() && virtualFile.AppendSubFolder {
 				utils.Log.Infof("递归遍历子文件夹：[%s]", item.GetName())
 				queue.Push(item)
@@ -188,19 +181,48 @@ func Rename(storageId uint, dir, oldName, newName string) error {
 	return db.Rename(storageId, virtualFile.ShareID, oldName, newName)
 }
 
-func replace(test model.ReplaceItem, index int) bool {
+func tryReplace(replaceItem *model.ReplaceItem, index int, oldName string, nameSetter model.SetName) bool {
 
-	if test.SourceName == "" {
+	if replaceItem.SourceName == "" {
 		return false
 	}
 
-	if index >= test.Start && ((index <= test.End) || (test.End == -1)) {
-		return true
-	} else if test.Start == -1 && test.End == -1 {
-		return true
+	if replaceItem.Type == 0 {
+
+		// 不在给定的重命名规则中
+		if index < replaceItem.Start || (replaceItem.End != -1 && index > replaceItem.End) {
+			return false
+		}
+
+		// 获取文件后缀名
+		nameSetter.SetName(fmt.Sprintf("%s%02d%s", replaceItem.SourceName, replaceItem.StartNum, filepath.Ext(oldName)))
+		replaceItem.StartNum += 1
+
+	} else if replaceItem.Type == 1 && replaceItem.OldNameRegexp != "" {
+
+		regexp := regexp2.MustCompile(replaceItem.OldNameRegexp, 0)
+		matchString, err := regexp.MatchString(oldName)
+		if err != nil {
+			utils.Log.Infof("正则重命名影片:[%s]时出现错误,正则规则:[%v],错误原因:%v", oldName, replaceItem.OldNameRegexp, err)
+			return false
+		}
+
+		if !matchString {
+			return false
+		}
+
+		replacedName, err := regexp.Replace(oldName, replaceItem.SourceName, -1, -1)
+		if err != nil {
+			utils.Log.Infof("正则重命名影片:[%s]时出现错误,正则规则:[%v],错误原因:%v", oldName, replaceItem.OldNameRegexp, err)
+			return false
+		}
+		if replacedName != "" && replacedName != oldName {
+			nameSetter.SetName(replacedName)
+		}
+
 	}
 
-	return false
+	return true
 
 }
 

@@ -84,13 +84,6 @@ func (d *PikPak) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 
 func (d *PikPak) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
-	if d.Mocked && d.MockedLink != "" {
-		utils.Log.Infof("pikpak返回的地址: %s", d.MockedLink)
-		return &model.Link{
-			URL: d.MockedLink,
-		}, nil
-	}
-
 	var resp File
 	_, err := d.request(fmt.Sprintf("https://api-drive.mypikpak.com/drive/v1/files/%s?_magic=2021&thumbnail_size=SIZE_LARGE", file.GetID()),
 		http.MethodGet, nil, &resp)

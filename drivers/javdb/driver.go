@@ -122,6 +122,13 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 
 func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
+	if d.Mocked && d.MockedLink != "" {
+		utils.Log.Infof("jdvdb返回的地址: %s", d.MockedLink)
+		return &model.Link{
+			URL: d.MockedLink,
+		}, nil
+	}
+
 	if strings.HasSuffix(file.GetID(), "jpg") {
 		return &model.Link{
 			URL: file.GetID(),
@@ -135,12 +142,6 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 	pikPak, ok := storage.(*pikpak.PikPak)
 	if !ok {
 		return emptyFile, nil
-	}
-	if pikPak.Mocked && pikPak.MockedLink != "" {
-		utils.Log.Infof("jdvdb返回的地址: %s", pikPak.MockedLink)
-		return &model.Link{
-			URL: pikPak.MockedLink,
-		}, nil
 	}
 
 	pikPakFile, err := pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, file, func(obj model.Obj) (string, error) {

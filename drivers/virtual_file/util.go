@@ -195,8 +195,12 @@ func tryReplace(replaceItem *model.ReplaceItem, index int, oldName string, nameS
 		}
 
 		// 获取文件后缀名
-		nameSetter.SetName(fmt.Sprintf("%s%02d%s", replaceItem.SourceName, replaceItem.StartNum, filepath.Ext(oldName)))
-		replaceItem.StartNum += 1
+		if replaceItem.StartNum >= 0 {
+			nameSetter.SetName(fmt.Sprintf("%s%02d%s", replaceItem.SourceName, replaceItem.StartNum, filepath.Ext(oldName)))
+			replaceItem.StartNum += 1
+		} else {
+			nameSetter.SetName(fmt.Sprintf("%s%s", replaceItem.SourceName, filepath.Ext(oldName)))
+		}
 
 	} else if replaceItem.Type == 1 && replaceItem.OldNameRegexp != "" {
 

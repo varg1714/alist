@@ -11,9 +11,11 @@ type Addition struct {
 	// driver.RootID
 	// define other
 	// Field string `json:"field" type:"select" required:"true" options:"a,b,c" default:"a"`
-	Surl  string `json:"surl"`
-	Pwd   string `json:"pwd"`
-	BDUSS string `json:"BDUSS"`
+	Surl            string `json:"surl"`
+	Pwd             string `json:"pwd"`
+	BDUSS           string `json:"BDUSS"`
+	BaiDuDriverPath string `json:"BaiDuDriverPath"`
+	TransferPath    string `json:"transferPath"`
 }
 
 var config = driver.Config{

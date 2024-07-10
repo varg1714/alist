@@ -155,8 +155,10 @@ func (d *BaiduNetdisk) linkOfficial(file model.Obj, args model.LinkArgs) (*model
 
 	updateObjMd5(file, "pan.baidu.com", u)
 
+	exp := time.Hour
 	return &model.Link{
-		URL: u,
+		URL:        u,
+		Expiration: &exp,
 		Header: http.Header{
 			"User-Agent": []string{"pan.baidu.com"},
 		},

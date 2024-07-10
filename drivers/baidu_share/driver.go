@@ -3,12 +3,14 @@ package baidu_share
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/Xhofe/go-cache"
+	"github.com/alist-org/alist/v3/drivers/baidu_netdisk"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
+	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/pkg/utils"
-	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -90,7 +92,7 @@ func (d *BaiduShare) getShareInfo(shareId, pwd string) (string, string, string, 
 
 	if err == nil {
 		if resp.IsSuccess() && respJson.Errno == 0 {
-			shareTokenCache.Set(shareId, respJson, cache.WithEx[ShareInfo](time.Hour*time.Duration(7)))
+			shareTokenCache.Set(shareId, respJson, cache.WithEx[ShareInfo](time.Second*time.Duration(30)))
 			return path.Dir(respJson.Data.List[0].Path), respJson.Data.Seckey, respJson.Data.Shareid.String(), respJson.Data.Uk.String(), nil
 		} else {
 			err = fmt.Errorf(" %s; %s; ", resp.Status(), resp.Body())
@@ -187,77 +189,78 @@ func (d *BaiduShare) List(ctx context.Context, dir model.Obj, args model.ListArg
 }
 
 func (d *BaiduShare) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
-	// TODO return link of file, required
 
+	start := time.Now().UnixMilli()
 	split := strings.Split(file.GetPath(), "/")
 	virtualFile := db.QueryVirtualFilm(d.ID, split[0])
 
 	_, secKey, shareId, uk, _ := d.getShareInfo(virtualFile.ShareID, virtualFile.SharePwd)
 
-	link := model.Link{Header: d.client.Header}
-	sign := ""
-	stamp := ""
+	link := &model.Link{Header: d.client.Header}
 	signJson := struct {
 		Errno int64 `json:"errno"`
-		Data  struct {
-			Stamp json.Number `json:"timestamp"`
-			Sign  string      `json:"sign"`
-		} `json:"data"`
-	}{}
-	resp, err := d.client.R().
-		SetQueryParam("surl", virtualFile.ShareID).
-		SetResult(&signJson).
-		Get("share/tplconfig?fields=sign,timestamp&channel=chunlei&web=1&app_id=250528&clienttype=0")
-	if err == nil {
-		if resp.IsSuccess() && signJson.Errno == 0 {
-			stamp = signJson.Data.Stamp.String()
-			sign = signJson.Data.Sign
-		} else {
-			err = fmt.Errorf(" %s; %s; ", resp.Status(), resp.Body())
-		}
-	}
-	if err == nil {
-		respJson := struct {
-			Errno int64 `json:"errno"`
-			List  [1]struct {
-				Dlink string `json:"dlink"`
+		Extra struct {
+			List []struct {
+				From     string `json:"from"`
+				FromFsId int    `json:"from_fs_id"`
+				To       string `json:"to"`
+				ToFsId   int    `json:"to_fs_id"`
 			} `json:"list"`
-		}{}
-		resp, err = d.client.R().
-			SetQueryParam("sign", sign).
-			SetQueryParam("timestamp", stamp).
-			SetBody(url.Values{
-				"encrypt":   {"0"},
-				"extra":     {fmt.Sprintf(`{"sekey":"%s"}`, secKey)},
-				"fid_list":  {fmt.Sprintf("[%s]", file.GetID())},
-				"primaryid": {shareId},
-				"product":   {"share"},
-				"type":      {"nolimit"},
-				"uk":        {uk},
-			}.Encode()).
-			SetResult(&respJson).
-			Post("api/sharedownload?app_id=250528&channel=chunlei&clienttype=12&web=1")
-		if err == nil {
-			if resp.IsSuccess() && respJson.Errno == 0 && respJson.List[0].Dlink != "" {
-				link.URL = respJson.List[0].Dlink
-			} else {
-				err = fmt.Errorf(" %s; %s; ", resp.Status(), resp.Body())
-			}
-		}
-		if err == nil {
-			resp, err = d.client.R().
-				SetDoNotParseResponse(true).
-				Get(link.URL)
-			if err == nil {
-				defer resp.RawBody().Close()
-				if resp.IsError() {
-					byt, _ := io.ReadAll(resp.RawBody())
-					err = fmt.Errorf(" %s; %s; ", resp.Status(), byt)
-				}
-			}
-		}
+		} `json:"extra"`
+	}{}
+
+	resp, err := d.client.R().
+		SetQueryParams(map[string]string{
+			"shareid": shareId,
+			"from":    uk,
+		}).
+		SetBody(url.Values{
+			"fsidlist": {fmt.Sprintf("[%s]", file.GetID())},
+			"path":     {d.TransferPath},
+		}.Encode()).
+		SetHeader("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8").
+		SetHeader("Referer", fmt.Sprintf("https://pan.baidu.com/s/%s", virtualFile.ShareID)).
+		SetHeader("sekey", secKey).
+		SetResult(&signJson).
+		Post("share/transfer?channel=chunlei&web=1&app_id=250528&clienttype=0&ondup=newcopy")
+
+	if err != nil {
+		return link, err
 	}
-	return &link, err
+
+	if len(signJson.Extra.List) == 0 {
+		utils.Log.Infof("文件转存失败:%s", resp.String())
+		return nil, errors.New("文件转存失败")
+	}
+
+	storage := op.GetBalancedStorage(d.BaiDuDriverPath)
+	baiduDrive, ok := storage.(*baidu_netdisk.BaiduNetdisk)
+	if !ok {
+		return link, nil
+	}
+
+	obj := &model.Object{
+		ID: strconv.Itoa(signJson.Extra.List[0].ToFsId),
+	}
+
+	relLink, err := baiduDrive.Link(ctx, obj, args)
+	utils.Log.Infof("文件转存与获取地址耗时：:[%d]ms", time.Now().UnixMilli()-start)
+
+	if err != nil {
+		return relLink, err
+	}
+
+	go func() {
+		obj.Path = signJson.Extra.List[0].To
+		err = baiduDrive.Remove(ctx, obj)
+		if err != nil {
+			utils.Log.Infof("清除文件:[%s]失败,错误原因:[%s]", file.GetName(), err.Error())
+			return
+		}
+		utils.Log.Infof("清除文件:[%s]完毕", file.GetName())
+	}()
+
+	return relLink, err
 }
 
 func (d *BaiduShare) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {

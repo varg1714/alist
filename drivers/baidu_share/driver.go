@@ -112,20 +112,22 @@ func (d *BaiduShare) List(ctx context.Context, dir model.Obj, args model.ListArg
 
 	return virtual_file.List(d.ID, dir, func(virtualFile model.VirtualFile, dir model.Obj) ([]model.Obj, error) {
 
-		var reqDir string
+		reqDir := "/"
 		split := strings.Split(dir.GetPath(), "/")
 
-		if len(split) <= 1 {
-			reqDir = "/"
-		} else {
-			reqDir = "/" + strings.Join(split[1:], "/")
+		if len(split) > 1 {
+
+			parentDir := path.Join(split[1:]...)
+			unescape, err2 := url.QueryUnescape(parentDir)
+			if err2 != nil {
+				utils.Log.Infof("url unescape error: %s", err2)
+				unescape = parentDir
+			}
+			reqDir = path.Join(reqDir, unescape)
 		}
 
 		isRoot := "0"
-		if reqDir == d.RootFolderPath {
-			reqDir = path.Join(virtualFile.ParentDir, reqDir)
-		}
-		if reqDir == virtualFile.ParentDir || reqDir == "/" {
+		if reqDir == "/" {
 			isRoot = "1"
 		}
 
@@ -273,8 +275,7 @@ func (d *BaiduShare) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *BaiduShare) Rename(ctx context.Context, srcObj model.Obj, newName string) error {
-	// TODO rename obj, optional
-	return errs.NotSupport
+	return virtual_file.Rename(d.ID, srcObj.GetPath(), srcObj.GetID(), newName)
 }
 
 func (d *BaiduShare) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {

@@ -73,6 +73,11 @@ func (d *QuarkShare) List(ctx context.Context, dir model.Obj, args model.ListArg
 
 func (d *QuarkShare) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
+	err := limiter.WaitN(ctx, 1)
+	if err != nil {
+		return nil, err
+	}
+
 	fileObject, exist := file.(*FileObj)
 	if !exist {
 		return nil, errors.New("文件格式错误")

@@ -74,7 +74,7 @@ func (d *QuarkShare) getShareInfo(shareId, pwd string) (string, error) {
 	}
 
 	if shareResp.Data.Stoken != "" {
-		shareTokenCache.Set(shareId, shareResp, cache.WithEx[ShareTokenResp](time.Hour*time.Duration(1)))
+		shareTokenCache.Set(shareId, shareResp, cache.WithEx[ShareTokenResp](time.Minute*time.Duration(10)))
 		return shareResp.Data.Stoken, nil
 	} else {
 		utils.Log.Infof("获取夸克网盘stToken获取为空:%v", shareResp)
@@ -201,7 +201,7 @@ func (d *QuarkShare) transformFile(virtualFile model.VirtualFile, obj FileObj) (
 			return "", err
 		}
 		if len(transformResult.Data.SaveAs.SaveAsTopFids) == 0 {
-			time.Sleep(time.Second)
+			time.Sleep(2 * time.Second)
 		}
 	}
 

@@ -66,8 +66,10 @@ func (d *QuarkOrUC) Link(ctx context.Context, file model.Obj, args model.LinkArg
 		return nil, err
 	}
 
+	expire := time.Hour
 	return &model.Link{
-		URL: resp.Data[0].DownloadUrl,
+		Expiration: &expire,
+		URL:        resp.Data[0].DownloadUrl,
 		Header: http.Header{
 			"Cookie":     []string{d.Cookie},
 			"Referer":    []string{d.conf.referer},

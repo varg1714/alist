@@ -74,7 +74,7 @@ func (d *QuarkShare) getShareInfo(shareId, pwd string) (string, error) {
 	}
 
 	if shareResp.Data.Stoken != "" {
-		shareTokenCache.Set(shareId, shareResp, cache.WithEx[ShareTokenResp](time.Minute*time.Duration(10)))
+		shareTokenCache.Set(shareId, shareResp, cache.WithEx[ShareTokenResp](time.Minute*time.Duration(d.CacheExpiration)))
 		return shareResp.Data.Stoken, nil
 	} else {
 		utils.Log.Infof("获取夸克网盘stToken获取为空:%v", shareResp)

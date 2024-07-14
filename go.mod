@@ -1,6 +1,6 @@
 module github.com/alist-org/alist/v3
 
-go 1.22
+go 1.22.5
 
 require (
 	github.com/SheltonZhu/115driver v1.0.25
@@ -28,20 +28,15 @@ require (
 	github.com/foxxorcat/mopan-sdk-go v0.1.6
 	github.com/foxxorcat/weiyun-sdk-go v0.1.3
 	github.com/gaoyb7/115drive-webdav v0.1.8
-	github.com/gin-contrib/cors v1.5.0
-	github.com/gin-gonic/gin v1.9.1
-	github.com/go-resty/resty/v2 v2.11.0
-	github.com/go-webauthn/webauthn v0.10.0
-	github.com/gocolly/colly/v2 v2.1.0
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-resty/resty/v2 v2.13.1
 	github.com/go-webauthn/webauthn v0.10.2
+	github.com/gocolly/colly/v2 v2.1.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hirochachacha/go-smb2 v1.1.0
-	github.com/ipfs/boxo v0.12.0
 	github.com/ipfs/go-ipfs-api v0.7.0
 	github.com/jlaffaye/ftp v0.2.0
 	github.com/json-iterator/go v1.1.12
@@ -75,14 +70,13 @@ require (
 	google.golang.org/appengine v1.6.8
 	gopkg.in/ldap.v3 v3.1.0
 	gorm.io/driver/mysql v1.5.7
-	gorm.io/driver/postgres v1.4.8
+	gorm.io/driver/postgres v1.5.9
 	gorm.io/driver/sqlite v1.5.6
 	gorm.io/gorm v1.25.11
 )
 
 require (
-	cloud.google.com/go/compute v1.23.0 // indirect
-	github.com/BurntSushi/toml v0.3.1 // indirect
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/blevesearch/go-faiss v1.0.19 // indirect
 	github.com/blevesearch/zapx/v16 v16.1.4 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
@@ -94,19 +88,19 @@ require (
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/ipfs/boxo v0.12.0 // indirect
+	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 )
 
 require (
 	github.com/Max-Sum/base32768 v0.0.0-20230304063302-18e6ce5945fd // indirect
-	github.com/PuerkitoBio/goquery v1.5.1 // indirect
-	github.com/RoaringBitmap/roaring v1.2.3 // indirect
+	github.com/PuerkitoBio/goquery v1.8.1 // indirect
 	github.com/RoaringBitmap/roaring v1.9.3 // indirect
 	github.com/abbot/go-http-auth v0.4.0 // indirect
 	github.com/aead/ecdh v0.2.0 // indirect
 	github.com/andreburgaud/crypt2go v1.2.0 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
-	github.com/andybalholm/cascadia v1.2.0 // indirect
+	github.com/andybalholm/cascadia v1.3.2 // indirect
 	github.com/antchfx/htmlquery v1.2.3 // indirect
 	github.com/antchfx/xmlquery v1.2.4 // indirect
 	github.com/antchfx/xpath v1.1.8 // indirect
@@ -149,14 +143,12 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.20.0 // indirect
 	github.com/go-sql-driver/mysql v1.7.0 // indirect
-	github.com/go-webauthn/x v0.1.6 // indirect
-	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/go-webauthn/x v0.1.9 // indirect
+	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/golang/geo v0.0.0-20210211234256-740aa86cb551 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-tpm v0.9.0 // indirect
@@ -164,11 +156,10 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/ipfs/go-cid v0.4.1 // indirect
 	github.com/ipfs/go-cid v0.4.1
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
-	github.com/jackc/pgx/v5 v5.3.0 // indirect
+	github.com/jackc/pgx/v5 v5.5.5 // indirect
 	github.com/jaevor/go-nanoid v1.3.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
@@ -176,8 +167,6 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/jzelinskie/whirlpool v0.0.0-20201016144138-0675e54bb004 // indirect
 	github.com/kennygrant/sanitize v1.2.4 // indirect
-	github.com/klauspost/compress v1.17.4 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/klauspost/compress v1.17.8 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/kr/fs v0.1.0 // indirect
@@ -224,8 +213,6 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/ryszard/goskiplist v0.0.0-20150312221310-2dfbae5fcf46 // indirect
 	github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca // indirect
-	github.com/shabbyrobe/gocovmerge v0.0.0-20190829150210-3e036491d500 // indirect
-	github.com/shirou/gopsutil/v3 v3.23.7 // indirect
 	github.com/shabbyrobe/gocovmerge v0.0.0-20230507112040-c3350d9342df // indirect
 	github.com/shirou/gopsutil/v3 v3.24.4 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
@@ -233,8 +220,6 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/temoto/robotstxt v1.1.1 // indirect
-	github.com/tklauser/go-sysconf v0.3.11 // indirect
-	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.13 // indirect
 	github.com/tklauser/numcpus v0.7.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect

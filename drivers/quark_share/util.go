@@ -13,6 +13,7 @@ import (
 	"golang.org/x/time/rate"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -174,6 +175,14 @@ func (d *QuarkShare) transformFile(virtualFile model.VirtualFile, obj FileObj) (
 	}, &transformResult)
 	if err != nil {
 		utils.Log.Infof("夸克文件:%s转存失败:%v", obj.GetName(), err)
+
+		if strings.Contains(err.Error(), "token校验异常") {
+			shareTokenCache.Del(virtualFile.ShareID)
+			topDir := strings.Split(obj.GetPath(), "/")[0]
+			op.ClearCache(d, topDir)
+			utils.Log.Infof("由于文件token失效,因此清除:%s目录的文件缓存", topDir)
+		}
+
 		return "", err
 	}
 

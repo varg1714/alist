@@ -176,7 +176,7 @@ func (d *QuarkShare) transformFile(virtualFile model.VirtualFile, obj FileObj) (
 	if err != nil {
 		utils.Log.Infof("夸克文件:%s转存失败:%v", obj.GetName(), err)
 
-		if strings.Contains(err.Error(), "token校验异常") {
+		if strings.Contains(err.Error(), "token校验异常") || strings.Contains(err.Error(), "分享的stoken过期") {
 			shareTokenCache.Del(virtualFile.ShareID)
 			topDir := strings.Split(obj.GetPath(), "/")[0]
 			op.ClearCache(d, topDir)

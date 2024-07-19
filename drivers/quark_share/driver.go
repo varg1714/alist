@@ -57,7 +57,7 @@ func (d *QuarkShare) List(ctx context.Context, dir model.Obj, args model.ListArg
 
 	return virtual_file.List(d.ID, dir, func(virtualFile model.VirtualFile, dir model.Obj) ([]model.Obj, error) {
 
-		files, err := d.getShareFiles(ctx, virtualFile, filepath.Base(dir.GetPath()))
+		files, err := d.getShareFiles(ctx, virtualFile, dir)
 		if err != nil {
 			return nil, err
 		}

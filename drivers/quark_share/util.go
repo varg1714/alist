@@ -12,6 +12,7 @@ import (
 	"github.com/go-resty/resty/v2"
 	"golang.org/x/time/rate"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -84,7 +85,7 @@ func (d *QuarkShare) getShareInfo(shareId, pwd string) (string, error) {
 
 }
 
-func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.VirtualFile, parentDir string) ([]FileObj, error) {
+func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.VirtualFile, dir model.Obj) ([]FileObj, error) {
 
 	err := limiter.WaitN(ctx, 1)
 	if err != nil {
@@ -111,7 +112,7 @@ func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.Virtua
 				map[string]string{
 					"pwd_id":   virtualFile.ShareID,
 					"stoken":   stToken,
-					"pdir_fid": parentDir,
+					"pdir_fid": filepath.Base(dir.GetPath()),
 					"_page":    strconv.Itoa(page),
 					"_size":    strconv.Itoa(pageSize),
 					"_sort":    "file_type:asc,file_name:asc,updated_at:desc",
@@ -119,7 +120,16 @@ func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.Virtua
 		}, &fileResp)
 
 		if err != nil {
-			return res, err
+			utils.Log.Infof("获取夸克分享:%s文件列表失败:%v", dir.GetName(), err)
+			if strings.Contains(err.Error(), "分享的stoken过期") {
+				shareTokenCache.Del(virtualFile.ShareID)
+				topDir := strings.Split(dir.GetPath(), "/")[0]
+				op.ClearCache(d, topDir)
+				utils.Log.Infof("由于文件token失效,因此清除:%s目录的文件缓存", topDir)
+				continue
+			} else {
+				return res, err
+			}
 		}
 
 		for _, item := range fileResp.Data.List {

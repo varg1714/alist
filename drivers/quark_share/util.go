@@ -105,8 +105,7 @@ func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.Virtua
 
 	var fileResp FileListResp
 
-	for nextPage {
-
+	getFiles := func() {
 		_, err = d.request("/1/clouddrive/share/sharepage/detail", http.MethodGet, func(req *resty.Request) {
 			req.SetQueryParams(
 				map[string]string{
@@ -118,18 +117,26 @@ func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.Virtua
 					"_sort":    "file_type:asc,file_name:asc,updated_at:desc",
 				})
 		}, &fileResp)
+	}
+
+	for nextPage {
+
+		getFiles()
+		if err != nil && strings.Contains(err.Error(), "分享的stoken过期") {
+			utils.Log.Infof("获取夸克分享:%s文件列表失败:%v", dir.GetName(), err)
+			err = nil
+
+			shareTokenCache.Del(virtualFile.ShareID)
+			topDir := strings.Split(dir.GetPath(), "/")[0]
+			op.ClearCache(d, topDir)
+			utils.Log.Infof("由于文件token失效,因此清除:%s目录的文件缓存", topDir)
+			getFiles()
+
+		}
 
 		if err != nil {
 			utils.Log.Infof("获取夸克分享:%s文件列表失败:%v", dir.GetName(), err)
-			if strings.Contains(err.Error(), "分享的stoken过期") {
-				shareTokenCache.Del(virtualFile.ShareID)
-				topDir := strings.Split(dir.GetPath(), "/")[0]
-				op.ClearCache(d, topDir)
-				utils.Log.Infof("由于文件token失效,因此清除:%s目录的文件缓存", topDir)
-				continue
-			} else {
-				return res, err
-			}
+			return res, err
 		}
 
 		for _, item := range fileResp.Data.List {
@@ -166,33 +173,41 @@ func (d *QuarkShare) transformFile(virtualFile model.VirtualFile, obj FileObj) (
 	}
 
 	utils.Log.Infof("开始转存文件:%s", obj.GetName())
+
 	var transformResult TransformResult
-	_, err = d.request("/1/clouddrive/share/sharepage/save", http.MethodPost, func(req *resty.Request) {
-		req.SetQueryParams(
-			map[string]string{
-				"pr": "ucpro",
-			})
-		req.SetBody(
-			base.Json{
-				"fid_list":       []string{obj.GetID()},
-				"fid_token_list": []string{obj.ShareFidToken},
-				"to_pdir_fid":    d.TransferPath,
-				"pwd_id":         virtualFile.ShareID,
-				"stoken":         stToken,
-				"pdir_fid":       "0",
-				"scene":          "link",
-			})
-	}, &transformResult)
-	if err != nil {
+	transferFile := func() {
+		_, err = d.request("/1/clouddrive/share/sharepage/save", http.MethodPost, func(req *resty.Request) {
+			req.SetQueryParams(
+				map[string]string{
+					"pr": "ucpro",
+				})
+			req.SetBody(
+				base.Json{
+					"fid_list":       []string{obj.GetID()},
+					"fid_token_list": []string{obj.ShareFidToken},
+					"to_pdir_fid":    d.TransferPath,
+					"pwd_id":         virtualFile.ShareID,
+					"stoken":         stToken,
+					"pdir_fid":       "0",
+					"scene":          "link",
+				})
+		}, &transformResult)
+	}
+
+	transferFile()
+	if err != nil && (strings.Contains(err.Error(), "token校验异常") || strings.Contains(err.Error(), "分享的stoken过期")) {
 		utils.Log.Infof("夸克文件:%s转存失败:%v", obj.GetName(), err)
+		err = nil
 
-		if strings.Contains(err.Error(), "token校验异常") || strings.Contains(err.Error(), "分享的stoken过期") {
-			shareTokenCache.Del(virtualFile.ShareID)
-			topDir := strings.Split(obj.GetPath(), "/")[0]
-			op.ClearCache(d, topDir)
-			utils.Log.Infof("由于文件token失效,因此清除:%s目录的文件缓存", topDir)
-		}
+		shareTokenCache.Del(virtualFile.ShareID)
+		topDir := strings.Split(obj.GetPath(), "/")[0]
+		op.ClearCache(d, topDir)
+		utils.Log.Infof("由于文件token失效,因此清除:%s目录的文件缓存", topDir)
 
+		transferFile()
+	}
+
+	if err != nil {
 		return "", err
 	}
 

@@ -32,6 +32,19 @@ func (d *Cloud189Share) getShareInfo(shareId, pwd string) (ShareInfo, error) {
 		return shareInfo, err
 	}
 
+	if shareInfo.ShareId == 0 {
+		var checkShareInfo ShareInfo
+		_, err = d.client.R().SetQueryParams(map[string]string{
+			"shareCode":  shareId,
+			"accessCode": pwd,
+		}).SetResult(&checkShareInfo).Get("https://cloud.189.cn/api/open/share/checkAccessCode.action")
+		if err != nil {
+			utils.Log.Info("获取天翼网盘分享ID失败", err)
+			return shareInfo, err
+		}
+		shareInfo.ShareId = checkShareInfo.ShareId
+	}
+
 	if shareInfo.FileId != "" {
 		shareTokenCache.Set(shareId, shareInfo, cache.WithEx[ShareInfo](time.Minute*time.Duration(d.CacheExpiration)))
 		return shareInfo, nil

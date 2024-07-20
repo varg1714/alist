@@ -76,7 +76,7 @@ func (d *Cloud189Share) getShareFiles(ctx context.Context, virtualFile model.Vir
 			"pageSize":       "60",
 			"fileId":         fileId,
 			"shareDirFileId": fileId,
-			"isFolder":       strconv.FormatBool(true),
+			"isFolder":       strconv.FormatBool(shareInfo.IsFolder),
 			"shareId":        strconv.Itoa(shareInfo.ShareId),
 			"shareMode":      strconv.Itoa(shareInfo.ShareMode),
 			"iconOption":     "5",
@@ -88,11 +88,6 @@ func (d *Cloud189Share) getShareFiles(ctx context.Context, virtualFile model.Vir
 		if err != nil {
 			utils.Log.Infof("获取天翼云分享文件:%s失败: %v", dir.GetName(), err)
 			return nil, err
-		}
-
-		// 获取完毕跳出
-		if resp.FileListAO.Count == 0 {
-			break
 		}
 
 		for _, item := range resp.FileListAO.FileList {
@@ -126,6 +121,11 @@ func (d *Cloud189Share) getShareFiles(ctx context.Context, virtualFile model.Vir
 				},
 				oldName: item.Name,
 			})
+		}
+
+		// 获取完毕跳出
+		if resp.FileListAO.Count == 0 {
+			break
 		}
 
 	}

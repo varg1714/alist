@@ -6,6 +6,7 @@ type ShareInfo struct {
 	FileId    string `json:"fileId"`
 	ShareMode int    `json:"shareMode"`
 	ShareId   int    `json:"shareId"`
+	IsFolder  bool   `json:"isFolder"`
 }
 
 type Cloud189FilesResp struct {

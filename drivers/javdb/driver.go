@@ -99,7 +99,7 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 		// 自定义目录
 		url := actor.Url
 		if !strings.HasPrefix(url, "http") {
-			url = "https://javdb.com/actors/" + url + "?page=%d&sort_type=0&t=d"
+			url = "https://javdb.com/actors/" + url + "?page=%d&sort_type=0"
 		}
 
 		films, err := d.getFilms(dirName, func(index int) string {

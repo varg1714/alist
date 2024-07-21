@@ -173,11 +173,20 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 	collector.OnHTML(".movie-list", func(element *colly.HTMLElement) {
 		element.ForEach(".item", func(i int, element *colly.HTMLElement) {
 
+			tag := element.ChildText(".tag")
+			if tag == "" {
+				return
+			}
+
 			href := element.ChildAttr("a", "href")
 			title := element.ChildText(".video-title")
 			image := element.ChildAttr("img", "src")
 
 			parse, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))
+			if parse.After(time.Now()) {
+				parse = time.Now()
+			}
+
 			data = append(data, model.ObjThumb{
 				Object: model.Object{
 					Name:     title,
@@ -188,6 +197,7 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 				},
 				Thumbnail: model.Thumbnail{Thumbnail: image},
 			})
+
 		})
 	})
 

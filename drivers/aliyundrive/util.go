@@ -9,6 +9,7 @@ import (
 	"github.com/Xhofe/go-cache"
 	"github.com/alist-org/alist/v3/internal/model"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/alist-org/alist/v3/drivers/base"
@@ -175,7 +176,7 @@ func (d *AliDrive) getFiles(fileId string) ([]File, error) {
 	return res, nil
 }
 
-func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualFile, parentDir string) ([]File, error) {
+func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualFile, parentDir model.Obj) ([]File, error) {
 
 	err := limiter.WaitN(ctx, 1)
 	if err != nil {
@@ -184,7 +185,8 @@ func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualF
 
 	token, err := d.getShareToken(virtualFile.ShareID)
 	if err != nil {
-		return nil, err
+		utils.Log.Infof("获取文件:%s分享token失败:%s", parentDir.GetName(), err.Error())
+		return []File{}, nil
 	}
 
 	res := make([]File, 0)
@@ -197,7 +199,7 @@ func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualF
 		var resp Files
 		data := base.Json{
 			"share_id":                virtualFile.ShareID,
-			"parent_file_id":          parentDir,
+			"parent_file_id":          filepath.Base(parentDir.GetPath()),
 			"limit":                   200,
 			"image_thumbnail_process": "image/resize,w_256/format,jpeg",
 			"image_url_process":       "image/resize,w_1920/format,jpeg/interlace,1",

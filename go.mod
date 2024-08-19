@@ -22,9 +22,8 @@ require (
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/disintegration/imaging v1.6.2
 	github.com/djherbis/times v1.6.0
-	github.com/dlclark/regexp2 v1.11.2
-	github.com/dustin/go-humanize v1.0.1
 	github.com/dlclark/regexp2 v1.11.4
+	github.com/dustin/go-humanize v1.0.1
 	github.com/dustinxie/ecc v0.0.0-20210511000915-959544187564
 	github.com/emirpasic/gods/v2 v2.0.0-alpha
 	github.com/foxxorcat/mopan-sdk-go v0.1.6
@@ -79,8 +78,6 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
-	github.com/blevesearch/go-faiss v1.0.19 // indirect
-	github.com/blevesearch/zapx/v16 v16.1.4 // indirect
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/blevesearch/go-faiss v1.0.20 // indirect
 	github.com/blevesearch/zapx/v16 v16.1.5 // indirect

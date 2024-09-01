@@ -33,6 +33,7 @@ import (
 	_ "github.com/alist-org/alist/v3/drivers/ipfs_api"
 	_ "github.com/alist-org/alist/v3/drivers/jable_tv"
 	_ "github.com/alist-org/alist/v3/drivers/javdb"
+	_ "github.com/alist-org/alist/v3/drivers/kodbox"
 	_ "github.com/alist-org/alist/v3/drivers/lanzou"
 	_ "github.com/alist-org/alist/v3/drivers/lenovonas_share"
 	_ "github.com/alist-org/alist/v3/drivers/local"

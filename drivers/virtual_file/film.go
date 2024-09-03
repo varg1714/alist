@@ -38,7 +38,7 @@ func GetFilms(source, dirName string, urlFunc func(index int) string, pageFunc f
 
 }
 
-func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.ObjThumb, error) {
+func GetFilmsWitchStorage(source, dirName string, actorId string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.ObjThumb, error) {
 
 	results := make([]model.ObjThumb, 0)
 	films := make([]model.ObjThumb, 0)
@@ -53,7 +53,7 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 		urls = append(urls, item.ID)
 	}
 
-	existFilms := db.QueryByUrls(dirName, urls)
+	existFilms := db.QueryByUrls(actorId, urls)
 
 	// not exists
 	for index := 2; index <= 20 && nextPage && len(existFilms) == 0; index++ {
@@ -67,7 +67,7 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 			urls = append(urls, item.ID)
 		}
 
-		existFilms = db.QueryByUrls(dirName, urls)
+		existFilms = db.QueryByUrls(actorId, urls)
 
 	}
 	// exist
@@ -83,7 +83,7 @@ func GetFilmsWitchStorage(source, dirName string, urlFunc func(index int) string
 	}
 
 	if len(films) != 0 {
-		err = db.CreateFilms(source, dirName, films)
+		err = db.CreateFilms(source, dirName, actorId, films)
 		if err != nil {
 			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results), nil
 		}

@@ -219,7 +219,7 @@ func (d *Javdb) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
 
 	if len(db.QueryByUrls("个人收藏", []string{srcObj.GetID()})) == 0 {
 		thumb := srcObj.(*model.ObjThumb)
-		return db.CreateFilms("javdb", "个人收藏", []model.ObjThumb{*thumb})
+		return db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.ObjThumb{*thumb})
 	}
 
 	return nil

@@ -21,7 +21,7 @@ import (
 func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]model.ObjThumb, error) {
 
 	// 1. 获取所有影片
-	javFilms, err := virtual_file.GetFilmsWitchStorage("javdb", dirName, urlFunc,
+	javFilms, err := virtual_file.GetFilmsWitchStorage("javdb", dirName, dirName, urlFunc,
 		func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 			return d.getJavPageInfo(urlFunc, index, data)
 		})
@@ -85,7 +85,7 @@ func (d *Javdb) addStar(code string) (model.ObjThumb, error) {
 		}
 	}
 
-	err = db.CreateFilms("javdb", "个人收藏", []model.ObjThumb{cachingFilm})
+	err = db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.ObjThumb{cachingFilm})
 	cachingFilm.Name = virtual_file.AppendFilmName(cachingFilm.Name)
 	cachingFilm.Path = "个人收藏"
 
@@ -255,7 +255,7 @@ func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data
 	nextPage := false
 
 	collector := colly.NewCollector(func(c *colly.Collector) {
-		c.SetRequestTimeout(time.Second * 10)
+		c.SetRequestTimeout(time.Second * 20)
 	})
 	extensions.RandomUserAgent(collector)
 
@@ -388,9 +388,18 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 
 	collector.OnHTML(".list-group", func(element *colly.HTMLElement) {
 
-		url := element.ChildAttr(".my-2 a", "href")
-		if url != "" && strings.Contains(url, "/cn/actor") {
-			actorPageUrl = fmt.Sprintf("https://airav.io%s&idx=", url)
+		urls := element.ChildAttrs(".my-2 a", "href")
+
+		var actors []string
+		for _, url := range urls {
+			if strings.Contains(url, "/cn/actor") {
+				actors = append(actors, url)
+			}
+		}
+
+		// 仅当演员只有一个的时候才进行爬取
+		if len(actors) == 1 {
+			actorPageUrl = fmt.Sprintf("https://airav.io%s&idx=", actors[0])
 		}
 
 	})
@@ -436,7 +445,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 
 			if addr != "" {
 				// 2.2.2 爬取该主演所有作品
-				namingFilms, err := virtual_file.GetFilmsWitchStorage("airav", dirName, func(index int) string {
+				namingFilms, err := virtual_file.GetFilmsWitchStorage("airav", dirName, addr, func(index int) string {
 					return addr + strconv.Itoa(index)
 				},
 					func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {

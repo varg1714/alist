@@ -50,12 +50,6 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 	categories := make(map[string]string)
 	results := make([]model.Obj, 0)
 
-	storage := op.GetBalancedStorage(d.PikPakPath)
-	pikPak, ok := storage.(*pikpak.PikPak)
-	if !ok {
-		return results, nil
-	}
-
 	dirName := dir.GetName()
 
 	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
@@ -111,11 +105,6 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 		}
 		return utils.SliceConvert(films, func(src model.ObjThumb) (model.Obj, error) {
 			return &src, nil
-		})
-	} else if !strings.Contains(dir.GetID(), ".jpg") {
-		// 临时文件
-		return pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, dir, func(obj model.Obj) (string, error) {
-			return d.getMagnet(dir)
 		})
 	} else {
 		// pikPak文件
@@ -216,7 +205,7 @@ func (d *FC2) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
 
 	if len(db.QueryByUrls("个人收藏", []string{srcObj.GetID()})) == 0 {
 		thumb := srcObj.(*model.ObjThumb)
-		return db.CreateFilms("fc2", "个人收藏", []model.ObjThumb{*thumb})
+		return db.CreateFilms("fc2", "个人收藏", "个人收藏", []model.ObjThumb{*thumb})
 	}
 
 	return nil

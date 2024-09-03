@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func CreateFilms(source string, actor string, models []model.ObjThumb) error {
+func CreateFilms(source string, actor, actorId string, models []model.ObjThumb) error {
 
 	if len(models) == 0 {
 		return nil
@@ -24,6 +24,7 @@ func CreateFilms(source string, actor string, models []model.ObjThumb) error {
 			Image:     obj.Thumb(),
 			Source:    source,
 			Actor:     actor,
+			ActorId:   actorId,
 			CreatedAt: now,
 			Date:      obj.Modified,
 		})

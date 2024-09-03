@@ -36,7 +36,7 @@ func (d *FC2) findMagnet(url string) (string, error) {
 func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.ObjThumb, error) {
 
 	if strings.HasPrefix(urlFunc(1), "https://adult.contents.fc2.com/users") {
-		return virtual_file.GetFilmsWitchStorage("fc2", dirName, urlFunc,
+		return virtual_file.GetFilmsWitchStorage("fc2", dirName, dirName, urlFunc,
 			func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 				return d.getPageInfo(urlFunc, index, data)
 			})

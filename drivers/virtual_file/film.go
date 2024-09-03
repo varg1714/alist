@@ -125,7 +125,7 @@ func convertFilm(source, dirName string, actor []model.Film, results []model.Obj
 		}
 
 		if cacheFile {
-			CacheImage(source, dirName, AppendImageName(sourceName), film.Image)
+			_ = CacheImage(source, dirName, AppendImageName(sourceName), film.Image)
 		}
 
 		results = append(results, thumb)
@@ -150,59 +150,66 @@ func convertObj(source, dirName string, actor []model.ObjThumb, results []model.
 			Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
 		})
 
-		CacheImage(source, dirName, AppendImageName(film.Name), film.Thumb())
+		_ = CacheImage(source, dirName, AppendImageName(film.Name), film.Thumb())
 
 	}
 	return results
 
 }
 
-func CacheImage(source, dir, name, img string) {
+func CacheImage(source, dir, name, img string) int {
 
-	cacheActorNfo(dir, name, source)
+	actorNfo := cacheActorNfo(dir, name, source)
+	if actorNfo == Exist {
+		return Exist
+	}
 
 	if img == "" {
-		return
+		return CreatedFailed
 	}
 
 	if utils.Exists(filepath.Join(flags.DataDir, "emby", source, dir, name)) {
-		return
+		return Exist
 	}
 
 	imgResp, err := base.RestyClient.R().Get(img)
 	if err != nil {
 		utils.Log.Info("图片下载失败", err)
-		return
+		return CreatedFailed
 	}
 
 	err = os.MkdirAll(filepath.Join(flags.DataDir, "emby", source, dir), 0777)
 	if err != nil {
 		utils.Log.Info("图片缓存文件夹创建失败", err)
+		return CreatedFailed
 	}
 
 	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", source, dir, name), imgResp.Body(), 0777)
 	if err != nil {
 		utils.Log.Info("图片缓存失败", err)
+		return CreatedFailed
 	}
+
+	return CreatedSuccess
 
 }
 
-func cacheActorNfo(dir, name, source string) {
+func cacheActorNfo(dir, name, source string) int {
 
 	if name == "" {
-		return
+		return CreatedFailed
 	}
 
 	sourceName := name[0:strings.LastIndex(name, ".")]
 
 	if utils.Exists(filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo")) {
-		return
+		return Exist
 	}
 
 	err := os.MkdirAll(filepath.Join(flags.DataDir, "emby", source, dir), 0777)
 	if err != nil {
 		utils.Log.Info("nfo缓存文件夹创建失败", err)
-		return
+		return CreatedFailed
 	}
 
 	media := Media{
@@ -218,12 +225,14 @@ func cacheActorNfo(dir, name, source string) {
 	xml, err := mediaToXML(&media)
 	if err != nil {
 		utils.Log.Info("xml格式转换失败", err)
-		return
+		return CreatedFailed
 	}
 	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo"), xml, 0777)
 	if err != nil {
 		utils.Log.Infof("文件:%s的xml缓存失败:%v", name, err)
 	}
+
+	return CreatedSuccess
 
 }
 

@@ -48,3 +48,9 @@ type Option struct {
 	MaxPageNum int
 	CacheFile  bool
 }
+
+const (
+	Exist = iota
+	CreatedFailed
+	CreatedSuccess
+)

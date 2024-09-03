@@ -43,3 +43,8 @@ type Actor struct {
 	Name  string `xml:"name"`
 	Thumb string `xml:"thumb"`
 }
+
+type Option struct {
+	MaxPageNum int
+	CacheFile  bool
+}

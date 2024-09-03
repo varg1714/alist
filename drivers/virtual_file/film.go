@@ -38,14 +38,14 @@ func GetFilms(source, dirName string, urlFunc func(index int) string, pageFunc f
 
 }
 
-func GetFilmsWitchStorage(source, dirName string, actorId string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.ObjThumb) ([]model.ObjThumb, bool, error), cacheFile bool) ([]model.ObjThumb, error) {
+func GetFilmsWitchStorage(source, dirName, actorId string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.ObjThumb) ([]model.ObjThumb, bool, error), option Option) ([]model.ObjThumb, error) {
 
 	results := make([]model.ObjThumb, 0)
 	films := make([]model.ObjThumb, 0)
 
 	films, nextPage, err := pageFunc(urlFunc, 1, films)
 	if err != nil {
-		return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, cacheFile), err
+		return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), err
 	}
 
 	var urls []string
@@ -56,11 +56,11 @@ func GetFilmsWitchStorage(source, dirName string, actorId string, urlFunc func(i
 	existFilms := db.QueryByUrls(actorId, urls)
 
 	// not exists
-	for index := 2; index <= 20 && nextPage && len(existFilms) == 0; index++ {
+	for index := 2; index <= option.MaxPageNum && nextPage && len(existFilms) == 0; index++ {
 
 		films, nextPage, err = pageFunc(urlFunc, index, films)
 		if err != nil {
-			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, cacheFile), err
+			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), err
 		}
 		clear(urls)
 		for _, item := range films {
@@ -85,11 +85,11 @@ func GetFilmsWitchStorage(source, dirName string, actorId string, urlFunc func(i
 	if len(films) != 0 {
 		err = db.CreateFilms(source, dirName, actorId, films)
 		if err != nil {
-			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, cacheFile), nil
+			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), nil
 		}
 	}
 
-	return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, cacheFile), nil
+	return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), nil
 
 }
 

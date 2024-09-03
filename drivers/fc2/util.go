@@ -39,7 +39,7 @@ func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.
 		return virtual_file.GetFilmsWitchStorage("fc2", dirName, dirName, urlFunc,
 			func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 				return d.getPageInfo(urlFunc, index, data)
-			}, true)
+			}, virtual_file.Option{CacheFile: true, MaxPageNum: 20})
 	} else {
 		return virtual_file.GetFilms("fc2", dirName, urlFunc,
 			func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {

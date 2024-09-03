@@ -24,7 +24,7 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 	javFilms, err := virtual_file.GetFilmsWitchStorage("javdb", dirName, dirName, urlFunc,
 		func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 			return d.getJavPageInfo(urlFunc, index, data)
-		}, false)
+		}, virtual_file.Option{CacheFile: false, MaxPageNum: 20})
 
 	if err != nil && len(javFilms) == 0 {
 		utils.Log.Info("javdb影片获取失败", err)
@@ -49,6 +49,7 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 		}
 		virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(javFilms[index].Name), javFilms[index].Thumb())
 	}
+	utils.Log.Info("中文影片名称映射完毕", err)
 
 	return javFilms, err
 
@@ -451,7 +452,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 				},
 					func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 						return d.getAiravPageInfo(urlFunc, index, data)
-					}, false)
+					}, virtual_file.Option{CacheFile: false, MaxPageNum: 40})
 
 				if err != nil {
 					utils.Log.Info("airav影片列表爬取失败", err)
@@ -482,7 +483,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 
 	}
 
-	utils.Log.Info("影片名称映射结束")
+	utils.Log.Info("影片名称映射列表获取结束")
 
 	return nameCache, nil
 

@@ -92,7 +92,7 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 		}
 		return results, nil
 	} else if dirName == "个人收藏" {
-		return utils.SliceConvert(virtual_file.GeoStorageFilms("fc2", "个人收藏"), func(src model.ObjThumb) (model.Obj, error) {
+		return utils.SliceConvert(virtual_file.GeoStorageFilms("fc2", "个人收藏", true), func(src model.ObjThumb) (model.Obj, error) {
 			return &src, nil
 		})
 	} else if categories[dirName] != "" {

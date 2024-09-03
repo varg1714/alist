@@ -24,7 +24,7 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 	javFilms, err := virtual_file.GetFilmsWitchStorage("javdb", dirName, dirName, urlFunc,
 		func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 			return d.getJavPageInfo(urlFunc, index, data)
-		})
+		}, false)
 
 	if err != nil && len(javFilms) == 0 {
 		utils.Log.Info("javdb影片获取失败", err)
@@ -46,10 +46,8 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 			_, newName = splitName(newName)
 			newName = virtual_file.AppendFilmName(virtual_file.CutString(newName))
 			javFilms[index].Name = fmt.Sprintf("%s %s", code, strings.ReplaceAll(newName, "-", ""))
-
-			virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(javFilms[index].Name), javFilms[index].Thumb())
-
 		}
+		virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(javFilms[index].Name), javFilms[index].Thumb())
 	}
 
 	return javFilms, err
@@ -57,7 +55,7 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 }
 
 func (d *Javdb) getStars() []model.ObjThumb {
-	return virtual_file.GeoStorageFilms("javdb", "个人收藏")
+	return virtual_file.GeoStorageFilms("javdb", "个人收藏", true)
 }
 
 func (d *Javdb) addStar(code string) (model.ObjThumb, error) {
@@ -265,16 +263,19 @@ func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data
 			href := element.ChildAttr(".oneVideo-top a", "href")
 			title := element.ChildText(".oneVideo-body h5")
 
-			parse, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))
-			data = append(data, model.ObjThumb{
-				Object: model.Object{
-					Name:     title,
-					IsFolder: false,
-					ID:       "https://airav.io" + href,
-					Size:     622857143,
-					Modified: parse,
-				},
-			})
+			if !strings.Contains(title, "马赛克破坏版") {
+				parse, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))
+				data = append(data, model.ObjThumb{
+					Object: model.Object{
+						Name:     title,
+						IsFolder: false,
+						ID:       "https://airav.io" + href,
+						Size:     622857143,
+						Modified: parse,
+					},
+				})
+			}
+
 		})
 
 	})
@@ -435,7 +436,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 
 		// 2.1 仅当未爬取到才爬取，对于非第一条数据，若未爬取到则不再爬取
 		if nameCache[code] == "" && (init == false || index == 0) {
-			// 2.2 首先爬取airav站点到
+			// 2.2 首先爬取airav站点的
 			addr, searchResult := d.getAiravNamingAddr(films[index])
 
 			if searchResult.ID != "" {
@@ -450,7 +451,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 				},
 					func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
 						return d.getAiravPageInfo(urlFunc, index, data)
-					})
+					}, false)
 
 				if err != nil {
 					utils.Log.Info("airav影片列表爬取失败", err)

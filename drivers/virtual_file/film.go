@@ -38,14 +38,14 @@ func GetFilms(source, dirName string, urlFunc func(index int) string, pageFunc f
 
 }
 
-func GetFilmsWitchStorage(source, dirName string, actorId string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.ObjThumb, error) {
+func GetFilmsWitchStorage(source, dirName string, actorId string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.ObjThumb) ([]model.ObjThumb, bool, error), cacheFile bool) ([]model.ObjThumb, error) {
 
 	results := make([]model.ObjThumb, 0)
 	films := make([]model.ObjThumb, 0)
 
 	films, nextPage, err := pageFunc(urlFunc, 1, films)
 	if err != nil {
-		return convertFilm(source, dirName, db.QueryByActor(source, dirName), results), err
+		return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, cacheFile), err
 	}
 
 	var urls []string
@@ -60,7 +60,7 @@ func GetFilmsWitchStorage(source, dirName string, actorId string, urlFunc func(i
 
 		films, nextPage, err = pageFunc(urlFunc, index, films)
 		if err != nil {
-			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results), err
+			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, cacheFile), err
 		}
 		clear(urls)
 		for _, item := range films {
@@ -85,20 +85,20 @@ func GetFilmsWitchStorage(source, dirName string, actorId string, urlFunc func(i
 	if len(films) != 0 {
 		err = db.CreateFilms(source, dirName, actorId, films)
 		if err != nil {
-			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results), nil
+			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, cacheFile), nil
 		}
 	}
 
-	return convertFilm(source, dirName, db.QueryByActor(source, dirName), results), nil
+	return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, cacheFile), nil
 
 }
 
-func GeoStorageFilms(source, dirName string) []model.ObjThumb {
+func GeoStorageFilms(source, dirName string, cacheFile bool) []model.ObjThumb {
 	films := db.QueryByActor(source, dirName)
-	return convertFilm(source, dirName, films, []model.ObjThumb{})
+	return convertFilm(source, dirName, films, []model.ObjThumb{}, cacheFile)
 }
 
-func convertFilm(source, dirName string, actor []model.Film, results []model.ObjThumb) []model.ObjThumb {
+func convertFilm(source, dirName string, actor []model.Film, results []model.ObjThumb, cacheFile bool) []model.ObjThumb {
 	for _, film := range actor {
 
 		thumb := model.ObjThumb{
@@ -124,7 +124,9 @@ func convertFilm(source, dirName string, actor []model.Film, results []model.Obj
 			thumb.Name = AppendFilmName(film.Name)
 		}
 
-		CacheImage(source, dirName, AppendImageName(sourceName), film.Image)
+		if cacheFile {
+			CacheImage(source, dirName, AppendImageName(sourceName), film.Image)
+		}
 
 		results = append(results, thumb)
 	}

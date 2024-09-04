@@ -48,12 +48,12 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 	}
 
 	for _, film := range javFilms {
-		_ = virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(film.Name), film.Thumb())
-		// todo 检查文件
-		//if created == virtual_file.Exist {
-		//	// 已经创建过了，后续不再创建
-		//	break
-		//}
+		created := virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(film.Name), film.Thumb())
+
+		if created == virtual_file.Exist {
+			// 已经创建过了，后续不再创建
+			break
+		}
 	}
 
 	utils.Log.Info("中文影片名称映射完毕", err)
@@ -427,8 +427,7 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 
 func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map[string]string, error) {
 
-	// todo 检查查询
-	//init := false
+	init := false
 	nameCache := make(map[string]string)
 	var savingNamingMapping []model.ObjThumb
 
@@ -438,18 +437,17 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 		name := actors[index].Name
 		nameCache[splitCode(name)] = virtual_file.AppendFilmName(name)
 	}
-	//if len(nameCache) != 0 {
-	//	init = true
-	//}
+	if len(nameCache) != 0 {
+		init = true
+	}
 
 	// 2. 爬取新的数据
 	for index := range films {
 
 		code := splitCode(films[index].Name)
 
-		// 2.1 仅当未爬取到才爬取，对于非第一条数据，若未爬取到则不再爬取 && (init == false || index == 0)
-		// todo 检查查询
-		if nameCache[code] == "" {
+		// 2.1 仅当未爬取到才爬取，对于非第一条数据，若未爬取到则不再爬取
+		if nameCache[code] == "" && (init == false || index == 0) {
 			// 2.2 首先爬取airav站点的
 			addr, searchResult := d.getAiravNamingAddr(films[index])
 

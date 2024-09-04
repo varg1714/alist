@@ -235,7 +235,7 @@ func cacheActorNfo(dir, name, source string) int {
 
 func CutString(name string) string {
 
-	prettyNameRegexp, _ := regexp.Compile("[\\/\\\\0\\\\\\*\\?\\:\\\"\\<\\>\\|]")
+	prettyNameRegexp, _ := regexp.Compile("[\\/\\\\\\*\\?\\:\\\"\\<\\>\\|]")
 	name = prettyNameRegexp.ReplaceAllString(name, "")
 
 	// 将字符串转换为 rune 切片

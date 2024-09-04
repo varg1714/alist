@@ -386,6 +386,9 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 	}
 	if len(searchResult) > 0 && splitCode(searchResult[0].Name) == code {
 		actorUrl = searchResult[0].ID
+		if actorUrl == "" {
+			return actorPageUrl, searchResult[0]
+		}
 	}
 	if actorUrl == "" {
 		return actorPageUrl, model.ObjThumb{}

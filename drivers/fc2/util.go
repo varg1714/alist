@@ -133,7 +133,7 @@ func (d *FC2) getPageInfo(urlFunc func(index int) string, index int, data []mode
 			id := actorUrlsRegexp.ReplaceAllString(href, "$1")
 			data = append(data, model.ObjThumb{
 				Object: model.Object{
-					Name:     fmt.Sprintf("FC2-PPV-%s %s", id, title),
+					Name:     virtual_file.CutString(fmt.Sprintf("FC2-PPV-%s %s", id, title)),
 					IsFolder: true,
 					ID:       id,
 					Size:     622857143,

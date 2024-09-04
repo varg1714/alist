@@ -43,18 +43,17 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 	for index, film := range javFilms {
 		code := splitCode(film.Name)
 		if newName, exist := namingFilms[code]; exist && strings.HasSuffix(javFilms[index].Name, "mp4") {
-			_, newName = splitName(newName)
-			newName = virtual_file.AppendFilmName(virtual_file.CutString(newName))
-			javFilms[index].Name = fmt.Sprintf("%s %s", code, strings.ReplaceAll(newName, "-", ""))
+			javFilms[index].Name = virtual_file.AppendFilmName(newName)
 		}
 	}
 
 	for _, film := range javFilms {
-		created := virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(film.Name), film.Thumb())
-		if created == virtual_file.Exist {
-			// 已经创建过了，后续不再创建
-			break
-		}
+		_ = virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(film.Name), film.Thumb())
+		// todo 检查文件
+		//if created == virtual_file.Exist {
+		//	// 已经创建过了，后续不再创建
+		//	break
+		//}
 	}
 
 	utils.Log.Info("中文影片名称映射完毕", err)
@@ -196,7 +195,7 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 
 			data = append(data, model.ObjThumb{
 				Object: model.Object{
-					Name:     title,
+					Name:     virtual_file.CutString(title),
 					IsFolder: false,
 					ID:       "https://javdb.com/" + href,
 					Size:     622857143,
@@ -238,7 +237,7 @@ func (d *Javdb) getNajavPageInfo(urlFunc func(index int) string, index int, data
 			parse, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))
 			data = append(data, model.ObjThumb{
 				Object: model.Object{
-					Name:     title,
+					Name:     virtual_file.CutString(title),
 					IsFolder: false,
 					ID:       "https://njav.tv/zh/" + href,
 					Size:     622857143,
@@ -276,7 +275,7 @@ func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data
 				parse, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))
 				data = append(data, model.ObjThumb{
 					Object: model.Object{
-						Name:     title,
+						Name:     virtual_file.CutString(title),
 						IsFolder: false,
 						ID:       "https://airav.io" + href,
 						Size:     622857143,
@@ -425,8 +424,10 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 
 func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map[string]string, error) {
 
-	init := false
+	// todo 检查查询
+	//init := false
 	nameCache := make(map[string]string)
+	var savingNamingMapping []model.ObjThumb
 
 	// 1. 获取库中已爬取结果
 	actors := db.QueryByActor("airav", dirName)
@@ -434,23 +435,28 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 		name := actors[index].Name
 		nameCache[splitCode(name)] = virtual_file.AppendFilmName(name)
 	}
-	if len(nameCache) != 0 {
-		init = true
-	}
+	//if len(nameCache) != 0 {
+	//	init = true
+	//}
 
 	// 2. 爬取新的数据
 	for index := range films {
 
 		code := splitCode(films[index].Name)
 
-		// 2.1 仅当未爬取到才爬取，对于非第一条数据，若未爬取到则不再爬取
-		if nameCache[code] == "" && (init == false || index == 0) {
+		// 2.1 仅当未爬取到才爬取，对于非第一条数据，若未爬取到则不再爬取 && (init == false || index == 0)
+		// todo 检查查询
+		if nameCache[code] == "" {
 			// 2.2 首先爬取airav站点的
 			addr, searchResult := d.getAiravNamingAddr(films[index])
 
 			if searchResult.ID != "" {
 				// 2.2.1 有该作品信息
 				nameCache[splitCode(searchResult.Name)] = virtual_file.AppendFilmName(searchResult.Name)
+				if addr == "" {
+					// 没有爬取到演员主页，直接记录该影片信息
+					savingNamingMapping = append(savingNamingMapping, searchResult)
+				}
 			}
 
 			if addr != "" {
@@ -481,6 +487,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 				}
 				if len(njavSearchResult) > 0 && splitCode(njavSearchResult[0].Name) == code {
 					nameCache[code] = virtual_file.AppendFilmName(njavSearchResult[0].Name)
+					savingNamingMapping = append(savingNamingMapping, njavSearchResult[0])
 				} else {
 					nameCache[code] = films[index].Name
 				}
@@ -491,6 +498,12 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 
 	}
 
+	if len(savingNamingMapping) > 0 {
+		err := db.CreateFilms("airav", dirName, dirName, savingNamingMapping)
+		if err != nil {
+			utils.Log.Infof("影片名称映射入库失败:%s", err.Error())
+		}
+	}
 	utils.Log.Info("影片名称映射列表获取结束")
 
 	return nameCache, nil

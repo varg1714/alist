@@ -112,8 +112,6 @@ func convertFilm(source, dirName string, actor []model.Film, results []model.Obj
 			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 		}
 
-		film.Name = strings.ReplaceAll(film.Name, "/", "")
-		film.Name = CutString(film.Name)
 		sourceName := film.Name
 
 		if strings.HasSuffix(film.Name, "mp4") {
@@ -137,7 +135,6 @@ func convertObj(source, dirName string, actor []model.ObjThumb, results []model.
 
 	for _, film := range actor {
 		parse, _ := time.Parse(time.DateTime, "2024-01-02 15:04:05")
-		film.Name = CutString(film.Name)
 		results = append(results, model.ObjThumb{
 			Object: model.Object{
 				Name:     AppendFilmName(film.Name),
@@ -238,7 +235,7 @@ func cacheActorNfo(dir, name, source string) int {
 
 func CutString(name string) string {
 
-	prettyNameRegexp, _ := regexp.Compile("[*?:\"<>|\\/]")
+	prettyNameRegexp, _ := regexp.Compile("[\\/\\\\0\\\\\\*\\?\\:\\\"\\<\\>\\|]")
 	name = prettyNameRegexp.ReplaceAllString(name, "")
 
 	// 将字符串转换为 rune 切片

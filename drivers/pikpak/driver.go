@@ -56,6 +56,7 @@ func (d *PikPak) Init(ctx context.Context) (err error) {
 				d.Common.CaptchaToken = token
 				op.MustSaveDriverStorage(d)
 			},
+			LowLatencyAddr: "",
 		}
 	}
 
@@ -73,6 +74,13 @@ func (d *PikPak) Init(ctx context.Context) (err error) {
 		d.PackageName = WebPackageName
 		d.Algorithms = WebAlgorithms
 		d.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
+	} else if d.Platform == "pc" {
+		d.ClientID = PCClientID
+		d.ClientSecret = PCClientSecret
+		d.ClientVersion = PCClientVersion
+		d.PackageName = PCPackageName
+		d.Algorithms = PCAlgorithms
+		d.UserAgent = "MainWindow Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) PikPak/2.5.6.4831 Chrome/100.0.4896.160 Electron/18.3.15 Safari/537.36"
 	}
 
 	if d.Addition.CaptchaToken != "" && d.Addition.RefreshToken == "" {
@@ -136,6 +144,15 @@ func (d *PikPak) Init(ctx context.Context) (err error) {
 	// 保存 有效的 RefreshToken
 	d.Addition.RefreshToken = d.RefreshToken
 	op.MustSaveDriverStorage(d)
+
+	if d.UseLowLatencyAddress && d.Addition.CustomLowLatencyAddress != "" {
+		d.Common.LowLatencyAddr = d.Addition.CustomLowLatencyAddress
+	} else if d.UseLowLatencyAddress {
+		d.Common.LowLatencyAddr = findLowestLatencyAddress(DlAddr)
+		d.Addition.CustomLowLatencyAddress = d.Common.LowLatencyAddr
+		op.MustSaveDriverStorage(d)
+	}
+
 	return nil
 }
 
@@ -156,6 +173,7 @@ func (d *PikPak) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 func (d *PikPak) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
 	var resp File
+	var url string
 	queryParams := map[string]string{
 		"_magic":         "2021",
 		"usage":          "FETCH",
@@ -176,6 +194,7 @@ func (d *PikPak) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 		URL:        resp.WebContentLink,
 		Expiration: &exp,
 	}
+
 	if !d.DisableMediaLink && len(resp.Medias) > 0 && resp.Medias[0].Link.Url != "" {
 		log.Debugln("use media link")
 		if len(resp.Medias) > int(d.LinkIndex) {
@@ -184,32 +203,14 @@ func (d *PikPak) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 			link.URL = resp.Medias[0].Link.Url
 		}
 	}
+
+	if d.UseLowLatencyAddress && d.Common.LowLatencyAddr != "" {
+		// 替换为加速链接
+		re := regexp.MustCompile(`https://[^/]+/download/`)
+		link.URL = re.ReplaceAllString(url, "https://"+d.Common.LowLatencyAddr+"/download/")
+	}
+
 	utils.Log.Infof("pikpak返回的地址: %s", link.URL)
-	return &link, nil
-}
-
-func (d *PikPak) HdLink(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
-	var resp File
-	_, err := d.request(fmt.Sprintf("https://api-drive.mypikpak.com/drive/v1/files/%s?_magic=2021&thumbnail_size=SIZE_LARGE", file.GetID()),
-		http.MethodGet, nil, &resp)
-	if err != nil {
-		return nil, err
-	}
-	link := model.Link{
-		URL: resp.WebContentLink,
-	}
-	if len(resp.Medias) > 1 && resp.Medias[1].Link.Url != "" {
-		log.Debugln("use media link")
-		link.URL = resp.Medias[1].Link.Url
-		return &link, nil
-	}
-
-	if len(resp.Medias) > 0 && resp.Medias[0].Link.Url != "" {
-		log.Debugln("use media link")
-		link.URL = resp.Medias[0].Link.Url
-		return &link, nil
-	}
-
 	return &link, nil
 }
 

@@ -284,7 +284,7 @@ func (d *BaiduShare) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *BaiduShare) Remove(ctx context.Context, obj model.Obj) error {
-	return db.DeleteVirtualFile(strconv.Itoa(int(d.ID)), obj.GetName())
+	return db.DeleteVirtualFile(d.ID, obj)
 }
 
 func (d *BaiduShare) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {

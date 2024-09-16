@@ -200,9 +200,26 @@ func CreateVirtualFile(virtualFile model.VirtualFile) error {
 
 }
 
-func DeleteVirtualFile(storageId string, name string) error {
+func DeleteVirtualFile(storageId uint, obj model.Obj) error {
 
-	return errors.WithStack(db.Where("storage_id = ?", storageId).Where("name = ?", name).Delete(&model.VirtualFile{}).Error)
+	virtualFile := model.VirtualFile{}
+	db.Where("storage_id = ?", storageId).Where("name = ?", obj.GetName()).Take(&virtualFile)
+	if virtualFile.ShareID != "" {
+		// virtual share file
+		return errors.WithStack(db.Where("storage_id = ?", storageId).Where("name = ?", obj.GetName()).Delete(&model.VirtualFile{}).Error)
+	} else {
+		// delete file
+		replacement := model.Replacement{
+			StorageId: storageId,
+			DirName: func() string {
+				virtualFile = QueryVirtualFilm(storageId, strings.Split(obj.GetPath(), "/")[0])
+				return virtualFile.ShareID
+			}(),
+			Type:    1,
+			OldName: obj.GetID(),
+		}
+		return errors.WithStack(db.Create(&replacement).Error)
+	}
 
 }
 

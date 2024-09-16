@@ -13,7 +13,6 @@ import (
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -138,7 +137,7 @@ func (d *QuarkShare) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *QuarkShare) Remove(ctx context.Context, obj model.Obj) error {
-	return db.DeleteVirtualFile(strconv.Itoa(int(d.ID)), obj.GetName())
+	return db.DeleteVirtualFile(d.ID, obj)
 }
 
 func (d *QuarkShare) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {

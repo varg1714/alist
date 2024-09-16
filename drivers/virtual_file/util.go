@@ -77,9 +77,9 @@ func prettyFiles(storageId uint, virtualFile model.VirtualFile, queriedFiles []m
 
 	// 手动修改的名称，优先级最高
 	replacements := db.QueryReplacements(storageId, virtualFile.ShareID)
-	replaceMap := make(map[string]string)
+	replaceMap := make(map[string]model.Replacement)
 	for _, temp := range replacements {
-		replaceMap[temp.OldName] = temp.NewName
+		replaceMap[temp.OldName] = temp
 	}
 
 	for fileIndex, obj := range queriedFiles {
@@ -91,27 +91,31 @@ func prettyFiles(storageId uint, virtualFile model.VirtualFile, queriedFiles []m
 			continue
 		}
 
-		// 规则重命名
-		for replacedIndex := range virtualFile.Replace {
-
-			// 匹配上规则，进行重命名
-			replace := tryReplace(&virtualFile.Replace[replacedIndex], fileIndex, obj.GetName(), objNameSetter)
-			if replace {
+		// 重命名或者移除文件
+		if replacement, ok := replaceMap[obj.GetID()]; ok {
+			if replacement.Type == 1 {
 				excludeFile = true
-				results = append(results, obj)
-				break
+			} else {
+				objNameSetter.SetName(replacement.NewName)
 			}
+		} else {
+			// 规则重命名
+			for replacedIndex := range virtualFile.Replace {
 
+				// 匹配上规则，进行重命名
+				replace := tryReplace(&virtualFile.Replace[replacedIndex], fileIndex, obj.GetName(), objNameSetter)
+				if replace {
+					excludeFile = true
+					results = append(results, obj)
+					break
+				}
+
+			}
 		}
 
 		// 未匹配上重命名规则且不需要排除
 		if !excludeFile {
 			results = append(results, obj)
-		}
-
-		// 手动重命名
-		if newName, ok := replaceMap[obj.GetID()]; ok {
-			objNameSetter.SetName(newName)
 		}
 
 	}

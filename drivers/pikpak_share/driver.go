@@ -14,7 +14,6 @@ import (
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -171,7 +170,7 @@ func (d *PikPakShare) MakeDir(ctx context.Context, parentDir model.Obj, dirName 
 }
 
 func (d *PikPakShare) Remove(ctx context.Context, obj model.Obj) error {
-	return db.DeleteVirtualFile(strconv.Itoa(int(d.ID)), obj.GetName())
+	return db.DeleteVirtualFile(d.ID, obj)
 }
 
 var _ driver.Driver = (*PikPakShare)(nil)

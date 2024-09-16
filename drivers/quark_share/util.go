@@ -109,6 +109,8 @@ func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.Virtua
 		_, err = d.request("/1/clouddrive/share/sharepage/detail", http.MethodGet, func(req *resty.Request) {
 			req.SetQueryParams(
 				map[string]string{
+					"pr":       "ucpro",
+					"force":    "0",
 					"pwd_id":   virtualFile.ShareID,
 					"stoken":   stToken,
 					"pdir_fid": filepath.Base(dir.GetPath()),

@@ -59,4 +59,6 @@ type Replacement struct {
 	DirName   string `json:"dir_name"`
 	OldName   string `json:"old_name"`
 	NewName   string `json:"new_name"`
+	// 0: 重命名 1: 删除
+	Type int `json:"type"`
 }

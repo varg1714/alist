@@ -132,6 +132,13 @@ func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.Virtua
 			topDir := strings.Split(dir.GetPath(), "/")[0]
 			op.ClearCache(d, topDir)
 			utils.Log.Infof("由于文件token失效,因此清除:%s目录的文件缓存", topDir)
+
+			stToken, err = d.getShareInfo(virtualFile.ShareID, virtualFile.SharePwd)
+			if err != nil {
+				utils.Log.Infof("分享的stoken过期后重新获取stoken失败:%s", err.Error())
+				return nil, err
+			}
+
 			getFiles()
 
 		}

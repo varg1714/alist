@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -213,7 +214,7 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 
 	url := d.SpiderServer + urlFunc(index)
 	err := collector.Visit(url)
-	utils.Log.Infof("开始爬取javdb页面：%s，错误：%v", url, err)
+	utils.Log.Debugf("开始爬取javdb页面：%s，错误：%v", url, err)
 
 	return data, nextPage, err
 
@@ -249,7 +250,7 @@ func (d *Javdb) getNajavPageInfo(urlFunc func(index int) string, index int, data
 	})
 
 	url := urlFunc(index)
-	utils.Log.Infof("开始爬取njav页面：%s", url)
+	utils.Log.Debugf("开始爬取njav页面：%s", url)
 	err := collector.Visit(url)
 
 	return data, preLen != len(data), err
@@ -298,7 +299,7 @@ func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data
 
 	url := urlFunc(index)
 
-	utils.Log.Infof("开始爬取airav页面：%s", url)
+	utils.Log.Debugf("开始爬取airav页面：%s", url)
 	err := collector.Visit(url)
 
 	return data, nextPage, err
@@ -427,7 +428,6 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 
 func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map[string]string, error) {
 
-	init := false
 	nameCache := make(map[string]string)
 	var savingNamingMapping []model.ObjThumb
 
@@ -437,17 +437,14 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 		name := actors[index].Name
 		nameCache[splitCode(name)] = virtual_file.AppendFilmName(name)
 	}
-	if len(nameCache) != 0 {
-		init = true
-	}
 
 	// 2. 爬取新的数据
 	for index := range films {
 
-		code := splitCode(films[index].Name)
+		code, name := splitName(films[index].Name)
 
-		// 2.1 仅当未爬取到才爬取，对于非第一条数据，若未爬取到则不再爬取
-		if nameCache[code] == "" && (init == false || index == 0) {
+		// 2.1 仅当未爬取到才爬取
+		if nameCache[code] == "" {
 			// 2.2 首先爬取airav站点的
 			addr, searchResult := d.getAiravNamingAddr(films[index])
 
@@ -479,16 +476,13 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 			} else if addr == "" && searchResult.ID == "" {
 
 				// 2.2.3 airav没有该作品信息，尝试爬取其它站点的
-				njavSearchResult, _, err := d.getNajavPageInfo(func(index int) string {
-					return fmt.Sprintf("https://njav.tv/zh/search?keyword=%s", code)
-				}, 1, []model.ObjThumb{})
-
-				if err != nil {
-					utils.Log.Info("njav搜索影片失败", err)
-				}
-				if len(njavSearchResult) > 0 && splitCode(njavSearchResult[0].Name) == code {
-					nameCache[code] = virtual_file.AppendFilmName(njavSearchResult[0].Name)
-					savingNamingMapping = append(savingNamingMapping, njavSearchResult[0])
+				translatedText := d.GptTranslate(name)
+				if translatedText != "" {
+					translatedText = fmt.Sprintf("%s %s", code, translatedText)
+					nameCache[code] = virtual_file.AppendFilmName(translatedText)
+					savingNamingMapping = append(savingNamingMapping, model.ObjThumb{
+						Object: model.Object{Name: translatedText},
+					})
 				} else {
 					nameCache[code] = films[index].Name
 				}
@@ -508,6 +502,56 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 	utils.Log.Info("影片名称映射列表获取结束")
 
 	return nameCache, nil
+
+}
+
+func (d *Javdb) GptTranslate(text string) string {
+
+	text = virtual_file.ClearFilmName(text)
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	utils.Log.Debugf("开始翻译:%s", text)
+	response, err := base.RestyClient.R().SetAuthToken(d.OpenAiApiKey).SetHeaders(map[string]string{
+		"Content-Type": "application/json",
+		"Accept":       "application/json",
+	}).SetBody(base.Json{
+		"messages": []base.Json{
+			{
+				"role":    "system",
+				"content": d.TranslatePromote,
+			},
+			{
+				"role":    "system",
+				"content": text,
+			},
+		},
+		"model":             "gpt-4o",
+		"temperature":       0.5,
+		"presence_penalty":  0,
+		"frequency_penalty": 0,
+		"top_p":             1,
+	}).SetResult(&result).Post(d.OpenAiUrl)
+	if err != nil {
+		var detail string
+		if response != nil {
+			detail = string(response.Body())
+		}
+		utils.Log.Warnf("翻译失败:%s,响应信息为:%s", err.Error(), detail)
+		return text
+	}
+
+	if len(result.Choices) == 0 {
+		return text
+	}
+
+	return virtual_file.CutString(result.Choices[0].Message.Content)
 
 }
 

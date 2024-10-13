@@ -269,6 +269,21 @@ func AppendFilmName(name string) string {
 
 }
 
+func ClearFilmName(name string) string {
+
+	if strings.HasSuffix(name, ".mp4") {
+		return name[0 : len(name)-4]
+	}
+
+	if strings.HasSuffix(name, ".") {
+		// 仅有.
+		return name[0 : len(name)-1]
+	}
+
+	// 返回原始文件名
+	return name
+}
+
 func AppendImageName(name string) string {
 
 	if strings.HasSuffix(name, ".jpg") {

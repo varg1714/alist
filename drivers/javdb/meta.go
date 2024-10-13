@@ -18,6 +18,7 @@ type Addition struct {
 	OpenAiUrl        string `json:"open_ai_url" required:"true"`
 	OpenAiApiKey     string `json:"open_ai_api_key" required:"true"`
 	TranslatePromote string `json:"translate_promote" required:"true"`
+	QuickCache       bool   `json:"quick_cache" required:"true"`
 }
 
 var config = driver.Config{

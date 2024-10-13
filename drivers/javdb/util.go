@@ -51,7 +51,7 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 	for _, film := range javFilms {
 		created := virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(film.Name), film.Thumb())
 
-		if created == virtual_file.Exist {
+		if created == virtual_file.Exist && d.QuickCache {
 			// 已经创建过了，后续不再创建
 			break
 		}

@@ -86,15 +86,19 @@ func (d *Javdb) addStar(code string) (model.ObjThumb, error) {
 	if airavFilm.Name != "" {
 		cachingFilm.Name = airavFilm.Name
 	} else {
-		_, njavFilm := d.getNjavAddr(cachingFilm)
-		if njavFilm.Name != "" {
-			cachingFilm.Name = njavFilm.Name
+		tempCode, name := splitName(cachingFilm.Name)
+
+		translatedText := d.GptTranslate(name)
+		if translatedText != "" {
+			translatedText = fmt.Sprintf("%s %s", tempCode, translatedText)
+			cachingFilm.Name = translatedText
 		}
 	}
 
 	err = db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.ObjThumb{cachingFilm})
 	cachingFilm.Name = virtual_file.AppendFilmName(cachingFilm.Name)
 	cachingFilm.Path = "个人收藏"
+	_ = virtual_file.CacheImage("javdb", "个人收藏", virtual_file.AppendImageName(cachingFilm.Name), cachingFilm.Thumb())
 
 	return cachingFilm, err
 

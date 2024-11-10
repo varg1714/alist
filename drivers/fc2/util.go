@@ -52,7 +52,7 @@ func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.
 
 func (d *FC2) getMagnet(file model.Obj) (string, error) {
 
-	magnetCache := db.QueryCacheFileId(file.GetName())
+	magnetCache := db.QueryCacheFileId(file.GetID())
 	if magnetCache.Magnet != "" {
 		utils.Log.Infof("返回缓存中的磁力地址:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil
@@ -79,7 +79,7 @@ func (d *FC2) getMagnet(file model.Obj) (string, error) {
 	magnet := magnetUrl.ReplaceAllString(tempMagnet, "$1")
 
 	if magnet != "" {
-		err = db.CreateCacheFile(magnet, "", file.GetName())
+		err = db.CreateCacheFile(magnet, "", id)
 	}
 
 	return magnet, err
@@ -159,6 +159,12 @@ func (d *FC2) getStars() []model.ObjThumb {
 
 func (d *FC2) addStar(code string) (model.ObjThumb, error) {
 
+	id := fmt.Sprintf("FC2-PPV-%s", code)
+	magnetCache := db.QueryCacheFileId(id)
+	if magnetCache.Magnet != "" {
+		return model.ObjThumb{}, errors.New("已存在该文件")
+	}
+
 	searchUrl := fmt.Sprintf("https://sukebei.nyaa.si/?f=0&c=0_0&q=%s&s=downloads&o=desc", code)
 
 	collector := colly.NewCollector(func(c *colly.Collector) {
@@ -198,19 +204,18 @@ func (d *FC2) addStar(code string) (model.ObjThumb, error) {
 		return model.ObjThumb{}, err
 	}
 
-	err = db.CreateCacheFile(magnet, "", title)
-
 	obj := model.ObjThumb{
 		Object: model.Object{
 			Name:     title,
 			IsFolder: false,
-			ID:       fmt.Sprintf("FC2-PPV-%s", code),
+			ID:       id,
 			Size:     622857143,
 			Modified: time.Now(),
 		},
 		Thumbnail: model.Thumbnail{Thumbnail: ""},
 	}
 
+	err = db.CreateCacheFile(magnet, "", obj.ID)
 	obj.Thumbnail.Thumbnail = d.getPpvdbFilm(code)
 
 	err = db.CreateFilms("fc2", "个人收藏", "个人收藏", []model.ObjThumb{obj})

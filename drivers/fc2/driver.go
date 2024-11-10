@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/pikpak"
-	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -92,7 +91,7 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 		}
 		return results, nil
 	} else if dirName == "个人收藏" {
-		return utils.SliceConvert(virtual_file.GeoStorageFilms("fc2", "个人收藏", true), func(src model.ObjThumb) (model.Obj, error) {
+		return utils.SliceConvert(d.getStars(), func(src model.ObjThumb) (model.Obj, error) {
 			return &src, nil
 		})
 	} else if categories[dirName] != "" {
@@ -209,6 +208,12 @@ func (d *FC2) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
 	}
 
 	return nil
+
+}
+
+func (d *FC2) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) (model.Obj, error) {
+	star, err := d.addStar(stream.GetName())
+	return &star, err
 
 }
 

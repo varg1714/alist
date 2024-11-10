@@ -169,10 +169,12 @@ func (d *FC2) addStar(code string) (model.ObjThumb, error) {
 	detailUrl := ""
 
 	collector.OnHTML(`.table-responsive .success td[colspan="2"]`, func(element *colly.HTMLElement) {
-		title = strings.ReplaceAll(element.ChildAttr("a", "title"), "+++ ", "")
-		href := element.ChildAttr("a", "href")
-		if href != "" {
-			detailUrl = fmt.Sprintf("https://sukebei.nyaa.si/%s", href)
+		if title == "" {
+			title = strings.ReplaceAll(element.ChildAttr("a", "title"), "+++ ", "")
+			href := element.ChildAttr("a", "href")
+			if href != "" {
+				detailUrl = fmt.Sprintf("https://sukebei.nyaa.si/%s", href)
+			}
 		}
 	})
 
@@ -234,7 +236,7 @@ func (d *FC2) getPpvdbFilm(code string) string {
 
 	err := collector.Visit(fmt.Sprintf("https://fc2ppvdb.com/articles/%s", code))
 	if err != nil {
-		utils.Log.Infof("影片:%s的缩略图获取失败", err.Error())
+		utils.Log.Infof("影片:%s的缩略图获取失败:%s", code, err.Error())
 	}
 
 	return imageUrl

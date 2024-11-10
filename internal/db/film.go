@@ -81,6 +81,8 @@ func QueryCacheFileId(name string) model.MagnetCache {
 	split := strings.Split(name, " ")
 	if len(split) >= 2 {
 		code = split[0]
+	} else {
+		code = name
 	}
 
 	fileCache := model.MagnetCache{
@@ -98,6 +100,8 @@ func CreateCacheFile(magnet string, fileId string, name string) error {
 	split := strings.Split(name, " ")
 	if len(split) >= 2 {
 		code = split[0]
+	} else {
+		code = name
 	}
 
 	magnetCache := model.MagnetCache{

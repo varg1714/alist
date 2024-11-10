@@ -161,6 +161,7 @@ func (d *FC2) Remove(ctx context.Context, obj model.Obj) error {
 
 		return db.DeleteFilmsByActor("fc2", obj.GetName())
 	} else {
+		_ = db.DeleteCacheByName(obj.GetID())
 		return db.DeleteFilmsByUrl("fc2", "个人收藏", obj.GetID())
 	}
 

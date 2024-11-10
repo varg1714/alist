@@ -176,11 +176,19 @@ func (d *FC2) addStar(code string) (model.ObjThumb, error) {
 
 	collector.OnHTML(`.table-responsive .success td[colspan="2"]`, func(element *colly.HTMLElement) {
 		if title == "" {
-			title = strings.ReplaceAll(element.ChildAttr("a", "title"), "+++ ", "")
-			href := element.ChildAttr("a", "href")
-			if href != "" {
-				detailUrl = fmt.Sprintf("https://sukebei.nyaa.si/%s", href)
-			}
+
+			element.ForEach("a", func(i int, aElement *colly.HTMLElement) {
+
+				if attr := aElement.Attr("class"); attr != "comments" {
+					title = strings.ReplaceAll(aElement.Attr("title"), "+++ ", "")
+					href := aElement.Attr("href")
+					if href != "" {
+						detailUrl = fmt.Sprintf("https://sukebei.nyaa.si/%s", href)
+					}
+				}
+
+			})
+
 		}
 	})
 

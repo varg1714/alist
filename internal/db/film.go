@@ -134,6 +134,25 @@ func UpdateCacheFile(magnet string, fileId string, name string) error {
 
 }
 
+func DeleteCacheByName(name string) error {
+
+	var code string
+	split := strings.Split(name, " ")
+	if len(split) >= 2 {
+		code = split[0]
+	} else {
+		code = name
+	}
+
+	fileCache := model.MagnetCache{
+		Code: code,
+	}
+	db.Where(fileCache).First(&fileCache)
+
+	return errors.WithStack(db.Where(fileCache).Delete(&fileCache).Error)
+
+}
+
 func DeleteCacheFile(fileId string) error {
 
 	magnetCache := model.MagnetCache{

@@ -62,7 +62,7 @@ func Init(e *gin.Engine) {
 	api.GET("/auth/get_sso_id", handles.SSOLoginCallback)
 	api.GET("/auth/sso_get_token", handles.SSOLoginCallback)
 
-	//webauthn
+	// webauthn
 	webauthn.GET("/webauthn_begin_registration", handles.BeginAuthnRegistration)
 	webauthn.POST("/webauthn_finish_registration", handles.FinishAuthnRegistration)
 	webauthn.GET("/webauthn_begin_login", handles.BeginAuthnLogin)
@@ -76,6 +76,7 @@ func Init(e *gin.Engine) {
 	public.Any("/offline_download_tools", handles.OfflineDownloadTools)
 
 	_fs(auth.Group("/fs"))
+	_task(auth.Group("/task", middlewares.AuthNotGuest))
 	admin(auth.Group("/admin", middlewares.AuthAdmin))
 	if flags.Debug || flags.Dev {
 		debug(g.Group("/debug"))
@@ -125,9 +126,10 @@ func admin(g *gin.RouterGroup) {
 	setting.POST("/reset_token", handles.ResetToken)
 	setting.POST("/set_aria2", handles.SetAria2)
 	setting.POST("/set_qbit", handles.SetQbittorrent)
+	setting.POST("/set_transmission", handles.SetTransmission)
 
-	task := g.Group("/task")
-	handles.SetupTaskRoute(task)
+	// retain /admin/task API to ensure compatibility with legacy automation scripts
+	_task(g.Group("/task"))
 
 	ms := g.Group("/message")
 	ms.POST("/get", message.HttpInstance.GetHandle)
@@ -159,15 +161,20 @@ func _fs(g *gin.RouterGroup) {
 	g.PUT("/put", middlewares.FsUp, handles.FsStream)
 	g.PUT("/form", middlewares.FsUp, handles.FsForm)
 	g.POST("/link", middlewares.AuthAdmin, handles.Link)
-	//g.POST("/add_aria2", handles.AddOfflineDownload)
-	//g.POST("/add_qbit", handles.AddQbittorrent)
+	// g.POST("/add_aria2", handles.AddOfflineDownload)
+	// g.POST("/add_qbit", handles.AddQbittorrent)
+	// g.POST("/add_transmission", handles.SetTransmission)
 	g.POST("/add_offline_download", handles.AddOfflineDownload)
 	g.POST("/offline_download", handles.FsOfflineDownload)
 }
 
+func _task(g *gin.RouterGroup) {
+	handles.SetupTaskRoute(g)
+}
+
 func Cors(r *gin.Engine) {
 	config := cors.DefaultConfig()
-	//config.AllowAllOrigins = true
+	// config.AllowAllOrigins = true
 	config.AllowOrigins = conf.Conf.Cors.AllowOrigins
 	config.AllowHeaders = conf.Conf.Cors.AllowHeaders
 	config.AllowMethods = conf.Conf.Cors.AllowMethods

@@ -5,9 +5,9 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/offline_download/tool"
 	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/alist-org/alist/v3/internal/task"
 	"github.com/alist-org/alist/v3/server/common"
 	"github.com/gin-gonic/gin"
-	"github.com/xhofe/tache"
 )
 
 type SetAria2Req struct {
@@ -30,6 +30,10 @@ func SetAria2(c *gin.Context) {
 		return
 	}
 	_tool, err := tool.Tools.Get("aria2")
+	if err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
 	version, err := _tool.Init()
 	if err != nil {
 		common.ErrorResp(c, err, 500)
@@ -74,6 +78,37 @@ func OfflineDownloadTools(c *gin.Context) {
 	common.SuccessResp(c, tools)
 }
 
+type SetTransmissionReq struct {
+	Uri      string `json:"uri" form:"uri"`
+	Seedtime string `json:"seedtime" form:"seedtime"`
+}
+
+func SetTransmission(c *gin.Context) {
+	var req SetTransmissionReq
+	if err := c.ShouldBind(&req); err != nil {
+		common.ErrorResp(c, err, 400)
+		return
+	}
+	items := []model.SettingItem{
+		{Key: conf.TransmissionUri, Value: req.Uri, Type: conf.TypeString, Group: model.OFFLINE_DOWNLOAD, Flag: model.PRIVATE},
+		{Key: conf.TransmissionSeedtime, Value: req.Seedtime, Type: conf.TypeNumber, Group: model.OFFLINE_DOWNLOAD, Flag: model.PRIVATE},
+	}
+	if err := op.SaveSettingItems(items); err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	_tool, err := tool.Tools.Get("transmission")
+	if err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	if _, err := _tool.Init(); err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	common.SuccessResp(c, "ok")
+}
+
 type AddOfflineDownloadReq struct {
 	Urls         []string `json:"urls"`
 	Path         string   `json:"path"`
@@ -98,7 +133,7 @@ func AddOfflineDownload(c *gin.Context) {
 		common.ErrorResp(c, err, 403)
 		return
 	}
-	var tasks []tache.TaskWithInfo
+	var tasks []task.TaskInfoWithCreator
 	for _, url := range req.Urls {
 		t, err := tool.AddURL(c, &tool.AddURLArgs{
 			URL:          url,

@@ -7,13 +7,14 @@ import (
 	"github.com/alist-org/alist/v3/internal/conf"
 	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/setting"
+	"github.com/alist-org/alist/v3/internal/task"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/xhofe/tache"
 )
 
 type DownloadTask struct {
-	tache.Base
+	task.TaskWithCreator
 	Url               string       `json:"url"`
 	DstDirPath        string       `json:"dst_dir_path"`
 	TempDir           string       `json:"temp_dir"`
@@ -101,6 +102,19 @@ outer:
 			}
 		}
 	}
+
+	if t.tool.Name() == "transmission" {
+		// hack for transmission
+		seedTime := setting.GetInt(conf.TransmissionSeedtime, 0)
+		if seedTime >= 0 {
+			t.Status = "offline download completed, waiting for seeding"
+			<-time.After(time.Minute * time.Duration(seedTime))
+			err := t.tool.Remove(t)
+			if err != nil {
+				log.Errorln(err.Error())
+			}
+		}
+	}
 	return nil
 }
 
@@ -158,6 +172,9 @@ func (t *DownloadTask) Complete() error {
 	for i := range files {
 		file := files[i]
 		TransferTaskManager.Add(&TransferTask{
+			TaskWithCreator: task.TaskWithCreator{
+				Creator: t.Creator,
+			},
 			file:         file,
 			DstDirPath:   t.DstDirPath,
 			TempDir:      t.TempDir,

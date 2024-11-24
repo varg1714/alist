@@ -448,10 +448,6 @@ func (d *PikPak) downloadMagnet(parentDir string, fileName, magnet string) (File
 
 	for downloading && count < 10 {
 
-		if count != 0 {
-			time.Sleep(2 * time.Second)
-		}
-
 		count++
 
 		tasks, taskErr := d.getTasks()
@@ -460,11 +456,14 @@ func (d *PikPak) downloadMagnet(parentDir string, fileName, magnet string) (File
 		}
 
 		find := false
-		for _, tempFile := range tasks.Tasks {
-			if tempFile.FileID == downloadResp.Task.FileID {
+		for _, task := range tasks.Tasks {
+			if task.ID == downloadResp.Task.ID {
 				// 还在下载中
 				find = true
-				utils.Log.Infof("文件下载任务尚未完成，第[%d]次等待。当前下载进度:%d", count, tempFile.Progress)
+				utils.Log.Infof("文件下载任务尚未完成，第[%d]次等待。当前下载进度:%d", count, task.Progress)
+				if downloadResp.File.Id == "" {
+					downloadResp.Task.FileID = task.FileID
+				}
 				break
 			}
 		}
@@ -472,6 +471,8 @@ func (d *PikPak) downloadMagnet(parentDir string, fileName, magnet string) (File
 		if !find {
 			// 下载完成
 			downloading = false
+		} else {
+			time.Sleep(2 * time.Second)
 		}
 
 	}

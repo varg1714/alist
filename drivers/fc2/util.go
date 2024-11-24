@@ -274,7 +274,23 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
 	// 保存影片信息
 	err = db.CreateFilms("fc2", "个人收藏", "个人收藏", cachingFiles)
-	_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), title, thumbnail)
+	_ = virtual_file.CacheImageAndNfo("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), title, thumbnail)
+
+	if len(cachingFiles) > 1 {
+
+		whatLinkInfo := d.getWhatLinkInfo(magnet)
+
+		for index, file := range cachingFiles[1:] {
+			if index < len(whatLinkInfo.Screenshots) {
+				_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(file.Name), whatLinkInfo.Screenshots[index].Screenshot, map[string]string{
+					"Referer": "https://mypikpak.com/",
+				})
+			} else {
+				_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(file.Name), thumbnail, map[string]string{})
+			}
+		}
+
+	}
 
 	return cachingFiles[0], err
 
@@ -348,5 +364,23 @@ func (d *FC2) GptTranslate(text string) string {
 	}
 
 	return result.Choices[0].Message.Content
+
+}
+
+func (d *FC2) getWhatLinkInfo(magnet string) WhatLinkInfo {
+
+	var whatLinkInfo WhatLinkInfo
+
+	_, err := base.RestyClient.R().SetHeaders(map[string]string{
+		"Referer": "https://mypikpak.net/",
+		"Origin":  "https://mypikpak.net/",
+	}).SetQueryParam("url", magnet).SetResult(&whatLinkInfo).Get("https://whatslink.info/api/v1/link")
+
+	if err != nil {
+		utils.Log.Info("磁力图片获取失败", err.Error())
+		return whatLinkInfo
+	}
+
+	return whatLinkInfo
 
 }

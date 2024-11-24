@@ -122,7 +122,7 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 		}
 
 		if cacheFile {
-			_ = CacheImage(source, dirName, AppendImageName(thumb.Name), thumb.Title, film.Image)
+			_ = CacheImageAndNfo(source, dirName, AppendImageName(thumb.Name), thumb.Title, film.Image)
 		}
 
 		results = append(results, thumb)
@@ -149,20 +149,25 @@ func convertObj(source, dirName string, actor []model.EmbyFileObj, results []mod
 			Title: film.Name,
 		})
 
-		_ = CacheImage(source, dirName, AppendImageName(film.Name), film.Name, film.Thumb())
+		_ = CacheImageAndNfo(source, dirName, AppendImageName(film.Name), film.Name, film.Thumb())
 
 	}
 	return results
 
 }
 
-func CacheImage(source, dir, fileName, title, img string) int {
+func CacheImageAndNfo(source, dir, fileName, title, img string) int {
 
 	actorNfo := cacheActorNfo(dir, fileName, title, source)
 	if actorNfo == Exist {
 		return Exist
 	}
 
+	return CacheImage(source, dir, fileName, img, map[string]string{})
+
+}
+
+func CacheImage(source string, dir string, fileName string, img string, requestHeader map[string]string) int {
 	if img == "" {
 		return CreatedFailed
 	}
@@ -171,7 +176,7 @@ func CacheImage(source, dir, fileName, title, img string) int {
 		return Exist
 	}
 
-	imgResp, err := base.RestyClient.R().Get(img)
+	imgResp, err := base.RestyClient.R().SetHeaders(requestHeader).Get(img)
 	if err != nil {
 		utils.Log.Info("图片下载失败", err)
 		return CreatedFailed
@@ -190,7 +195,6 @@ func CacheImage(source, dir, fileName, title, img string) int {
 	}
 
 	return CreatedSuccess
-
 }
 
 func cacheActorNfo(dir, fileName, title, source string) int {

@@ -164,7 +164,6 @@ func (d *PikPak) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 func (d *PikPak) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
 	var resp File
-	var url string
 	queryParams := map[string]string{
 		"_magic":         "2021",
 		"usage":          "FETCH",
@@ -195,10 +194,8 @@ func (d *PikPak) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 		}
 	}
 
-	utils.Log.Infof("pikpak返回的地址: %s", url)
-	return &model.Link{
-		URL: url,
-	}, nil
+	utils.Log.Infof("pikpak返回的地址: %s", link.URL)
+	return &link, err
 }
 
 func (d *PikPak) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {

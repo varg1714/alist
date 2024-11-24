@@ -106,3 +106,8 @@ type ObjThumbURL struct {
 	Thumbnail
 	Url
 }
+
+type EmbyFileObj struct {
+	ObjThumb
+	Title string
+}

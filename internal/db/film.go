@@ -3,11 +3,12 @@ package db
 import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/pkg/errors"
+	"regexp"
 	"strings"
 	"time"
 )
 
-func CreateFilms(source string, actor, actorId string, models []model.ObjThumb) error {
+func CreateFilms(source string, actor, actorId string, models []model.EmbyFileObj) error {
 
 	if len(models) == 0 {
 		return nil
@@ -75,19 +76,26 @@ func DeleteFilmsByUrl(source, actor, url string) error {
 
 }
 
-func QueryCacheFileId(name string) model.MagnetCache {
+func QueryFileCacheByName(name string) model.MagnetCache {
 
-	var code string
-	split := strings.Split(name, " ")
-	if len(split) >= 2 {
-		code = split[0]
-	} else {
-		code = name
+	fileCache := model.MagnetCache{
+		Name: name,
 	}
+
+	db.Where(fileCache).First(&fileCache)
+
+	return fileCache
+
+}
+
+func QueryFileCacheByCode(code string) model.MagnetCache {
+
+	code = getFilmCode(code)
 
 	fileCache := model.MagnetCache{
 		Code: code,
 	}
+
 	db.Where(fileCache).First(&fileCache)
 
 	return fileCache
@@ -96,13 +104,7 @@ func QueryCacheFileId(name string) model.MagnetCache {
 
 func CreateCacheFile(magnet string, fileId string, name string) error {
 
-	var code string
-	split := strings.Split(name, " ")
-	if len(split) >= 2 {
-		code = split[0]
-	} else {
-		code = name
-	}
+	code := getFilmCode(name)
 
 	magnetCache := model.MagnetCache{
 		Magnet: magnet,
@@ -111,8 +113,25 @@ func CreateCacheFile(magnet string, fileId string, name string) error {
 		Code:   code,
 	}
 
+	err := DeleteCacheByName(name)
+	if err != nil {
+		return err
+	}
+
 	return errors.WithStack(db.Create(&magnetCache).Error)
 
+}
+
+func getFilmCode(name string) string {
+	code := name
+	split := strings.Split(name, " ")
+	if len(split) >= 2 {
+		code = split[0]
+	} else {
+		nameRegexp, _ := regexp.Compile("(.*?)(-cd\\d+)?.mp4")
+		code = nameRegexp.ReplaceAllString(name, "$1")
+	}
+	return code
 }
 
 func UpdateCacheFile(magnet string, fileId string, name string) error {
@@ -134,20 +153,21 @@ func UpdateCacheFile(magnet string, fileId string, name string) error {
 
 }
 
-func DeleteCacheByName(name string) error {
-
-	var code string
-	split := strings.Split(name, " ")
-	if len(split) >= 2 {
-		code = split[0]
-	} else {
-		code = name
-	}
+func DeleteCacheByCode(code string) error {
 
 	fileCache := model.MagnetCache{
-		Code: code,
+		Code: getFilmCode(code),
 	}
-	db.Where(fileCache).First(&fileCache)
+
+	return errors.WithStack(db.Where(fileCache).Delete(&fileCache).Error)
+
+}
+
+func DeleteCacheByName(name string) error {
+
+	fileCache := model.MagnetCache{
+		Name: name,
+	}
 
 	return errors.WithStack(db.Where(fileCache).Delete(&fileCache).Error)
 

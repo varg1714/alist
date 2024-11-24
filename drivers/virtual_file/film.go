@@ -14,10 +14,10 @@ import (
 	"time"
 )
 
-func GetFilms(source, dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error)) ([]model.ObjThumb, error) {
+func GetFilms(source, dirName string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error)) ([]model.EmbyFileObj, error) {
 
-	results := make([]model.ObjThumb, 0)
-	films := make([]model.ObjThumb, 0)
+	results := make([]model.EmbyFileObj, 0)
+	films := make([]model.EmbyFileObj, 0)
 
 	films, nextPage, err := pageFunc(urlFunc, 1, films)
 	if err != nil {
@@ -38,10 +38,10 @@ func GetFilms(source, dirName string, urlFunc func(index int) string, pageFunc f
 
 }
 
-func GetFilmsWitchStorage(source, dirName, actorId string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.ObjThumb) ([]model.ObjThumb, bool, error), option Option) ([]model.ObjThumb, error) {
+func GetFilmsWitchStorage(source, dirName, actorId string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error), option Option) ([]model.EmbyFileObj, error) {
 
-	results := make([]model.ObjThumb, 0)
-	films := make([]model.ObjThumb, 0)
+	results := make([]model.EmbyFileObj, 0)
+	films := make([]model.EmbyFileObj, 0)
 
 	films, nextPage, err := pageFunc(urlFunc, 1, films)
 	if err != nil {
@@ -74,7 +74,7 @@ func GetFilmsWitchStorage(source, dirName, actorId string, urlFunc func(index in
 	for index, item := range films {
 		if utils.SliceContains(existFilms, item.ID) {
 			if index == 0 {
-				films = []model.ObjThumb{}
+				films = []model.EmbyFileObj{}
 			} else {
 				films = films[:index]
 			}
@@ -93,37 +93,36 @@ func GetFilmsWitchStorage(source, dirName, actorId string, urlFunc func(index in
 
 }
 
-func GeoStorageFilms(source, dirName string, cacheFile bool) []model.ObjThumb {
-	films := db.QueryByActor(source, dirName)
-	return convertFilm(source, dirName, films, []model.ObjThumb{}, cacheFile)
+func GetStorageFilms(source, dirName string, cacheFile bool) []model.EmbyFileObj {
+	return convertFilm(source, dirName, db.QueryByActor(source, dirName), []model.EmbyFileObj{}, cacheFile)
 }
 
-func convertFilm(source, dirName string, actor []model.Film, results []model.ObjThumb, cacheFile bool) []model.ObjThumb {
-	for _, film := range actor {
+func convertFilm(source, dirName string, films []model.Film, results []model.EmbyFileObj, cacheFile bool) []model.EmbyFileObj {
 
-		thumb := model.ObjThumb{
-			Object: model.Object{
-				IsFolder: false,
-				ID:       film.Url,
-				Size:     1417381701,
-				Modified: film.Date,
-				Path:     dirName,
+	for _, film := range films {
+
+		thumb := model.EmbyFileObj{
+			ObjThumb: model.ObjThumb{
+				Object: model.Object{
+					IsFolder: false,
+					ID:       film.Url,
+					Size:     1417381701,
+					Modified: film.Date,
+					Path:     dirName,
+				},
+				Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 			},
-			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
+			Title: ClearFilmName(film.Name),
 		}
 
-		sourceName := film.Name
-
 		if strings.HasSuffix(film.Name, "mp4") {
-			thumb.Name = film.Name
-			strings.LastIndex(film.Name, ".")
-			sourceName = film.Name[0:strings.LastIndex(film.Name, ".")]
+			thumb.Name = AppendFilmName(CutString(ClearFilmName(film.Name)))
 		} else {
-			thumb.Name = AppendFilmName(film.Name)
+			thumb.Name = AppendFilmName(CutString(film.Name))
 		}
 
 		if cacheFile {
-			_ = CacheImage(source, dirName, AppendImageName(sourceName), film.Image)
+			_ = CacheImage(source, dirName, AppendImageName(thumb.Name), thumb.Title, film.Image)
 		}
 
 		results = append(results, thumb)
@@ -131,32 +130,35 @@ func convertFilm(source, dirName string, actor []model.Film, results []model.Obj
 	return results
 }
 
-func convertObj(source, dirName string, actor []model.ObjThumb, results []model.ObjThumb) []model.ObjThumb {
+func convertObj(source, dirName string, actor []model.EmbyFileObj, results []model.EmbyFileObj) []model.EmbyFileObj {
 
 	for _, film := range actor {
 		parse, _ := time.Parse(time.DateTime, "2024-01-02 15:04:05")
-		results = append(results, model.ObjThumb{
-			Object: model.Object{
-				Name:     AppendFilmName(film.Name),
-				IsFolder: false,
-				ID:       film.ID,
-				Size:     1417381701,
-				Modified: parse,
-				Path:     dirName,
+		results = append(results, model.EmbyFileObj{
+			ObjThumb: model.ObjThumb{
+				Object: model.Object{
+					Name:     AppendFilmName(film.Name),
+					IsFolder: false,
+					ID:       film.ID,
+					Size:     1417381701,
+					Modified: parse,
+					Path:     dirName,
+				},
+				Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
 			},
-			Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
+			Title: film.Name,
 		})
 
-		_ = CacheImage(source, dirName, AppendImageName(film.Name), film.Thumb())
+		_ = CacheImage(source, dirName, AppendImageName(film.Name), film.Name, film.Thumb())
 
 	}
 	return results
 
 }
 
-func CacheImage(source, dir, name, img string) int {
+func CacheImage(source, dir, fileName, title, img string) int {
 
-	actorNfo := cacheActorNfo(dir, name, source)
+	actorNfo := cacheActorNfo(dir, fileName, title, source)
 	if actorNfo == Exist {
 		return Exist
 	}
@@ -165,7 +167,7 @@ func CacheImage(source, dir, name, img string) int {
 		return CreatedFailed
 	}
 
-	if utils.Exists(filepath.Join(flags.DataDir, "emby", source, dir, name)) {
+	if utils.Exists(filepath.Join(flags.DataDir, "emby", source, dir, fileName)) {
 		return Exist
 	}
 
@@ -181,7 +183,7 @@ func CacheImage(source, dir, name, img string) int {
 		return CreatedFailed
 	}
 
-	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", source, dir, name), imgResp.Body(), 0777)
+	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", source, dir, fileName), imgResp.Body(), 0777)
 	if err != nil {
 		utils.Log.Info("图片缓存失败", err)
 		return CreatedFailed
@@ -191,13 +193,13 @@ func CacheImage(source, dir, name, img string) int {
 
 }
 
-func cacheActorNfo(dir, name, source string) int {
+func cacheActorNfo(dir, fileName, title, source string) int {
 
-	if name == "" {
+	if fileName == "" {
 		return CreatedFailed
 	}
 
-	sourceName := name[0:strings.LastIndex(name, ".")]
+	sourceName := fileName[0:strings.LastIndex(fileName, ".")]
 
 	if utils.Exists(filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo")) {
 		return Exist
@@ -210,8 +212,8 @@ func cacheActorNfo(dir, name, source string) int {
 	}
 
 	media := Media{
-		Plot:  Inner{Inner: fmt.Sprintf("<![CDATA[%s]]>", sourceName)},
-		Title: Inner{Inner: sourceName},
+		Plot:  Inner{Inner: fmt.Sprintf("<![CDATA[%s]]>", title)},
+		Title: Inner{Inner: title},
 		Actor: []Actor{
 			{
 				Name: dir,
@@ -226,7 +228,7 @@ func cacheActorNfo(dir, name, source string) int {
 	}
 	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo"), xml, 0777)
 	if err != nil {
-		utils.Log.Infof("文件:%s的xml缓存失败:%v", name, err)
+		utils.Log.Infof("文件:%s的xml缓存失败:%v", fileName, err)
 	}
 
 	return CreatedSuccess
@@ -253,25 +255,13 @@ func CutString(name string) string {
 
 }
 
-func AppendFilmName(name string) string {
-
-	if strings.HasSuffix(name, ".mp4") {
-		return name
-	}
-
-	if strings.HasSuffix(name, ".") {
-		// 仅有.
-		return name + "mp4"
-	}
-
-	// 返回原始文件名
-	return name + ".mp4"
-
-}
-
 func ClearFilmName(name string) string {
 
 	if strings.HasSuffix(name, ".mp4") {
+		return name[0 : len(name)-4]
+	}
+
+	if strings.HasSuffix(name, ".jpg") {
 		return name[0 : len(name)-4]
 	}
 
@@ -284,23 +274,12 @@ func ClearFilmName(name string) string {
 	return name
 }
 
-func AppendImageName(name string) string {
-
-	if strings.HasSuffix(name, ".jpg") {
-		return name
-	}
-
-	if strings.HasSuffix(name, ".") {
-		// 仅有.
-		return name + "jpg"
-	}
-
-	// 是影片结尾的图片名
-	if strings.HasSuffix(name, ".mp4") {
-		return name[0:strings.LastIndex(name, ".")] + ".jpg"
-	}
-
+func AppendFilmName(name string) string {
 	// 返回原始文件名
-	return name + ".jpg"
+	return ClearFilmName(name) + ".mp4"
 
+}
+
+func AppendImageName(name string) string {
+	return ClearFilmName(name) + ".jpg"
 }

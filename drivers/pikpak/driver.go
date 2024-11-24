@@ -319,7 +319,7 @@ func (d *PikPak) Put(ctx context.Context, dstDir model.Obj, stream model.FileStr
 	return d.UploadByMultipart(&params, stream.GetSize(), stream, up)
 }
 
-func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.Obj, magnetGetter func(obj model.Obj) (string, error)) ([]model.Obj, error) {
+func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, downloadingFile model.Obj, magnetGetter func(obj model.Obj) (string, error)) ([]model.Obj, error) {
 
 	// 1. 异步获取磁力链接
 	magnet := ""
@@ -328,21 +328,19 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 	go func() {
 		start := time.Now().UnixMilli()
 		defer magnetWaiter.Done()
-		tempMagnet, err := magnetGetter(dir)
+		tempMagnet, err := magnetGetter(downloadingFile)
 		if err != nil {
 			utils.Log.Info("磁力链接获取失败", err)
 		}
 		magnet = tempMagnet
-		utils.Log.Infof("获取:%s的磁力链接结果为:[%s]耗时:[%d]", dir.GetName(), magnet, time.Now().UnixMilli()-start)
+		utils.Log.Infof("获取:%s的磁力链接结果为:[%s]耗时:[%d]", downloadingFile.GetName(), magnet, time.Now().UnixMilli()-start)
 	}()
 
 	// 2. 尝试获取缓存文件
-	index := strings.LastIndex(dir.GetName(), ".")
-	name := dir.GetName()[:index]
-	var resultFile File
+	fileName := downloadingFile.GetName()
 
 	// 2.1 获取缓存的文件ID
-	fileCache := db.QueryCacheFileId(name)
+	fileCache := db.QueryFileCacheByName(fileName)
 	if fileCache.FileId != "" {
 		existFile := d.getFile(fileCache.FileId)
 		if existFile.Id != "" {
@@ -352,67 +350,25 @@ func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, dir model.
 
 	// 2.2 判断该文件是否已下载
 	// 2.2.1. 获取临时目录下的文件夹
-	fileDir, err := d.getDir(parentDir, dir.GetPath())
+	fileDir, err := d.getDir(parentDir, downloadingFile.GetPath())
 	if fileDir == "" || err != nil {
 		utils.Log.Info("文件夹创建失败", err)
 		return []model.Obj{}, err
 	}
 
-	files, err := d.getFiles(fileDir)
-	if err != nil {
-		utils.Log.Info("文件夹信息获取失败", err)
+	// 2.3 该文件在云盘不存在，下载该文件
+	var downloadFile File
+	magnetWaiter.Wait()
+	if magnet == "" {
+		return []model.Obj{}, nil
+	}
+
+	downloadFile, err = d.downloadMagnet(fileDir, fileName, magnet)
+	if err != nil || downloadFile.Id == "" {
 		return []model.Obj{}, err
 	}
-	for _, tempFile := range files {
-		if tempFile.Id == fileCache.FileId || strings.HasPrefix(fileCache.Magnet, tempFile.Params.URL) || strings.Split(tempFile.Name, " ")[0] == fileCache.Code {
-			resultFile = tempFile
-			break
-		}
-	}
 
-	// 2.3 该文件在云盘不存在，下载该文件
-	newDownloaded := false
-	var newFileDir File
-	if resultFile.Id == "" {
-		magnetWaiter.Wait()
-		if magnet == "" {
-			return []model.Obj{}, nil
-		}
-
-		newFileDir, resultFile, err = d.downloadMagnet(fileDir, magnet)
-		if err != nil || resultFile.Id == "" {
-			return []model.Obj{}, err
-		}
-		newDownloaded = true
-	}
-
-	if newDownloaded {
-		// 2.4.3 新下载的文件，进行文件夹清理
-		go func() {
-			utils.Log.Info("开始重命名文件")
-			prettyFileId := d.prettyFile(fileDir, newFileDir.Id, name, newFileDir.Name, newFileDir.Kind != "drive#file")
-			utils.Log.Info("重命名文件完成")
-
-			if fileCache.FileId != "" {
-				err = db.UpdateCacheFile(magnet, prettyFileId, name)
-			} else {
-				err = db.CreateCacheFile(magnet, prettyFileId, name)
-			}
-			if err != nil {
-				utils.Log.Infof("缓存文件更新失败:%s-%s", name, newFileDir.Id)
-			}
-
-		}()
-	} else if fileCache.FileId != resultFile.Id {
-		utils.Log.Infof("更新缓存文件:%s-%s", name, resultFile.Id)
-		err = db.UpdateCacheFile(magnet, resultFile.Id, name)
-		if err != nil {
-			utils.Log.Infof("缓存文件更新失败:%s-%s", name, resultFile.Id)
-		}
-	}
-
-	// 2.4.2 返回结果
-	return d.buildDownloadResult(ctx, resultFile)
+	return d.buildDownloadResult(ctx, downloadFile)
 
 }
 
@@ -478,10 +434,9 @@ func (d *PikPak) getDir(parentDirId string, dirName string) (string, error) {
 	return fileDir, nil
 }
 
-func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, File, error) {
+func (d *PikPak) downloadMagnet(parentDir string, fileName, magnet string) (File, error) {
 
 	var downloadFile File
-	var downloadMaxFile File
 
 	var downloadResp CloudDownloadResp
 
@@ -501,71 +456,106 @@ func (d *PikPak) downloadMagnet(parentDir string, magnet string) (File, File, er
 	}, &downloadResp)
 
 	if err != nil {
-		return downloadFile, downloadMaxFile, err
+		return downloadFile, err
 	}
 
 	var count int
-	var downloadedFiles []File
+	downloading := true
 
-	for downloadFile.Id == "" && count < 10 {
+	for downloading && count < 10 {
 
 		if count != 0 {
 			time.Sleep(2 * time.Second)
 		}
 
-		utils.Log.Infof("文件下载任务尚未提交完成，第[%d]次等待", count)
+		utils.Log.Infof("文件下载任务尚未完成，第[%d]次等待", count)
 		count++
-		downloadedFiles, err = d.getFiles(parentDir)
-		if err != nil {
-			return downloadFile, downloadMaxFile, err
+
+		tasks, taskErr := d.getTasks()
+		if taskErr != nil {
+			return downloadFile, err
 		}
-		for _, tempFile := range downloadedFiles {
-			if tempFile.Id == downloadResp.Task.FileID {
-				downloadFile = tempFile
+
+		find := false
+		for _, tempFile := range tasks.Tasks {
+			if tempFile.FileID == downloadResp.Task.FileID {
+				// 还在下载中
+				find = true
+				utils.Log.Infof("当前下载进度:%d", tempFile.Progress)
 				break
 			}
 		}
+
+		if !find {
+			// 下载完成
+			downloading = false
+		}
+
 	}
 
-	fileDownloadCheck := func(checkingFiles []File) File {
+	var validFiles []File
 
-		for _, tempFile := range checkingFiles {
+	files, listFileErr := d.getFiles(downloadResp.Task.FileID)
+	if listFileErr != nil {
+		return downloadFile, err
+	}
 
-			size, err := strconv.Atoi(tempFile.Size)
-			if err != nil {
-				utils.Log.Info("get file size error:", err)
-				return downloadMaxFile
+	// 下载完的文件
+	for _, tempFile := range files {
+		size, err1 := strconv.Atoi(tempFile.Size)
+		if err1 != nil {
+			utils.Log.Info("get file size error:", err)
+			return downloadFile, err
+		}
+
+		if size/(1024*1024) > 100 {
+			validFiles = append(validFiles, tempFile)
+		}
+
+	}
+
+	if len(validFiles) == 0 {
+		return downloadFile, nil
+	}
+
+	slices.SortFunc(validFiles, func(a, b File) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	if len(validFiles) == 1 {
+		downloadFile = validFiles[0]
+		err1 := db.CreateCacheFile(magnet, validFiles[0].Id, fileName)
+		if err1 != nil {
+			utils.Log.Info("文件缓存失败:%s", err1.Error())
+			return downloadFile, err1
+		}
+	} else {
+		nameRegexp, _ := regexp.Compile("(.*?)(-cd\\d+)?.mp4")
+		code := nameRegexp.ReplaceAllString(fileName, "$1")
+		for index, file := range validFiles {
+			realName := fmt.Sprintf("%s-cd%d.mp4", code, index+1)
+			if realName == fileName {
+				downloadFile = file
 			}
-
-			if size/(1024*1024) > 100 && strings.HasPrefix(magnet, tempFile.Params.URL) {
-				return tempFile
+			err1 := db.CreateCacheFile(magnet, file.Id, realName)
+			if err1 != nil {
+				utils.Log.Info("文件缓存失败:%s", err1.Error())
+				return downloadFile, err1
 			}
-
 		}
-
-		return downloadMaxFile
 	}
 
-	count = 0
-	downloadMaxFile = fileDownloadCheck(downloadedFiles)
-
-	for downloadFile.Kind != "drive#file" && downloadMaxFile.Id == "" && count < 10 {
-
-		if count != 0 {
-			time.Sleep(1 * time.Second)
+	if downloadFile.Id == "" {
+		downloadFile = validFiles[0]
+		err1 := db.CreateCacheFile(magnet, downloadFile.Id, fileName)
+		if err1 != nil {
+			utils.Log.Info("文件缓存失败:%s", err1.Error())
+			return downloadFile, err1
 		}
-
-		utils.Log.Infof("文件未下载完毕，第[%d]次等待", count)
-		count++
-		downloadedFiles, err = d.getFiles(downloadFile.Id)
-		if err != nil {
-			return downloadFile, downloadMaxFile, err
-		}
-		downloadMaxFile = fileDownloadCheck(downloadedFiles)
-
 	}
 
-	return downloadFile, downloadMaxFile, nil
+	return downloadFile, nil
+
 }
 
 // clearIllegalChar 清理文件名中的非法字符

@@ -19,11 +19,11 @@ import (
 	"time"
 )
 
-func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]model.ObjThumb, error) {
+func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]model.EmbyFileObj, error) {
 
 	// 1. 获取所有影片
 	javFilms, err := virtual_file.GetFilmsWitchStorage("javdb", dirName, dirName, urlFunc,
-		func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+		func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 			return d.getJavPageInfo(urlFunc, index, data)
 		}, virtual_file.Option{CacheFile: false, MaxPageNum: 20})
 
@@ -44,46 +44,49 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 	for index, film := range javFilms {
 		code := splitCode(film.Name)
 		if newName, exist := namingFilms[code]; exist && strings.HasSuffix(javFilms[index].Name, "mp4") {
-			javFilms[index].Name = virtual_file.AppendFilmName(newName)
+			javFilms[index].Name = virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(newName)))
+			javFilms[index].Title = virtual_file.ClearFilmName(newName)
 		}
 	}
 
 	for _, film := range javFilms {
-		created := virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(film.Name), film.Thumb())
+		created := virtual_file.CacheImage("javdb", dirName, virtual_file.AppendImageName(film.Name), film.Title, film.Thumb())
 
 		if created == virtual_file.Exist && d.QuickCache {
 			// 已经创建过了，后续不再创建
 			break
 		}
+
 	}
 
-	utils.Log.Info("中文影片名称映射完毕", err)
+	utils.Log.Info("中文影片名称映射完毕")
 
 	return javFilms, err
 
 }
 
-func (d *Javdb) getStars() []model.ObjThumb {
-	return virtual_file.GeoStorageFilms("javdb", "个人收藏", true)
+func (d *Javdb) getStars() []model.EmbyFileObj {
+	return virtual_file.GetStorageFilms("javdb", "个人收藏", true)
 }
 
-func (d *Javdb) addStar(code string) (model.ObjThumb, error) {
+func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 
 	javFilms, _, err := d.getJavPageInfo(func(index int) string {
 		return fmt.Sprintf("https://javdb.com/search?f=download&q=%s", code)
-	}, 1, []model.ObjThumb{})
+	}, 1, []model.EmbyFileObj{})
 	if err != nil {
 		utils.Log.Info("jav影片查询失败:", err)
-		return model.ObjThumb{}, err
+		return model.EmbyFileObj{}, err
 	}
 
 	if len(javFilms) == 0 || strings.ToLower(code) != strings.ToLower(splitCode(javFilms[0].Name)) {
-		return model.ObjThumb{}, errors.New(fmt.Sprintf("影片:%s未查询到", code))
+		return model.EmbyFileObj{}, errors.New(fmt.Sprintf("影片:%s未查询到", code))
 	}
 
 	cachingFilm := javFilms[0]
 	_, airavFilm := d.getAiravNamingAddr(cachingFilm)
 	if airavFilm.Name != "" {
+		cachingFilm.Title = airavFilm.Title
 		cachingFilm.Name = airavFilm.Name
 	} else {
 		tempCode, name := splitName(cachingFilm.Name)
@@ -92,13 +95,14 @@ func (d *Javdb) addStar(code string) (model.ObjThumb, error) {
 		if translatedText != "" {
 			translatedText = fmt.Sprintf("%s %s", tempCode, translatedText)
 			cachingFilm.Name = translatedText
+			cachingFilm.Title = airavFilm.Title
 		}
 	}
 
-	err = db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.ObjThumb{cachingFilm})
-	cachingFilm.Name = virtual_file.AppendFilmName(cachingFilm.Name)
+	err = db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.EmbyFileObj{cachingFilm})
+	cachingFilm.Name = virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(cachingFilm.Name)))
 	cachingFilm.Path = "个人收藏"
-	_ = virtual_file.CacheImage("javdb", "个人收藏", virtual_file.AppendImageName(cachingFilm.Name), cachingFilm.Thumb())
+	_ = virtual_file.CacheImage("javdb", "个人收藏", virtual_file.AppendImageName(cachingFilm.Name), cachingFilm.Name, cachingFilm.Thumb())
 
 	return cachingFilm, err
 
@@ -106,7 +110,7 @@ func (d *Javdb) addStar(code string) (model.ObjThumb, error) {
 
 func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
-	magnetCache := db.QueryCacheFileId(file.GetName())
+	magnetCache := db.QueryFileCacheByName(file.GetName())
 	if magnetCache.Magnet != "" {
 		utils.Log.Infof("返回缓存中的磁力地址:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil
@@ -171,7 +175,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 }
 
-func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 
 	var nextPage bool
 
@@ -198,15 +202,18 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 				parse = time.Now()
 			}
 
-			data = append(data, model.ObjThumb{
-				Object: model.Object{
-					Name:     virtual_file.CutString(title),
-					IsFolder: false,
-					ID:       "https://javdb.com/" + href,
-					Size:     622857143,
-					Modified: parse,
+			data = append(data, model.EmbyFileObj{
+				ObjThumb: model.ObjThumb{
+					Object: model.Object{
+						Name:     title,
+						IsFolder: false,
+						ID:       "https://javdb.com/" + href,
+						Size:     622857143,
+						Modified: parse,
+					},
+					Thumbnail: model.Thumbnail{Thumbnail: image},
 				},
-				Thumbnail: model.Thumbnail{Thumbnail: image},
+				Title: title,
 			})
 
 		})
@@ -242,7 +249,7 @@ func (d *Javdb) getNajavPageInfo(urlFunc func(index int) string, index int, data
 			parse, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))
 			data = append(data, model.ObjThumb{
 				Object: model.Object{
-					Name:     virtual_file.CutString(title),
+					Name:     title,
 					IsFolder: false,
 					ID:       "https://njav.tv/zh/" + href,
 					Size:     622857143,
@@ -261,7 +268,7 @@ func (d *Javdb) getNajavPageInfo(urlFunc func(index int) string, index int, data
 
 }
 
-func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 
 	nextPage := false
 
@@ -278,14 +285,17 @@ func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data
 
 			if !strings.Contains(title, "马赛克破坏版") {
 				parse, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))
-				data = append(data, model.ObjThumb{
-					Object: model.Object{
-						Name:     virtual_file.CutString(title),
-						IsFolder: false,
-						ID:       "https://airav.io" + href,
-						Size:     622857143,
-						Modified: parse,
+				data = append(data, model.EmbyFileObj{
+					ObjThumb: model.ObjThumb{
+						Object: model.Object{
+							Name:     title,
+							IsFolder: false,
+							ID:       "https://airav.io" + href,
+							Size:     622857143,
+							Modified: parse,
+						},
 					},
+					Title: title,
 				})
 			}
 
@@ -375,7 +385,7 @@ func (d *Javdb) getNjavAddr(films model.ObjThumb) (string, model.ObjThumb) {
 
 }
 
-func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb) {
+func (d *Javdb) getAiravNamingAddr(film model.EmbyFileObj) (string, model.EmbyFileObj) {
 
 	actorUrl := ""
 	actorPageUrl := ""
@@ -384,10 +394,10 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 
 	searchResult, _, err := d.getAiravPageInfo(func(index int) string {
 		return fmt.Sprintf("https://airav.io/cn/search_result?kw=%s", code)
-	}, 1, []model.ObjThumb{})
+	}, 1, []model.EmbyFileObj{})
 	if err != nil {
 		utils.Log.Info("airav页面爬取错误", err)
-		return actorPageUrl, model.ObjThumb{}
+		return actorPageUrl, model.EmbyFileObj{}
 	}
 	if len(searchResult) > 0 && splitCode(searchResult[0].Name) == code {
 		actorUrl = searchResult[0].ID
@@ -396,7 +406,7 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 		}
 	}
 	if actorUrl == "" {
-		return actorPageUrl, model.ObjThumb{}
+		return actorPageUrl, model.EmbyFileObj{}
 	}
 
 	collector := colly.NewCollector(func(c *colly.Collector) {
@@ -430,10 +440,10 @@ func (d *Javdb) getAiravNamingAddr(film model.ObjThumb) (string, model.ObjThumb)
 
 }
 
-func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map[string]string, error) {
+func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (map[string]string, error) {
 
 	nameCache := make(map[string]string)
-	var savingNamingMapping []model.ObjThumb
+	var savingNamingMapping []model.EmbyFileObj
 
 	// 1. 获取库中已爬取结果
 	actors := db.QueryByActor("airav", dirName)
@@ -445,7 +455,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 	// 2. 爬取新的数据
 	for index := range films {
 
-		code, name := splitName(films[index].Name)
+		code, name := splitName(films[index].Title)
 
 		// 2.1 仅当未爬取到才爬取
 		if nameCache[code] == "" {
@@ -466,7 +476,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 				namingFilms, err := virtual_file.GetFilmsWitchStorage("airav", dirName, addr, func(index int) string {
 					return addr + strconv.Itoa(index)
 				},
-					func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+					func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 						return d.getAiravPageInfo(urlFunc, index, data)
 					}, virtual_file.Option{CacheFile: false, MaxPageNum: 40})
 
@@ -479,14 +489,16 @@ func (d *Javdb) getAiravNamingFilms(films []model.ObjThumb, dirName string) (map
 
 			} else if addr == "" && searchResult.ID == "" {
 
-				// 2.2.3 airav没有该作品信息，尝试爬取其它站点的
+				// 2.2.3 AI翻译
 				translatedText := d.GptTranslate(name)
 				if translatedText != "" {
 					translatedText = fmt.Sprintf("%s %s", code, translatedText)
 					nameCache[code] = virtual_file.AppendFilmName(translatedText)
-					savingNamingMapping = append(savingNamingMapping, model.ObjThumb{
-						Object: model.Object{Name: translatedText},
-					})
+					savingNamingMapping = append(savingNamingMapping, model.EmbyFileObj{
+						ObjThumb: model.ObjThumb{
+							Object: model.Object{Name: translatedText},
+						},
+						Title: translatedText})
 				} else {
 					nameCache[code] = films[index].Name
 				}
@@ -555,7 +567,7 @@ func (d *Javdb) GptTranslate(text string) string {
 		return text
 	}
 
-	return virtual_file.CutString(result.Choices[0].Message.Content)
+	return result.Choices[0].Message.Content
 
 }
 

@@ -91,7 +91,7 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 		}
 		return results, nil
 	} else if dirName == "个人收藏" {
-		return utils.SliceConvert(d.getStars(), func(src model.ObjThumb) (model.Obj, error) {
+		return utils.SliceConvert(d.getStars(), func(src model.EmbyFileObj) (model.Obj, error) {
 			return &src, nil
 		})
 	} else if categories[dirName] != "" {
@@ -102,7 +102,7 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 		if err != nil {
 			return nil, err
 		}
-		return utils.SliceConvert(films, func(src model.ObjThumb) (model.Obj, error) {
+		return utils.SliceConvert(films, func(src model.EmbyFileObj) (model.Obj, error) {
 			return &src, nil
 		})
 	} else {
@@ -161,7 +161,7 @@ func (d *FC2) Remove(ctx context.Context, obj model.Obj) error {
 
 		return db.DeleteFilmsByActor("fc2", obj.GetName())
 	} else {
-		_ = db.DeleteCacheByName(obj.GetID())
+		_ = db.DeleteCacheByCode(obj.GetName())
 		return db.DeleteFilmsByUrl("fc2", "个人收藏", obj.GetID())
 	}
 
@@ -204,8 +204,8 @@ func (d *FC2) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) 
 func (d *FC2) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
 
 	if len(db.QueryByUrls("个人收藏", []string{srcObj.GetID()})) == 0 {
-		thumb := srcObj.(*model.ObjThumb)
-		return db.CreateFilms("fc2", "个人收藏", "个人收藏", []model.ObjThumb{*thumb})
+		thumb := srcObj.(*model.EmbyFileObj)
+		return db.CreateFilms("fc2", "个人收藏", "个人收藏", []model.EmbyFileObj{*thumb})
 	}
 
 	return nil

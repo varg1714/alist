@@ -92,7 +92,7 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 		return results, nil
 	} else if dirName == "个人收藏" {
 		// 2. 个人收藏
-		return utils.SliceConvert(d.getStars(), func(src model.ObjThumb) (model.Obj, error) {
+		return utils.SliceConvert(d.getStars(), func(src model.EmbyFileObj) (model.Obj, error) {
 			return &src, nil
 		})
 	} else if actor, exist := categories.Get(dirName); exist {
@@ -109,7 +109,7 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 			utils.Log.Info("影片获取失败", err)
 			return nil, err
 		}
-		return utils.SliceConvert(films, func(src model.ObjThumb) (model.Obj, error) {
+		return utils.SliceConvert(films, func(src model.EmbyFileObj) (model.Obj, error) {
 			return &src, nil
 		})
 
@@ -174,7 +174,7 @@ func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 			return err
 		}
 
-		cache := db.QueryCacheFileId(obj.GetName())
+		cache := db.QueryFileCacheByName(obj.GetName())
 		if cache.FileId != "" {
 			go func() {
 				storage := op.GetBalancedStorage(d.PikPakPath)
@@ -218,8 +218,8 @@ func (d *Javdb) MakeDir(ctx context.Context, parentDir model.Obj, dirName string
 func (d *Javdb) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
 
 	if len(db.QueryByUrls("个人收藏", []string{srcObj.GetID()})) == 0 {
-		thumb := srcObj.(*model.ObjThumb)
-		return db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.ObjThumb{*thumb})
+		thumb := srcObj.(*model.EmbyFileObj)
+		return db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.EmbyFileObj{*thumb})
 	}
 
 	return nil

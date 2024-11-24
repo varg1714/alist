@@ -319,6 +319,27 @@ func (d *PikPak) getFiles(id string) ([]File, error) {
 	return res, nil
 }
 
+func (d *PikPak) getTasks() (OfflineListResp, error) {
+
+	var tasks OfflineListResp
+
+	query := map[string]string{
+		"with":           "reference_resource",
+		"type":           "offline",
+		"thumbnail_size": "SIZE_SMALL",
+		"limit":          "100",
+		"filters":        `{"phase":{"in":"PHASE_TYPE_UNKNOW,PHASE_TYPE_PENDING,PHASE_TYPE_RUNNING,PHASE_TYPE_PAUSED,PHASE_TYPE_ERROR"}}`,
+	}
+	_, err := d.request("https://api-drive.mypikpak.com/drive/v1/tasks", http.MethodGet, func(req *resty.Request) {
+		req.SetQueryParams(query)
+	}, &tasks)
+
+	if err != nil {
+		return tasks, err
+	}
+	return tasks, nil
+}
+
 func (d *PikPak) getFile(id string) File {
 
 	var resp File

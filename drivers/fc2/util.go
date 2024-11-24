@@ -8,6 +8,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/dustin/go-humanize"
 	"github.com/gocolly/colly/v2"
 	"regexp"
 	"strings"
@@ -34,16 +35,16 @@ func (d *FC2) findMagnet(url string) (string, error) {
 	return res.String(), err
 }
 
-func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.ObjThumb, error) {
+func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.EmbyFileObj, error) {
 
 	if strings.HasPrefix(urlFunc(1), "https://adult.contents.fc2.com/users") {
 		return virtual_file.GetFilmsWitchStorage("fc2", dirName, dirName, urlFunc,
-			func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+			func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 				return d.getPageInfo(urlFunc, index, data)
 			}, virtual_file.Option{CacheFile: true, MaxPageNum: 20})
 	} else {
 		return virtual_file.GetFilms("fc2", dirName, urlFunc,
-			func(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+			func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 				return d.getPageInfo(urlFunc, index, data)
 			})
 	}
@@ -52,7 +53,7 @@ func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.
 
 func (d *FC2) getMagnet(file model.Obj) (string, error) {
 
-	magnetCache := db.QueryCacheFileId(file.GetID())
+	magnetCache := db.QueryFileCacheByCode(file.GetID())
 	if magnetCache.Magnet != "" {
 		utils.Log.Infof("返回缓存中的磁力地址:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil
@@ -86,7 +87,7 @@ func (d *FC2) getMagnet(file model.Obj) (string, error) {
 
 }
 
-func (d *FC2) getPageInfo(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+func (d *FC2) getPageInfo(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 
 	pageUrl := urlFunc(index)
 	preLen := len(data)
@@ -132,14 +133,18 @@ func (d *FC2) getPageInfo(urlFunc func(index int) string, index int, data []mode
 			}
 
 			id := actorUrlsRegexp.ReplaceAllString(href, "$1")
-			data = append(data, model.ObjThumb{
-				Object: model.Object{
-					Name:     virtual_file.CutString(fmt.Sprintf("FC2-PPV-%s %s", id, title)),
-					IsFolder: true,
-					ID:       id,
-					Size:     622857143,
+			title = fmt.Sprintf("FC2-PPV-%s %s", id, title)
+			data = append(data, model.EmbyFileObj{
+				ObjThumb: model.ObjThumb{
+					Object: model.Object{
+						Name:     title,
+						IsFolder: true,
+						ID:       id,
+						Size:     622857143,
+					},
+					Thumbnail: model.Thumbnail{Thumbnail: image},
 				},
-				Thumbnail: model.Thumbnail{Thumbnail: image},
+				Title: title,
 			})
 		})
 	})
@@ -153,19 +158,19 @@ func (d *FC2) getPageInfo(urlFunc func(index int) string, index int, data []mode
 
 }
 
-func (d *FC2) getStars() []model.ObjThumb {
-	return virtual_file.GeoStorageFilms("fc2", "个人收藏", true)
+func (d *FC2) getStars() []model.EmbyFileObj {
+	return virtual_file.GetStorageFilms("fc2", "个人收藏", false)
 }
 
-func (d *FC2) addStar(code string) (model.ObjThumb, error) {
+func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
 	id := fmt.Sprintf("FC2-PPV-%s", code)
-	magnetCache := db.QueryCacheFileId(id)
+	magnetCache := db.QueryFileCacheByCode(id)
 	if magnetCache.Magnet != "" {
-		return model.ObjThumb{}, errors.New("已存在该文件")
+		return model.EmbyFileObj{}, errors.New("已存在该文件")
 	}
 
-	searchUrl := fmt.Sprintf("https://sukebei.nyaa.si/?f=0&c=0_0&q=%s&s=downloads&o=desc", code)
+	searchUrl := fmt.Sprintf("https://sukebei.nyaa.si/?f=0&c=0_0&q=%s&s=downloads&o=desc", id)
 
 	collector := colly.NewCollector(func(c *colly.Collector) {
 		c.SetRequestTimeout(time.Second * 10)
@@ -194,44 +199,84 @@ func (d *FC2) addStar(code string) (model.ObjThumb, error) {
 
 	err := collector.Visit(searchUrl)
 	if err != nil {
-		return model.ObjThumb{}, err
+		return model.EmbyFileObj{}, err
 	}
 
 	if detailUrl == "" {
-		return model.ObjThumb{}, errors.New("查询结果为空")
+		return model.EmbyFileObj{}, errors.New("查询结果为空")
 	}
 
-	title = virtual_file.CutString(d.GptTranslate(title))
+	title = d.GptTranslate(title)
 	magnet := ""
 
 	collector.OnHTML(".card-footer-item", func(element *colly.HTMLElement) {
 		magnet = element.Attr("href")
 	})
+
+	fileCount := 0
+	collector.OnHTML(".torrent-file-list.panel-body", func(element *colly.HTMLElement) {
+		element.ForEach(".file-size", func(i int, liElement *colly.HTMLElement) {
+			text := liElement.Text
+			if len(text) > 2 {
+				bytes, _ := humanize.ParseBytes(text[1 : len(text)-1])
+				if bytes != 0 {
+					fileCount++
+				}
+			}
+		})
+	})
+
 	err = collector.Visit(detailUrl)
 	if err != nil {
-		return model.ObjThumb{}, err
+		return model.EmbyFileObj{}, err
 	}
 
-	obj := model.ObjThumb{
-		Object: model.Object{
-			Name:     title,
-			IsFolder: false,
-			ID:       id,
-			Size:     622857143,
-			Modified: time.Now(),
-		},
-		Thumbnail: model.Thumbnail{Thumbnail: ""},
+	thumbnail := d.getPpvdbFilm(code)
+
+	var cachingFiles []model.EmbyFileObj
+	if fileCount <= 1 {
+		cachingFiles = append(cachingFiles, model.EmbyFileObj{
+			ObjThumb: model.ObjThumb{
+				Object: model.Object{
+					Name:     virtual_file.AppendFilmName(id),
+					IsFolder: false,
+					ID:       id,
+					Size:     622857143,
+					Modified: time.Now(),
+					Path:     "个人收藏",
+				},
+				Thumbnail: model.Thumbnail{Thumbnail: thumbnail},
+			},
+			Title: title})
+	} else {
+		for index := range fileCount {
+			realName := virtual_file.AppendFilmName(fmt.Sprintf("%s-cd%d", id, index+1))
+			cachingFiles = append(cachingFiles, model.EmbyFileObj{
+				ObjThumb: model.ObjThumb{
+					Object: model.Object{
+						Name:     realName,
+						IsFolder: false,
+						ID:       realName,
+						Size:     622857143,
+						Modified: time.Now(),
+						Path:     "个人收藏",
+					},
+					Thumbnail: model.Thumbnail{Thumbnail: thumbnail},
+				},
+				Title: title})
+		}
 	}
 
-	err = db.CreateCacheFile(magnet, "", obj.ID)
-	obj.Thumbnail.Thumbnail = d.getPpvdbFilm(code)
+	// 缓存磁力
+	for _, file := range cachingFiles {
+		err = db.CreateCacheFile(magnet, "", file.ID)
+	}
 
-	err = db.CreateFilms("fc2", "个人收藏", "个人收藏", []model.ObjThumb{obj})
-	obj.Name = virtual_file.AppendFilmName(obj.Name)
-	obj.Path = "个人收藏"
-	_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(obj.Name), obj.Thumb())
+	// 保存影片信息
+	err = db.CreateFilms("fc2", "个人收藏", "个人收藏", cachingFiles)
+	_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), title, thumbnail)
 
-	return obj, err
+	return cachingFiles[0], err
 
 }
 
@@ -302,6 +347,6 @@ func (d *FC2) GptTranslate(text string) string {
 		return text
 	}
 
-	return virtual_file.CutString(result.Choices[0].Message.Content)
+	return result.Choices[0].Message.Content
 
 }

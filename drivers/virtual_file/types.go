@@ -1,6 +1,8 @@
 package virtual_file
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+)
 
 type Media struct {
 	XMLName   xml.Name `xml:"movie"`

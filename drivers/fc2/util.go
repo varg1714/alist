@@ -320,7 +320,11 @@ func (d *FC2) getPpvdbFilm(code string) string {
 	imageUrl := ""
 
 	collector.OnHTML(fmt.Sprintf(`img[alt="%s"]`, code), func(element *colly.HTMLElement) {
-		imageUrl = element.Attr("src")
+
+		srcImage := element.Attr("src")
+		if srcImage != "" && !strings.Contains(srcImage, "no-image.jpg") {
+			imageUrl = srcImage
+		}
 	})
 
 	err := collector.Visit(fmt.Sprintf("https://fc2ppvdb.com/articles/%s", code))

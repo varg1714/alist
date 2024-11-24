@@ -219,7 +219,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 			text := liElement.Text
 			if len(text) > 2 {
 				bytes, _ := humanize.ParseBytes(text[1 : len(text)-1])
-				if bytes != 0 {
+				if bytes/(1024*1024) > 100 {
 					fileCount++
 				}
 			}

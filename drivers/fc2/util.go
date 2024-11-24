@@ -280,16 +280,31 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
 		whatLinkInfo := d.getWhatLinkInfo(magnet)
 
-		for index, file := range cachingFiles[1:] {
+		cachingImageFiles := cachingFiles
+		if thumbnail != "" {
+			cachingImageFiles = cachingFiles[1:]
+		}
+
+		for index, file := range cachingImageFiles {
 			if index < len(whatLinkInfo.Screenshots) {
 				_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(file.Name), whatLinkInfo.Screenshots[index].Screenshot, map[string]string{
 					"Referer": "https://mypikpak.com/",
 				})
 			} else {
+				if thumbnail == "" && len(whatLinkInfo.Screenshots) > 0 {
+					thumbnail = whatLinkInfo.Screenshots[0].Screenshot
+				}
 				_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(file.Name), thumbnail, map[string]string{})
 			}
 		}
 
+	} else if len(cachingFiles) == 1 && thumbnail == "" {
+		whatLinkInfo := d.getWhatLinkInfo(magnet)
+		if len(whatLinkInfo.Screenshots) > 0 {
+			_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), whatLinkInfo.Screenshots[0].Screenshot, map[string]string{
+				"Referer": "https://mypikpak.com/",
+			})
+		}
 	}
 
 	return cachingFiles[0], err

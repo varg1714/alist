@@ -122,7 +122,7 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 		}
 
 		if cacheFile {
-			_ = CacheImageAndNfo(source, dirName, AppendImageName(thumb.Name), thumb.Title, film.Image)
+			_ = CacheImageAndNfo(source, dirName, AppendImageName(thumb.Name), thumb.Title, film.Image, []string{dirName})
 		}
 
 		results = append(results, thumb)
@@ -149,16 +149,16 @@ func convertObj(source, dirName string, actor []model.EmbyFileObj, results []mod
 			Title: film.Name,
 		})
 
-		_ = CacheImageAndNfo(source, dirName, AppendImageName(film.Name), film.Name, film.Thumb())
+		_ = CacheImageAndNfo(source, dirName, AppendImageName(film.Name), film.Name, film.Thumb(), []string{dirName})
 
 	}
 	return results
 
 }
 
-func CacheImageAndNfo(source, dir, fileName, title, img string) int {
+func CacheImageAndNfo(source, dir, fileName, title, img string, actors []string) int {
 
-	actorNfo := cacheActorNfo(dir, fileName, title, source)
+	actorNfo := cacheActorNfo(dir, fileName, title, actors, source)
 	if actorNfo == Exist {
 		return Exist
 	}
@@ -197,7 +197,7 @@ func CacheImage(source string, dir string, fileName string, img string, requestH
 	return CreatedSuccess
 }
 
-func cacheActorNfo(dir, fileName, title, source string) int {
+func cacheActorNfo(dir, fileName, title string, actors []string, source string) int {
 
 	if fileName == "" {
 		return CreatedFailed
@@ -215,14 +215,17 @@ func cacheActorNfo(dir, fileName, title, source string) int {
 		return CreatedFailed
 	}
 
+	var actorInfos []Actor
+	for _, actor := range actors {
+		actorInfos = append(actorInfos, Actor{
+			Name: actor,
+		})
+	}
+
 	media := Media{
 		Plot:  Inner{Inner: fmt.Sprintf("<![CDATA[%s]]>", title)},
 		Title: Inner{Inner: title},
-		Actor: []Actor{
-			{
-				Name: dir,
-			},
-		},
+		Actor: actorInfos,
 	}
 
 	xml, err := mediaToXML(&media)

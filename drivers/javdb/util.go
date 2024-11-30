@@ -50,7 +50,7 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 	}
 
 	for _, film := range javFilms {
-		created := virtual_file.CacheImageAndNfo("javdb", dirName, virtual_file.AppendImageName(film.Name), film.Title, film.Thumb())
+		created := virtual_file.CacheImageAndNfo("javdb", dirName, virtual_file.AppendImageName(film.Name), film.Title, film.Thumb(), []string{dirName})
 
 		if created == virtual_file.Exist && d.QuickCache {
 			// 已经创建过了，后续不再创建
@@ -102,7 +102,7 @@ func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 	err = db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.EmbyFileObj{cachingFilm})
 	cachingFilm.Name = virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(cachingFilm.Name)))
 	cachingFilm.Path = "个人收藏"
-	_ = virtual_file.CacheImageAndNfo("javdb", "个人收藏", virtual_file.AppendImageName(cachingFilm.Name), cachingFilm.Name, cachingFilm.Thumb())
+	_ = virtual_file.CacheImageAndNfo("javdb", "个人收藏", virtual_file.AppendImageName(cachingFilm.Name), cachingFilm.Name, cachingFilm.Thumb(), []string{"个人收藏"})
 
 	return cachingFilm, err
 

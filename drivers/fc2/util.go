@@ -231,7 +231,10 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 		return model.EmbyFileObj{}, err
 	}
 
-	thumbnail := d.getPpvdbFilm(code)
+	thumbnail, actors := d.getPpvdbFilm(code)
+	if len(actors) == 0 {
+		actors = append(actors, "个人收藏")
+	}
 
 	var cachingFiles []model.EmbyFileObj
 	if fileCount <= 1 {
@@ -274,7 +277,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
 	// 保存影片信息
 	err = db.CreateFilms("fc2", "个人收藏", "个人收藏", cachingFiles)
-	_ = virtual_file.CacheImageAndNfo("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), title, thumbnail)
+	_ = virtual_file.CacheImageAndNfo("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), title, thumbnail, actors)
 
 	if len(cachingFiles) > 1 {
 
@@ -311,13 +314,16 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
 }
 
-func (d *FC2) getPpvdbFilm(code string) string {
+func (d *FC2) getPpvdbFilm(code string) (string, []string) {
 
 	collector := colly.NewCollector(func(c *colly.Collector) {
 		c.SetRequestTimeout(time.Second * 10)
 	})
 
 	imageUrl := ""
+
+	var actors []string
+	actorMap := make(map[string]bool)
 
 	collector.OnHTML(fmt.Sprintf(`img[alt="%s"]`, code), func(element *colly.HTMLElement) {
 
@@ -327,12 +333,24 @@ func (d *FC2) getPpvdbFilm(code string) string {
 		}
 	})
 
+	collector.OnHTML(".text-white.title-font.text-lg.font-medium", func(element *colly.HTMLElement) {
+		title := element.Attr("title")
+		if title != "" {
+			actorMap[title] = true
+		}
+
+	})
+
 	err := collector.Visit(fmt.Sprintf("https://fc2ppvdb.com/articles/%s", code))
 	if err != nil {
 		utils.Log.Infof("影片:%s的缩略图获取失败:%s", code, err.Error())
 	}
 
-	return imageUrl
+	for actor, _ := range actorMap {
+		actors = append(actors, actor)
+	}
+
+	return imageUrl, actors
 
 }
 

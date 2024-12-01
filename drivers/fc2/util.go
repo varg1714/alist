@@ -179,7 +179,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 	title := ""
 	detailUrl := ""
 
-	collector.OnHTML(`.table-responsive .success td[colspan="2"]`, func(element *colly.HTMLElement) {
+	collector.OnHTML(`.table-responsive td[colspan="2"]`, func(element *colly.HTMLElement) {
 		if title == "" {
 
 			element.ForEach("a", func(i int, aElement *colly.HTMLElement) {

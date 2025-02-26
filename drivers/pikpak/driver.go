@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"golang.org/x/exp/slices"
-	"golang.org/x/oauth2"
 	"net/http"
 	"strconv"
 	"strings"

@@ -35,19 +35,64 @@ func (d *FC2) findMagnet(url string) (string, error) {
 	return res.String(), err
 }
 
-func (d *FC2) getFilms(dirName string, urlFunc func(index int) string) ([]model.EmbyFileObj, error) {
+func (d *FC2) getFilms(urlFunc func(index int) string) ([]model.EmbyFileObj, error) {
 
-	if strings.HasPrefix(urlFunc(1), "https://adult.contents.fc2.com/users") {
-		return virtual_file.GetFilmsWitchStorage("fc2", dirName, dirName, urlFunc,
-			func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
-				return d.getPageInfo(urlFunc, index, data)
-			}, virtual_file.Option{CacheFile: true, MaxPageNum: 20})
-	} else {
-		return virtual_file.GetFilms("fc2", dirName, urlFunc,
-			func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
-				return d.getPageInfo(urlFunc, index, data)
-			})
+	collector := colly.NewCollector(func(c *colly.Collector) {
+		c.SetRequestTimeout(time.Second * 10)
+	})
+
+	var result []model.EmbyFileObj
+	var filmIds []string
+	page := 1
+	preSize := len(filmIds)
+
+	collector.OnHTML(".flex.flex-wrap.-m-4.pb-4", func(e *colly.HTMLElement) {
+
+		e.ForEach(".absolute.top-0.left-0.text-white.bg-gray-800.px-1", func(i int, film *colly.HTMLElement) {
+			filmIds = append(filmIds, fmt.Sprintf("FC2-PPV-%s", film.Text))
+		})
+
+	})
+
+	for page == 1 || (preSize != len(filmIds)) {
+
+		err := collector.Visit(urlFunc(page))
+		if err != nil {
+			utils.Log.Warnf("影片爬取失败: %s", err.Error())
+			return result, nil
+		} else {
+			page++
+			preSize = len(filmIds)
+		}
+
 	}
+
+	unCachedFilms := db.QueryUnCachedFilms(filmIds)
+	if len(unCachedFilms) == 0 {
+		return result, nil
+	}
+
+	unMissedFilms := db.QueryUnMissedFilms(unCachedFilms)
+	if len(unMissedFilms) == 0 {
+		return result, nil
+	}
+
+	var notExitedFilms []string
+	for _, id := range unCachedFilms {
+		_, err := d.addStar(id)
+		if err != nil {
+			notExitedFilms = append(notExitedFilms, id)
+		}
+	}
+
+	if len(notExitedFilms) > 0 {
+		err := db.CreateMissedFilms(notExitedFilms)
+		if err != nil {
+			utils.Log.Warnf("影片信息保存失败: %s", err.Error())
+		}
+	}
+
+	return result, nil
 
 }
 
@@ -164,7 +209,11 @@ func (d *FC2) getStars() []model.EmbyFileObj {
 
 func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
-	id := fmt.Sprintf("FC2-PPV-%s", code)
+	id := code
+	if !strings.HasPrefix(id, "FC2-PPV") {
+		id = fmt.Sprintf("FC2-PPV-%s", code)
+	}
+
 	magnetCache := db.QueryFileCacheByCode(id)
 	if magnetCache.Magnet != "" {
 		return model.EmbyFileObj{}, errors.New("已存在该文件")
@@ -315,6 +364,9 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 }
 
 func (d *FC2) getPpvdbFilm(code string) (string, []string) {
+
+	split := strings.Split(code, "-")
+	code = split[len(split)-1]
 
 	collector := colly.NewCollector(func(c *colly.Collector) {
 		c.SetRequestTimeout(time.Second * 10)

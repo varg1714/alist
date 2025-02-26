@@ -1,7 +1,9 @@
 package db
 
 import (
+	"fmt"
 	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/pkg/errors"
 	"regexp"
 	"strings"
@@ -297,4 +299,55 @@ func QueryReplacements(storageId uint, dir string) []model.Replacement {
 
 	return result
 
+}
+
+func QueryUnCachedFilms(fileIds []string) []string {
+
+	return queryNotExistData(fileIds, "x_magnet_caches")
+
+}
+
+func QueryUnMissedFilms(fileIds []string) []string {
+	return queryNotExistData(fileIds, "x_missed_films")
+}
+
+func CreateMissedFilms(fileIds []string) error {
+
+	var missedFilms []model.MissedFilm
+	for _, fileId := range fileIds {
+		missedFilms = append(missedFilms, model.MissedFilm{
+			Code: fileId,
+		})
+	}
+
+	return errors.WithStack(db.CreateInBatches(&missedFilms, 100).Error)
+
+}
+
+func queryNotExistData(fileIds []string, dbName string) []string {
+
+	if len(fileIds) == 0 {
+		return []string{}
+	}
+
+	var result []string
+	var placeHolders []string
+	var tempIds []any
+
+	for _, fileId := range fileIds {
+		placeHolders = append(placeHolders, "(?)")
+		tempIds = append(tempIds, fileId)
+	}
+
+	query := fmt.Sprintf(`with temp(id) as (values %s)
+select temp.id
+from temp
+where temp.id not in (select code from %s);`, strings.Join(placeHolders, ","), dbName)
+
+	err := db.Raw(query, tempIds...).Scan(&result).Error
+	if err != nil {
+		utils.Log.Errorf("sql查询失败:%s", err.Error())
+	}
+
+	return result
 }

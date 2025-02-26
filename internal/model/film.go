@@ -23,6 +23,11 @@ type MagnetCache struct {
 	Code   string `json:"code"`
 }
 
+type MissedFilm struct {
+	gorm.Model
+	Code string `json:"code" gorm:"index"`
+}
+
 type Actor struct {
 	gorm.Model
 	Dir  string `json:"dir" gorm:"index"`

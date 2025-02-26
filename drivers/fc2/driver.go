@@ -96,7 +96,7 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 		})
 	} else if categories[dirName] != "" {
 		// 自定义目录
-		films, err := d.getFilms(dirName, func(index int) string {
+		films, err := d.getFilms(func(index int) string {
 			return fmt.Sprintf(categories[dirName], index)
 		})
 		if err != nil {
@@ -182,17 +182,10 @@ func (d *FC2) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) 
 	var url string
 	if actorType == 0 {
 		// 0 演员
-		url = fmt.Sprintf("https://adult.contents.fc2.com/users/%s/articles?sort=assess&order=desc&deal=", split[1]) + "&page=%d"
+		url = fmt.Sprintf("https://fc2ppvdb.com/actresses/%s", split[1]) + "?page=%d"
 	} else if actorType == 1 {
-		// yearly
-		url = fmt.Sprintf("https://adult.contents.fc2.com/ranking/article/yearly?year=%s", split[1]) + "&page=%d"
-	} else if actorType == 2 {
-		// monthly
-		now := time.Now()
-		url = fmt.Sprintf("https://adult.contents.fc2.com/ranking/article/monthly?year=%d&month=%d", now.Year(), now.Month()-1) + "&page=%d"
-	} else if actorType == 3 {
-		// weekly
-		url = "https://adult.contents.fc2.com/ranking/article/weekly" + "?page=%d"
+		// 贩卖者
+		url = fmt.Sprintf("https://fc2ppvdb.com/writers/%s", split[1]) + "?page=%d"
 	} else {
 		return err
 	}

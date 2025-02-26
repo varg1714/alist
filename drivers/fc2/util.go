@@ -77,6 +77,7 @@ func (d *FC2) getFilms(urlFunc func(index int) string) ([]model.EmbyFileObj, err
 		return result, nil
 	}
 
+	utils.Log.Infof("以下影片首次扫描到需添加入库：%v", unCachedFilms)
 	var notExitedFilms []string
 	for _, id := range unCachedFilms {
 		_, err := d.addStar(id)
@@ -86,6 +87,7 @@ func (d *FC2) getFilms(urlFunc func(index int) string) ([]model.EmbyFileObj, err
 	}
 
 	if len(notExitedFilms) > 0 {
+		utils.Log.Infof("以下影片未获取到下载信息：%v", notExitedFilms)
 		err := db.CreateMissedFilms(notExitedFilms)
 		if err != nil {
 			utils.Log.Warnf("影片信息保存失败: %s", err.Error())

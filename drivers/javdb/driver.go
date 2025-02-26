@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/pikpak"
+	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -171,6 +172,12 @@ func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 		err := db.DeleteFilmsByUrl("javdb", "个人收藏", obj.GetID())
 		if err != nil {
 			utils.Log.Info("收藏影片删除失败", err)
+			return err
+		}
+
+		err = virtual_file.DeleteImageAndNfo("javdb", "个人收藏", obj.GetName())
+		if err != nil {
+			utils.Log.Info("影片附件删除失败", err)
 			return err
 		}
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/pikpak"
+	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -161,8 +162,26 @@ func (d *FC2) Remove(ctx context.Context, obj model.Obj) error {
 
 		return db.DeleteFilmsByActor("fc2", obj.GetName())
 	} else {
-		_ = db.DeleteCacheByCode(obj.GetName())
-		return db.DeleteFilmsByUrl("fc2", "个人收藏", obj.GetID())
+		err := db.DeleteCacheByCode(obj.GetName())
+		if err != nil {
+			utils.Log.Warnf("影片缓存信息删除失败：%s", err.Error())
+		}
+		err = virtual_file.DeleteImageAndNfo("fc2", "个人收藏", obj.GetName())
+		if err != nil {
+			utils.Log.Warnf("影片附件信息删除失败：%s", err.Error())
+		}
+
+		err = db.CreateMissedFilms([]string{db.GetFilmCode(obj.GetName())})
+		if err != nil {
+			utils.Log.Warnf("影片黑名单信息失败：%s", err.Error())
+		}
+
+		err = db.DeleteFilmsByPrefixUrl("fc2", "个人收藏", obj.GetID())
+		if err != nil {
+			utils.Log.Warnf("影片删除失败：%s", err.Error())
+		}
+
+		return err
 	}
 
 }

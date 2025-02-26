@@ -78,6 +78,15 @@ func DeleteFilmsByUrl(source, actor, url string) error {
 
 }
 
+func DeleteFilmsByPrefixUrl(source, actor, url string) error {
+
+	return errors.WithStack(db.Where("source = ?", source).
+		Where("actor = ?", actor).
+		Where("url like ?", fmt.Sprintf("%s%%", GetFilmCode(url))).
+		Delete(&model.Film{}).Error)
+
+}
+
 func QueryFileCacheByName(name string) model.MagnetCache {
 
 	fileCache := model.MagnetCache{
@@ -92,7 +101,7 @@ func QueryFileCacheByName(name string) model.MagnetCache {
 
 func QueryFileCacheByCode(code string) model.MagnetCache {
 
-	code = getFilmCode(code)
+	code = GetFilmCode(code)
 
 	fileCache := model.MagnetCache{
 		Code: code,
@@ -106,7 +115,7 @@ func QueryFileCacheByCode(code string) model.MagnetCache {
 
 func CreateCacheFile(magnet string, fileId string, name string) error {
 
-	code := getFilmCode(name)
+	code := GetFilmCode(name)
 
 	magnetCache := model.MagnetCache{
 		Magnet: magnet,
@@ -124,7 +133,7 @@ func CreateCacheFile(magnet string, fileId string, name string) error {
 
 }
 
-func getFilmCode(name string) string {
+func GetFilmCode(name string) string {
 	code := name
 	split := strings.Split(name, " ")
 	if len(split) >= 2 {
@@ -158,7 +167,7 @@ func UpdateCacheFile(magnet string, fileId string, name string) error {
 func DeleteCacheByCode(code string) error {
 
 	fileCache := model.MagnetCache{
-		Code: getFilmCode(code),
+		Code: GetFilmCode(code),
 	}
 
 	return errors.WithStack(db.Where(fileCache).Delete(&fileCache).Error)

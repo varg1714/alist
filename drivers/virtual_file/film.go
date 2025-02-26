@@ -167,12 +167,68 @@ func CacheImageAndNfo(source, dir, fileName, title, img string, actors []string)
 
 }
 
+func DeleteImageAndNfo(source, dir, fileName string) error {
+
+	sourceName := fileName[0:strings.LastIndex(fileName, ".")]
+
+	nameRegexp, _ := regexp.Compile("(.*?)(-cd\\d+)")
+
+	if nameRegexp.MatchString(sourceName) {
+
+		// 有多个文件
+		sourceName = nameRegexp.ReplaceAllString(sourceName, "$1")
+
+		filePath := filepath.Join(flags.DataDir, "emby", source, dir, fmt.Sprintf("%s-cd1.nfo", sourceName))
+		for i := 1; utils.Exists(filePath); {
+			err := os.Remove(filePath)
+			if err != nil {
+				return err
+			}
+			i++
+			filePath = filepath.Join(flags.DataDir, "emby", source, dir, fmt.Sprintf("%s-cd%d.nfo", sourceName, i))
+		}
+
+		filePath = filepath.Join(flags.DataDir, "emby", source, dir, fmt.Sprintf("%s-cd1.jpg", sourceName))
+		for i := 1; utils.Exists(filePath); {
+			err := os.Remove(filePath)
+			if err != nil {
+				return err
+			}
+			i++
+			filePath = filepath.Join(flags.DataDir, "emby", source, dir, fmt.Sprintf("%s-cd%d.jpg", sourceName, i))
+		}
+
+	} else {
+		// 删除nfo文件
+		filePath := filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo")
+		if utils.Exists(filePath) {
+			err := os.Remove(filePath)
+			if err != nil {
+				return err
+			}
+		}
+
+		// 删除img文件
+		filePath = filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".jpg")
+		if utils.Exists(filePath) {
+			err := os.Remove(filePath)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+
+}
+
 func CacheImage(source string, dir string, fileName string, img string, requestHeader map[string]string) int {
 	if img == "" {
 		return CreatedFailed
 	}
 
-	if utils.Exists(filepath.Join(flags.DataDir, "emby", source, dir, fileName)) {
+	filePath := filepath.Join(flags.DataDir, "emby", source, dir, fileName)
+	if utils.Exists(filePath) {
 		return Exist
 	}
 
@@ -188,7 +244,7 @@ func CacheImage(source string, dir string, fileName string, img string, requestH
 		return CreatedFailed
 	}
 
-	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", source, dir, fileName), imgResp.Body(), 0777)
+	err = os.WriteFile(filePath, imgResp.Body(), 0777)
 	if err != nil {
 		utils.Log.Info("图片缓存失败", err)
 		return CreatedFailed
@@ -205,7 +261,8 @@ func cacheActorNfo(dir, fileName, title string, actors []string, source string) 
 
 	sourceName := fileName[0:strings.LastIndex(fileName, ".")]
 
-	if utils.Exists(filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo")) {
+	filePath := filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo")
+	if utils.Exists(filePath) {
 		return Exist
 	}
 
@@ -233,7 +290,7 @@ func cacheActorNfo(dir, fileName, title string, actors []string, source string) 
 		utils.Log.Info("xml格式转换失败", err)
 		return CreatedFailed
 	}
-	err = os.WriteFile(filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo"), xml, 0777)
+	err = os.WriteFile(filePath, xml, 0777)
 	if err != nil {
 		utils.Log.Infof("文件:%s的xml缓存失败:%v", fileName, err)
 	}

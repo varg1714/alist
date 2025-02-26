@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/net"
@@ -23,20 +24,26 @@ func Proxy(w http.ResponseWriter, r *http.Request, link *model.Link, file model.
 		if contentType != "" {
 			w.Header().Set("Content-Type", contentType)
 		}
-		http.ServeContent(w, r, file.GetName(), file.ModTime(), link.MFile)
+		mFile := link.MFile
+		if _, ok := mFile.(*os.File); !ok {
+			mFile = &stream.RateLimitFile{
+				File:    mFile,
+				Limiter: stream.ServerDownloadLimit,
+				Ctx:     r.Context(),
+			}
+		}
+		http.ServeContent(w, r, file.GetName(), file.ModTime(), mFile)
 		return nil
 	} else if link.RangeReadCloser != nil {
 		attachFileName(w, file)
-		net.ServeHTTP(w, r, file.GetName(), file.ModTime(), file.GetSize(), link.RangeReadCloser.RangeRead)
-		defer func() {
-			_ = link.RangeReadCloser.Close()
-		}()
+		net.ServeHTTP(w, r, file.GetName(), file.ModTime(), file.GetSize(), &stream.RateLimitRangeReadCloser{
+			RangeReadCloserIF: link.RangeReadCloser,
+			Limiter:           stream.ServerDownloadLimit,
+		})
 		return nil
 	} else if link.Concurrency != 0 || link.PartSize != 0 {
 		attachFileName(w, file)
 		size := file.GetSize()
-		//var finalClosers model.Closers
-		finalClosers := utils.EmptyClosers()
 		header := net.ProcessHeader(r.Header, link.Header)
 		rangeReader := func(ctx context.Context, httpRange http_range.Range) (io.ReadCloser, error) {
 			down := net.NewDownloader(func(d *net.Downloader) {
@@ -50,16 +57,17 @@ func Proxy(w http.ResponseWriter, r *http.Request, link *model.Link, file model.
 				HeaderRef: header,
 			}
 			rc, err := down.Download(ctx, req)
-			finalClosers.Add(rc)
 			return rc, err
 		}
-		net.ServeHTTP(w, r, file.GetName(), file.ModTime(), file.GetSize(), rangeReader)
-		defer finalClosers.Close()
+		net.ServeHTTP(w, r, file.GetName(), file.ModTime(), file.GetSize(), &stream.RateLimitRangeReadCloser{
+			RangeReadCloserIF: &model.RangeReadCloser{RangeReader: rangeReader},
+			Limiter:           stream.ServerDownloadLimit,
+		})
 		return nil
 	} else {
 		//transparent proxy
 		header := net.ProcessHeader(r.Header, link.Header)
-		res, err := net.RequestHttp(context.Background(), r.Method, header, link.URL)
+		res, err := net.RequestHttp(r.Context(), r.Method, header, link.URL)
 		if err != nil {
 			return err
 		}
@@ -72,7 +80,11 @@ func Proxy(w http.ResponseWriter, r *http.Request, link *model.Link, file model.
 		if r.Method == http.MethodHead {
 			return nil
 		}
-		_, err = io.Copy(w, res.Body)
+		_, err = utils.CopyWithBuffer(w, &stream.RateLimitReader{
+			Reader:  res.Body,
+			Limiter: stream.ServerDownloadLimit,
+			Ctx:     r.Context(),
+		})
 		if err != nil {
 			return err
 		}

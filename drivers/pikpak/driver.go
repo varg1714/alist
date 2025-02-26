@@ -32,7 +32,6 @@ type PikPak struct {
 	*Common
 	RefreshToken string
 	AccessToken  string
-	oauth2Token  oauth2.TokenSource
 }
 
 func (d *PikPak) Config() driver.Config {
@@ -92,41 +91,16 @@ func (d *PikPak) Init(ctx context.Context) (err error) {
 		d.Addition.DeviceID = d.Common.DeviceID
 		op.MustSaveDriverStorage(d)
 	}
-	// 初始化 oauth2Config
-	oauth2Config := &oauth2.Config{
-		ClientID:     d.ClientID,
-		ClientSecret: d.ClientSecret,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:   "https://user.mypikpak.net/v1/auth/signin",
-			TokenURL:  "https://user.mypikpak.net/v1/auth/token",
-			AuthStyle: oauth2.AuthStyleInParams,
-		},
-	}
-
 	// 如果已经有RefreshToken，直接获取AccessToken
 	if d.Addition.RefreshToken != "" {
-		if d.RefreshTokenMethod == "oauth2" {
-			// 使用 oauth2 刷新令牌
-			// 初始化 oauth2Token
-			d.initializeOAuth2Token(ctx, oauth2Config, d.Addition.RefreshToken)
-			if err := d.refreshTokenByOAuth2(); err != nil {
-				return err
-			}
-		} else {
-			if err := d.refreshToken(d.Addition.RefreshToken); err != nil {
-				return err
-			}
-		}
-
-	} else {
-		// 如果没有填写RefreshToken，尝试登录 获取 refreshToken
-		if err := d.login(); err != nil {
+		if err = d.refreshToken(d.Addition.RefreshToken); err != nil {
 			return err
 		}
-		if d.RefreshTokenMethod == "oauth2" {
-			d.initializeOAuth2Token(ctx, oauth2Config, d.RefreshToken)
+	} else {
+		// 如果没有填写RefreshToken，尝试登录 获取 refreshToken
+		if err = d.login(); err != nil {
+			return err
 		}
-
 	}
 
 	// 获取CaptchaToken
@@ -297,10 +271,10 @@ func (d *PikPak) Put(ctx context.Context, dstDir model.Obj, stream model.FileStr
 	}
 
 	if stream.GetSize() <= 10*utils.MB { // 文件大小 小于10MB，改用普通模式上传
-		return d.UploadByOSS(&params, stream, up)
+		return d.UploadByOSS(ctx, &params, stream, up)
 	}
 	// 分片上传
-	return d.UploadByMultipart(&params, stream.GetSize(), stream, up)
+	return d.UploadByMultipart(ctx, &params, stream.GetSize(), stream, up)
 }
 
 func (d *PikPak) CloudDownload(ctx context.Context, parentDir string, downloadingFile model.Obj, magnetGetter func(obj model.Obj) (string, error)) ([]model.Obj, error) {

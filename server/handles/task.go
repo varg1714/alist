@@ -4,6 +4,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/task"
 	"math"
+	"time"
 
 	"github.com/alist-org/alist/v3/internal/fs"
 	"github.com/alist-org/alist/v3/internal/offline_download/tool"
@@ -21,10 +22,13 @@ type TaskInfo struct {
 	State       tache.State `json:"state"`
 	Status      string      `json:"status"`
 	Progress    float64     `json:"progress"`
+	StartTime   *time.Time  `json:"start_time"`
+	EndTime     *time.Time  `json:"end_time"`
+	TotalBytes  int64       `json:"total_bytes"`
 	Error       string      `json:"error"`
 }
 
-func getTaskInfo[T task.TaskInfoWithCreator](task T) TaskInfo {
+func getTaskInfo[T task.TaskExtensionInfo](task T) TaskInfo {
 	errMsg := ""
 	if task.GetErr() != nil {
 		errMsg = task.GetErr().Error()
@@ -48,11 +52,14 @@ func getTaskInfo[T task.TaskInfoWithCreator](task T) TaskInfo {
 		State:       task.GetState(),
 		Status:      task.GetStatus(),
 		Progress:    progress,
+		StartTime:   task.GetStartTime(),
+		EndTime:     task.GetEndTime(),
+		TotalBytes:  task.GetTotalBytes(),
 		Error:       errMsg,
 	}
 }
 
-func getTaskInfos[T task.TaskInfoWithCreator](tasks []T) []TaskInfo {
+func getTaskInfos[T task.TaskExtensionInfo](tasks []T) []TaskInfo {
 	return utils.MustSliceConvert(tasks, getTaskInfo[T])
 }
 
@@ -68,7 +75,7 @@ func getUserInfo(c *gin.Context) (bool, uint, bool) {
 	}
 }
 
-func getTargetedHandler[T task.TaskInfoWithCreator](manager *tache.Manager[T], callback func(c *gin.Context, task T)) gin.HandlerFunc {
+func getTargetedHandler[T task.TaskExtensionInfo](manager task.Manager[T], callback func(c *gin.Context, task T)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		isAdmin, uid, ok := getUserInfo(c)
 		if !ok {
@@ -90,7 +97,32 @@ func getTargetedHandler[T task.TaskInfoWithCreator](manager *tache.Manager[T], c
 	}
 }
 
-func taskRoute[T task.TaskInfoWithCreator](g *gin.RouterGroup, manager *tache.Manager[T]) {
+func getBatchHandler[T task.TaskExtensionInfo](manager task.Manager[T], callback func(task T)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		isAdmin, uid, ok := getUserInfo(c)
+		if !ok {
+			common.ErrorStrResp(c, "user invalid", 401)
+			return
+		}
+		var tids []string
+		if err := c.ShouldBind(&tids); err != nil {
+			common.ErrorStrResp(c, "invalid request format", 400)
+			return
+		}
+		retErrs := make(map[string]string)
+		for _, tid := range tids {
+			t, ok := manager.GetByID(tid)
+			if !ok || (!isAdmin && uid != t.GetCreator().ID) {
+				retErrs[tid] = "task not found"
+				continue
+			}
+			callback(t)
+		}
+		common.SuccessResp(c, retErrs)
+	}
+}
+
+func taskRoute[T task.TaskExtensionInfo](g *gin.RouterGroup, manager task.Manager[T]) {
 	g.GET("/undone", func(c *gin.Context) {
 		isAdmin, uid, ok := getUserInfo(c)
 		if !ok {
@@ -131,6 +163,15 @@ func taskRoute[T task.TaskInfoWithCreator](g *gin.RouterGroup, manager *tache.Ma
 	g.POST("/retry", getTargetedHandler(manager, func(c *gin.Context, task T) {
 		manager.Retry(task.GetID())
 		common.SuccessResp(c)
+	}))
+	g.POST("/cancel_some", getBatchHandler(manager, func(task T) {
+		manager.Cancel(task.GetID())
+	}))
+	g.POST("/delete_some", getBatchHandler(manager, func(task T) {
+		manager.Remove(task.GetID())
+	}))
+	g.POST("/retry_some", getBatchHandler(manager, func(task T) {
+		manager.Retry(task.GetID())
 	}))
 	g.POST("/clear_done", func(c *gin.Context) {
 		isAdmin, uid, ok := getUserInfo(c)
@@ -179,4 +220,6 @@ func SetupTaskRoute(g *gin.RouterGroup) {
 	taskRoute(g.Group("/copy"), fs.CopyTaskManager)
 	taskRoute(g.Group("/offline_download"), tool.DownloadTaskManager)
 	taskRoute(g.Group("/offline_download_transfer"), tool.TransferTaskManager)
+	taskRoute(g.Group("/decompress"), fs.ArchiveDownloadTaskManager)
+	taskRoute(g.Group("/decompress_upload"), fs.ArchiveContentUploadTaskManager)
 }

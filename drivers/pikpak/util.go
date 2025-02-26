@@ -14,20 +14,18 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
-	"golang.org/x/oauth2"
 	"io"
 	"net/http"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/go-resty/resty/v2"
 )
-
-// do others that not defined in Driver interface
 
 var AndroidAlgorithms = []string{
 	"7xOq4Z8s",
@@ -171,30 +169,6 @@ func (d *PikPak) refreshToken(refreshToken string) error {
 	return nil
 }
 
-func (d *PikPak) initializeOAuth2Token(ctx context.Context, oauth2Config *oauth2.Config, refreshToken string) {
-	d.oauth2Token = oauth2.ReuseTokenSource(nil, utils.TokenSource(func() (*oauth2.Token, error) {
-		return oauth2Config.TokenSource(ctx, &oauth2.Token{
-			RefreshToken: refreshToken,
-		}).Token()
-	}))
-}
-
-func (d *PikPak) refreshTokenByOAuth2() error {
-	token, err := d.oauth2Token.Token()
-	if err != nil {
-		return err
-	}
-	d.Status = "work"
-	d.RefreshToken = token.RefreshToken
-	d.AccessToken = token.AccessToken
-	// 获取用户ID
-	userID := token.Extra("sub").(string)
-	d.Common.SetUserID(userID)
-	d.Addition.RefreshToken = d.RefreshToken
-	op.MustSaveDriverStorage(d)
-	return nil
-}
-
 func (d *PikPak) request(url string, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
 	req := base.RestyClient.R()
 	req.SetHeaders(map[string]string{
@@ -203,14 +177,7 @@ func (d *PikPak) request(url string, method string, callback base.ReqCallback, r
 		"X-Device-ID":     d.GetDeviceID(),
 		"X-Captcha-Token": d.GetCaptchaToken(),
 	})
-	if d.RefreshTokenMethod == "oauth2" && d.oauth2Token != nil {
-		// 使用oauth2 获取 access_token
-		token, err := d.oauth2Token.Token()
-		if err != nil {
-			return nil, err
-		}
-		req.SetAuthScheme(token.TokenType).SetAuthToken(token.AccessToken)
-	} else if d.AccessToken != "" {
+	if d.AccessToken != "" {
 		req.SetHeader("Authorization", "Bearer "+d.AccessToken)
 	}
 
@@ -232,16 +199,9 @@ func (d *PikPak) request(url string, method string, callback base.ReqCallback, r
 		return res.Body(), nil
 	case 4122, 4121, 16:
 		// access_token 过期
-		if d.RefreshTokenMethod == "oauth2" {
-			if err1 := d.refreshTokenByOAuth2(); err1 != nil {
-				return nil, err1
-			}
-		} else {
-			if err1 := d.refreshToken(d.RefreshToken); err1 != nil {
-				return nil, err1
-			}
+		if err1 := d.refreshToken(d.RefreshToken); err1 != nil {
+			return nil, err1
 		}
-
 		return d.request(url, method, callback, resp)
 	case 9: // 验证码token过期
 		if err = d.RefreshCaptchaTokenAtLogin(GetAction(method, url), d.GetUserID()); err != nil {
@@ -492,7 +452,7 @@ func (d *PikPak) refreshCaptchaToken(action string, metas map[string]string) err
 	return nil
 }
 
-func (d *PikPak) UploadByOSS(params *S3Params, stream model.FileStreamer, up driver.UpdateProgress) error {
+func (d *PikPak) UploadByOSS(ctx context.Context, params *S3Params, s model.FileStreamer, up driver.UpdateProgress) error {
 	ossClient, err := oss.New(params.Endpoint, params.AccessKeyID, params.AccessKeySecret)
 	if err != nil {
 		return err
@@ -502,14 +462,17 @@ func (d *PikPak) UploadByOSS(params *S3Params, stream model.FileStreamer, up dri
 		return err
 	}
 
-	err = bucket.PutObject(params.Key, stream, OssOption(params)...)
+	err = bucket.PutObject(params.Key, driver.NewLimitedUploadStream(ctx, &driver.ReaderUpdatingProgress{
+		Reader:         s,
+		UpdateProgress: up,
+	}), OssOption(params)...)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (d *PikPak) UploadByMultipart(params *S3Params, fileSize int64, stream model.FileStreamer, up driver.UpdateProgress) error {
+func (d *PikPak) UploadByMultipart(ctx context.Context, params *S3Params, fileSize int64, s model.FileStreamer, up driver.UpdateProgress) error {
 	var (
 		chunks    []oss.FileChunk
 		parts     []oss.UploadPart
@@ -519,7 +482,7 @@ func (d *PikPak) UploadByMultipart(params *S3Params, fileSize int64, stream mode
 		err       error
 	)
 
-	tmpF, err := stream.CacheFullInTempFile()
+	tmpF, err := s.CacheFullInTempFile()
 	if err != nil {
 		return err
 	}
@@ -563,6 +526,7 @@ func (d *PikPak) UploadByMultipart(params *S3Params, fileSize int64, stream mode
 		quit <- struct{}{}
 	}()
 
+	completedNum := atomic.Int32{}
 	// consumers
 	for i := 0; i < ThreadsNum; i++ {
 		go func(threadId int) {
@@ -575,6 +539,8 @@ func (d *PikPak) UploadByMultipart(params *S3Params, fileSize int64, stream mode
 				var part oss.UploadPart // 出现错误就继续尝试，共尝试3次
 				for retry := 0; retry < 3; retry++ {
 					select {
+					case <-ctx.Done():
+						break
 					case <-ticker.C:
 						errCh <- errors.Wrap(err, "ossToken 过期")
 					default:
@@ -585,13 +551,16 @@ func (d *PikPak) UploadByMultipart(params *S3Params, fileSize int64, stream mode
 						continue
 					}
 
-					b := bytes.NewBuffer(buf)
+					b := driver.NewLimitedUploadStream(ctx, bytes.NewBuffer(buf))
 					if part, err = bucket.UploadPart(imur, b, chunk.Size, chunk.Number, OssOption(params)...); err == nil {
 						break
 					}
 				}
 				if err != nil {
-					errCh <- errors.Wrap(err, fmt.Sprintf("上传 %s 的第%d个分片时出现错误：%v", stream.GetName(), chunk.Number, err))
+					errCh <- errors.Wrap(err, fmt.Sprintf("上传 %s 的第%d个分片时出现错误：%v", s.GetName(), chunk.Number, err))
+				} else {
+					num := completedNum.Add(1)
+					up(float64(num) * 100.0 / float64(len(chunks)))
 				}
 				UploadedPartsCh <- part
 			}
@@ -622,7 +591,7 @@ LOOP:
 	// EOF错误是xml的Unmarshal导致的，响应其实是json格式，所以实际上上传是成功的
 	if _, err = bucket.CompleteMultipartUpload(imur, parts, OssOption(params)...); err != nil && !errors.Is(err, io.EOF) {
 		// 当文件名含有 &< 这两个字符之一时响应的xml解析会出现错误，实际上上传是成功的
-		if filename := filepath.Base(stream.GetName()); !strings.ContainsAny(filename, "&<") {
+		if filename := filepath.Base(s.GetName()); !strings.ContainsAny(filename, "&<") {
 			return err
 		}
 	}

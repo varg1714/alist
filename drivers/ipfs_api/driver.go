@@ -108,9 +108,12 @@ func (d *IPFS) Remove(ctx context.Context, obj model.Obj) error {
 	return d.sh.FilesRm(ctx, obj.GetPath(), true)
 }
 
-func (d *IPFS) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {
+func (d *IPFS) Put(ctx context.Context, dstDir model.Obj, s model.FileStreamer, up driver.UpdateProgress) error {
 	// TODO upload file, optional
-	_, err := d.sh.Add(stream, ToFiles(stdpath.Join(dstDir.GetPath(), stream.GetName())))
+	_, err := d.sh.Add(driver.NewLimitedUploadStream(ctx, &driver.ReaderUpdatingProgress{
+		Reader:         s,
+		UpdateProgress: up,
+	}), ToFiles(stdpath.Join(dstDir.GetPath(), s.GetName())))
 	return err
 }
 

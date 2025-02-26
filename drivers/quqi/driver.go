@@ -3,6 +3,7 @@ package quqi
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"strconv"
 	"strings"
@@ -385,20 +386,34 @@ func (d *Quqi) Put(ctx context.Context, dstDir model.Obj, stream model.FileStrea
 	}
 	uploader := s3manager.NewUploader(s)
 	buf := make([]byte, 1024*1024*2)
+	fup := &driver.ReaderUpdatingProgress{
+		Reader: &driver.SimpleReaderWithSize{
+			Reader: f,
+			Size:   int64(len(buf)),
+		},
+		UpdateProgress: up,
+	}
 	for partNumber := int64(1); ; partNumber++ {
-		n, err := io.ReadFull(f, buf)
-		if err != nil && err != io.ErrUnexpectedEOF {
+		n, err := io.ReadFull(fup, buf)
+		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
 			if err == io.EOF {
 				break
 			}
 			return nil, err
 		}
+		reader := bytes.NewReader(buf[:n])
 		_, err = uploader.S3.UploadPartWithContext(ctx, &s3.UploadPartInput{
 			UploadId:   &uploadInitResp.Data.UploadID,
 			Key:        &uploadInitResp.Data.Key,
 			Bucket:     &uploadInitResp.Data.Bucket,
 			PartNumber: aws.Int64(partNumber),
-			Body:       bytes.NewReader(buf[:n]),
+			Body: struct {
+				*driver.RateLimitReader
+				io.Seeker
+			}{
+				RateLimitReader: driver.NewLimitedUploadStream(ctx, reader),
+				Seeker:          reader,
+			},
 		})
 		if err != nil {
 			return nil, err

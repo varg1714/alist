@@ -127,7 +127,7 @@ func (d *Onedrive) Request(url string, method string, callback base.ReqCallback,
 
 func (d *Onedrive) getFiles(path string) ([]File, error) {
 	var res []File
-	nextLink := d.GetMetaUrl(false, path) + "/children?$top=5000&$expand=thumbnails($select=medium)&$select=id,name,size,fileSystemInfo,content.downloadUrl,file,parentReference"
+	nextLink := d.GetMetaUrl(false, path) + "/children?$top=1000&$expand=thumbnails($select=medium)&$select=id,name,size,fileSystemInfo,content.downloadUrl,file,parentReference"
 	for nextLink != "" {
 		var files Files
 		_, err := d.Request(nextLink, http.MethodGet, nil, &files)
@@ -152,12 +152,8 @@ func (d *Onedrive) upSmall(ctx context.Context, dstDir model.Obj, stream model.F
 	// 1. upload new file
 	// ApiDoc: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content?view=odsp-graph-online
 	url := d.GetMetaUrl(false, filepath) + "/content"
-	data, err := io.ReadAll(stream)
-	if err != nil {
-		return err
-	}
-	_, err = d.Request(url, http.MethodPut, func(req *resty.Request) {
-		req.SetBody(data).SetContext(ctx)
+	_, err := d.Request(url, http.MethodPut, func(req *resty.Request) {
+		req.SetBody(driver.NewLimitedUploadStream(ctx, stream)).SetContext(ctx)
 	}, nil)
 	if err != nil {
 		return fmt.Errorf("onedrive: Failed to upload new file(path=%v): %w", filepath, err)
@@ -225,7 +221,7 @@ func (d *Onedrive) upBig(ctx context.Context, dstDir model.Obj, stream model.Fil
 		if err != nil {
 			return err
 		}
-		req, err := http.NewRequest("PUT", uploadUrl, bytes.NewBuffer(byteData))
+		req, err := http.NewRequest("PUT", uploadUrl, driver.NewLimitedUploadStream(ctx, bytes.NewBuffer(byteData)))
 		if err != nil {
 			return err
 		}

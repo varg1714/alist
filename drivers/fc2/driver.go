@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/alist-org/alist/v3/drivers/pikpak"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/alist-org/alist/v3/internal/offline_download/tool"
 	"github.com/alist-org/alist/v3/pkg/cron"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"strconv"
@@ -128,27 +127,9 @@ func (d *FC2) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*m
 		}, nil
 	}
 
-	emptyFile := &model.Link{
-		URL: "",
-	}
-
-	storage := op.GetBalancedStorage(d.PikPakPath)
-	pikPak, ok := storage.(*pikpak.PikPak)
-	if !ok {
-		return emptyFile, nil
-	}
-
-	pikPakFile, err := pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, file, func(obj model.Obj) (string, error) {
+	return tool.CloudPlay(ctx, args, d.CloudPlayDriverType, d.CloudPlayDownloadPath, file, func(obj model.Obj) (string, error) {
 		return d.getMagnet(obj)
 	})
-
-	if err != nil || len(pikPakFile) == 0 {
-		return emptyFile, err
-	}
-
-	return pikPak.Link(ctx, &model.Object{
-		ID: pikPakFile[0].GetID(),
-	}, args)
 
 }
 

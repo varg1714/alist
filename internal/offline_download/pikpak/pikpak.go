@@ -124,6 +124,10 @@ func (p *PikPak) Status(task *tool.DownloadTask) (*tool.Status, error) {
 			s.Status = t.Message
 			s.Completed = (t.Phase == "PHASE_TYPE_COMPLETE")
 			s.TotalBytes, err = strconv.ParseInt(t.FileSize, 10, 64)
+			s.FileInfo = tool.FileInfo{
+				FileId: t.FileID,
+				Kind:   t.Kind,
+			}
 			if err != nil {
 				s.TotalBytes = 0
 			}

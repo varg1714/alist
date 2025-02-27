@@ -133,6 +133,24 @@ func CreateCacheFile(magnet string, fileId string, name string) error {
 
 }
 
+func CreateCacheFileWithOption(magnet string, fileId string, name string, option map[string]string) error {
+
+	code := GetFilmCode(name)
+	magnetCache := model.MagnetCache{
+		Magnet: magnet,
+		FileId: fileId,
+		Name:   name,
+		Code:   code,
+		Option: option,
+	}
+
+	err := DeleteCacheByName(name)
+	if err != nil {
+		return err
+	}
+	return errors.WithStack(db.Create(&magnetCache).Error)
+}
+
 func GetFilmCode(name string) string {
 	code := name
 	split := strings.Split(name, " ")
@@ -140,27 +158,18 @@ func GetFilmCode(name string) string {
 		code = split[0]
 	} else {
 		nameRegexp, _ := regexp.Compile("(.*?)(-cd\\d+)?.mp4")
-		code = nameRegexp.ReplaceAllString(name, "$1")
+		if nameRegexp.MatchString(name) {
+			code = nameRegexp.ReplaceAllString(name, "$1")
+		}
 	}
 	return code
 }
 
-func UpdateCacheFile(magnet string, fileId string, name string) error {
-
-	var code string
-	split := strings.Split(name, " ")
-	if len(split) >= 2 {
-		code = split[0]
-	}
-
-	magnetCache := model.MagnetCache{
-		Magnet: magnet,
-		FileId: fileId,
-		Name:   name,
-		Code:   code,
-	}
-
-	return errors.WithStack(db.Where("code = ?", code).Save(&magnetCache).Error)
+func ClearCachedFileId(magnet string, name string) error {
+	return errors.WithStack(db.Model(&model.MagnetCache{}).
+		Where("code = ?", GetFilmCode(name)).
+		Where("magnet = ?", magnet).
+		Update("file_id", "").Error)
 
 }
 

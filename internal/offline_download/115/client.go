@@ -125,6 +125,9 @@ func (p *Cloud115) Status(task *tool.DownloadTask) (*tool.Status, error) {
 			s.Status = t.GetStatus()
 			s.Completed = t.IsDone()
 			s.TotalBytes = t.Size
+			s.FileInfo = tool.FileInfo{
+				FileId: t.FileId,
+			}
 			if t.IsFailed() {
 				s.Err = fmt.Errorf(t.GetStatus())
 			}

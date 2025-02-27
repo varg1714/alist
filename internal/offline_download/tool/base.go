@@ -18,6 +18,12 @@ type Status struct {
 	Completed  bool
 	Status     string
 	Err        error
+	FileInfo   FileInfo
+}
+
+type FileInfo struct {
+	FileId string
+	Kind   string
 }
 
 type Tool interface {

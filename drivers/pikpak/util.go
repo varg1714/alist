@@ -204,10 +204,14 @@ func (d *PikPak) request(url string, method string, callback base.ReqCallback, r
 		}
 		return d.request(url, method, callback, resp)
 	case 9: // 验证码token过期
-		if err = d.RefreshCaptchaTokenAtLogin(GetAction(method, url), d.GetUserID()); err != nil {
-			return nil, err
+		if e.ErrorMsg != "file_in_recycle_bin" {
+			if err = d.RefreshCaptchaTokenAtLogin(GetAction(method, url), d.GetUserID()); err != nil {
+				return nil, err
+			}
+			return d.request(url, method, callback, resp)
+		} else {
+			return nil, errors.New(e.Error())
 		}
-		return d.request(url, method, callback, resp)
 	case 10: // 操作频繁
 		return nil, errors.New(e.ErrorDescription)
 	default:

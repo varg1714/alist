@@ -720,7 +720,7 @@ func (d *PikPak) OfflineList(ctx context.Context, nextPageToken string, phase []
 	params := map[string]string{
 		"type":           "offline",
 		"thumbnail_size": "SIZE_SMALL",
-		"limit":          "10000",
+		"limit":          "100",
 		"page_token":     nextPageToken,
 		"with":           "reference_resource",
 	}

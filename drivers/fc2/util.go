@@ -22,12 +22,7 @@ var actorUrlsRegexp, _ = regexp.Compile(".*/article_search.php\\?id=(.*)")
 
 func (d *FC2) findMagnet(url string) (string, error) {
 
-	res, err := base.RestyClient.R().
-		SetBody(base.Json{
-			"url":        url,
-			"httpMethod": "GET",
-		}).Post(d.Addition.SpiderServer)
-
+	res, err := base.RestyClient.R().Get(url)
 	if err != nil {
 		return "", err
 	}

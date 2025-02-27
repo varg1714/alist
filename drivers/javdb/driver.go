@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/alist-org/alist/v3/drivers/pikpak"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/alist-org/alist/v3/internal/offline_download/tool"
 	"github.com/alist-org/alist/v3/pkg/cron"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/emirpasic/gods/v2/maps/linkedhashmap"
@@ -136,26 +135,9 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 		}, nil
 	}
 
-	emptyFile := &model.Link{
-		URL: "",
-	}
-	storage := op.GetBalancedStorage(d.PikPakPath)
-	pikPak, ok := storage.(*pikpak.PikPak)
-	if !ok {
-		return emptyFile, nil
-	}
-
-	pikPakFile, err := pikPak.CloudDownload(ctx, d.PikPakCacheDirectory, file, func(obj model.Obj) (string, error) {
+	return tool.CloudPlay(ctx, args, d.CloudPlayDriverType, d.CloudPlayDownloadPath, file, func(obj model.Obj) (string, error) {
 		return d.getMagnet(obj)
 	})
-	if err != nil || len(pikPakFile) == 0 {
-		return emptyFile, err
-	}
-
-	return pikPak.Link(ctx, &model.Object{
-		ID: pikPakFile[0].GetID(),
-	}, args)
-
 }
 
 func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
@@ -169,7 +151,12 @@ func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 		return db.DeleteFilmsByActor("javdb", obj.GetName())
 	} else {
 
-		err := db.DeleteFilmsByUrl("javdb", "个人收藏", obj.GetID())
+		err := db.DeleteCacheByCode(obj.GetName())
+		if err != nil {
+			utils.Log.Warnf("影片缓存信息删除失败：%s", err.Error())
+		}
+
+		err = db.DeleteFilmsByUrl("javdb", "个人收藏", obj.GetID())
 		if err != nil {
 			utils.Log.Info("收藏影片删除失败", err)
 			return err
@@ -181,30 +168,6 @@ func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 			return err
 		}
 
-		cache := db.QueryFileCacheByName(obj.GetName())
-		if cache.FileId != "" {
-			go func() {
-				storage := op.GetBalancedStorage(d.PikPakPath)
-				pikPak, ok := storage.(*pikpak.PikPak)
-				// 1. 删除pikpak文件
-				if ok {
-					err := pikPak.Remove(ctx, &model.Object{
-						ID: cache.FileId,
-					})
-					if err != nil {
-						utils.Log.Infof("删除pikpak文件:[%s]失败，失败原因:%v", cache.FileId, err)
-					} else {
-						utils.Log.Infof("pikpak文件:[%s]删除完成", cache.Name)
-					}
-				}
-
-				// 2. 删除缓存文件
-				err = db.DeleteCacheFile(cache.FileId)
-				if err != nil {
-					utils.Log.Info("缓存文件删除失败", err)
-				}
-			}()
-		}
 	}
 
 	return nil

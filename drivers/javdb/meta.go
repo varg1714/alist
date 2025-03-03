@@ -17,8 +17,8 @@ type Addition struct {
 	OpenAiApiKey          string `json:"open_ai_api_key" required:"true"`
 	TranslatePromote      string `json:"translate_promote" required:"true"`
 	QuickCache            bool   `json:"quick_cache" required:"true"`
-	CloudPlayDriverType   string `json:"cloud_play_driver_type" required:"true"`
-	CloudPlayDownloadPath string `json:"cloud_play_download_path" required:"true"`
+	CloudPlayDriverType   string `json:"cloud_play_driver_type" required:"true" default:"PikPak" type:"select" options:"PikPak,115 Cloud"`
+	CloudPlayDownloadPath string `json:"cloud_play_download_path" required:"false" help:"If empty then use global setting."`
 }
 
 var config = driver.Config{

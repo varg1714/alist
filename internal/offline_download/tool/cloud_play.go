@@ -7,10 +7,12 @@ import (
 	"fmt"
 	driver2 "github.com/SheltonZhu/115driver/pkg/driver"
 	_115 "github.com/alist-org/alist/v3/drivers/115"
+	"github.com/alist-org/alist/v3/internal/conf"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/alist-org/alist/v3/internal/setting"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"math"
 	"regexp"
@@ -20,6 +22,19 @@ import (
 )
 
 func CloudPlay(ctx context.Context, args model.LinkArgs, driverType, driverPath string, downloadingFile model.Obj, magnetGetter func(obj model.Obj) (string, error)) (*model.Link, error) {
+
+	if driverPath == "" {
+		switch driverType {
+		case "115 Cloud":
+			driverPath = setting.GetStr(conf.Pan115TempDir)
+		case "PikPak":
+			driverPath = setting.GetStr(conf.PikPakTempDir)
+		}
+	}
+
+	if driverPath == "" {
+		return nil, errors.New("尚未配置用于云播的网盘")
+	}
 
 	storage := op.GetBalancedStorage(driverPath)
 	if storage == nil {
@@ -48,7 +63,7 @@ func CloudPlay(ctx context.Context, args model.LinkArgs, driverType, driverPath 
 	if err != nil {
 		utils.Log.Info("磁力链接获取失败", err)
 	}
-	utils.Log.Infof("获取:%s的磁力链接结果为:[%s]耗时:[%d]", downloadingFile.GetName(), magnet, time.Now().UnixMilli()-start)
+	utils.Log.Infof("获取:[%s]的磁力链接结果为:[%s]耗时:[%d]", downloadingFile.GetName(), magnet, time.Now().UnixMilli()-start)
 
 	// 3. 下载文件
 	status, _, err := downloadMagnet(ctx, driverType, driverPath, magnet, fileName)
@@ -72,7 +87,7 @@ func CloudPlay(ctx context.Context, args model.LinkArgs, driverType, driverPath 
 			downloadedFile.ID = status.FileInfo.FileId
 			err1 := db.CreateCacheFile(magnet, status.FileInfo.FileId, fileName)
 			if err1 != nil {
-				utils.Log.Info("文件缓存失败:%s", err1.Error())
+				utils.Log.Infof("文件缓存失败:%s", err1.Error())
 			}
 			return storage.Link(ctx, downloadedFile, args)
 		} else {
@@ -121,25 +136,36 @@ func downloadMagnet(ctx context.Context, driverType string, driverPath string, m
 		if err != nil {
 			return nil, nil, err
 		}
+
+		utils.Log.Infof("当前任务下载进度：%f", func() float64 {
+			if status == nil {
+				return 0.0
+			} else {
+				return status.Progress
+			}
+		}())
+
 		if status == nil || !(status.Completed || math.Dim(100.0, status.Progress) <= 0.01) {
-			utils.Log.Infof("当前任务下载进度：%f", func() float64 {
-				if status == nil {
-					return 0.0
-				} else {
-					return status.Progress
-				}
-			}())
 			i++
 			time.Sleep(2 * time.Second)
 			status, err = downloadTask.tool.Status(downloadTask)
 		} else {
 			completed = true
 		}
+
 	}
 
 	if status == nil || !completed {
 		return nil, nil, errors.New("文件仍未下载完成")
 	}
+
+	go func() {
+		err2 := downloadTask.tool.Remove(downloadTask)
+		if err2 != nil {
+			utils.Log.Warnf("离线任务记录删除失败：%s", err2.Error())
+		}
+	}()
+
 	return status, downloadTask, nil
 
 }

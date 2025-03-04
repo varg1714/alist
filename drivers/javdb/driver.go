@@ -156,13 +156,13 @@ func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 			utils.Log.Warnf("影片缓存信息删除失败：%s", err.Error())
 		}
 
-		err = db.DeleteFilmsByUrl("javdb", "个人收藏", obj.GetID())
+		err = db.DeleteFilmsByUrl("javdb", obj.GetPath(), obj.GetID())
 		if err != nil {
 			utils.Log.Info("收藏影片删除失败", err)
 			return err
 		}
 
-		err = virtual_file.DeleteImageAndNfo("javdb", "个人收藏", obj.GetName())
+		err = virtual_file.DeleteImageAndNfo("javdb", obj.GetPath(), obj.GetName())
 		if err != nil {
 			utils.Log.Info("影片附件删除失败", err)
 			return err

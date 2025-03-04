@@ -313,7 +313,7 @@ func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data
 	})
 
 	collector.OnHTML(".col-2.d-flex.align-items-center.px-4.page-input", func(element *colly.HTMLElement) {
-		page := element.ChildAttr("input", "max")
+		page := element.ChildAttr(".form-control", "max")
 		pageNum, _ := strconv.Atoi(page)
 		if page != "" && index < pageNum {
 			nextPage = true
@@ -398,6 +398,7 @@ func (d *Javdb) getAiravNamingAddr(film model.EmbyFileObj) (string, model.EmbyFi
 
 	actorUrl := ""
 	actorPageUrl := ""
+	var matchedFilm model.EmbyFileObj
 
 	code := splitCode(film.Name)
 
@@ -408,12 +409,17 @@ func (d *Javdb) getAiravNamingAddr(film model.EmbyFileObj) (string, model.EmbyFi
 		utils.Log.Info("airav页面爬取错误", err)
 		return actorPageUrl, model.EmbyFileObj{}
 	}
-	if len(searchResult) > 0 && splitCode(searchResult[0].Name) == code {
-		actorUrl = searchResult[0].ID
-		if actorUrl == "" {
-			return actorPageUrl, searchResult[0]
+
+	for _, item := range searchResult {
+		if splitCode(item.Name) == code {
+			actorUrl = item.ID
+			matchedFilm = item
+			if actorUrl == "" {
+				return actorPageUrl, item
+			}
 		}
 	}
+
 	if actorUrl == "" {
 		return actorPageUrl, model.EmbyFileObj{}
 	}
@@ -445,13 +451,15 @@ func (d *Javdb) getAiravNamingAddr(film model.EmbyFileObj) (string, model.EmbyFi
 		utils.Log.Info("演员主页爬取失败", err)
 	}
 
-	return actorPageUrl, searchResult[0]
+	return actorPageUrl, matchedFilm
 
 }
 
 func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (map[string]string, error) {
 
 	nameCache := make(map[string]string)
+	actorCache := make(map[string]bool)
+
 	var savingNamingMapping []model.EmbyFileObj
 
 	// 1. 获取库中已爬取结果
@@ -474,29 +482,38 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 			if searchResult.ID != "" {
 				// 2.2.1 有该作品信息
 				nameCache[splitCode(searchResult.Name)] = virtual_file.AppendFilmName(searchResult.Name)
-				if addr == "" {
+				if addr == "" || actorCache[addr] {
 					// 没有爬取到演员主页，直接记录该影片信息
 					savingNamingMapping = append(savingNamingMapping, searchResult)
 				}
 			}
 
-			if addr != "" {
+			if addr != "" && !actorCache[addr] {
 				// 2.2.2 爬取该主演所有作品
-				namingFilms, err := virtual_file.GetFilmsWitchStorage("airav", dirName, addr, func(index int) string {
+				namingFilms, err := virtual_file.GetFilms("airav", dirName, func(index int) string {
 					return addr + strconv.Itoa(index)
 				},
 					func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 						return d.getAiravPageInfo(urlFunc, index, data)
-					}, virtual_file.Option{CacheFile: false, MaxPageNum: 40})
+					})
 
 				if err != nil {
 					utils.Log.Info("airav影片列表爬取失败", err)
 				}
 				for nameFileIndex := range namingFilms {
-					nameCache[splitCode(namingFilms[nameFileIndex].Name)] = namingFilms[nameFileIndex].Name
+					tempName := namingFilms[nameFileIndex].Name
+					tempCode := splitCode(tempName)
+					if nameCache[tempCode] == "" {
+						nameCache[tempCode] = tempName
+						savingNamingMapping = append(savingNamingMapping, namingFilms[nameFileIndex])
+					}
 				}
 
-			} else if addr == "" && searchResult.ID == "" {
+				actorCache[addr] = true
+
+			}
+
+			if nameCache[code] == "" {
 
 				// 2.2.3 AI翻译
 				translatedText := d.GptTranslate(name)
@@ -510,6 +527,11 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 						Title: translatedText})
 				} else {
 					nameCache[code] = films[index].Name
+					savingNamingMapping = append(savingNamingMapping, model.EmbyFileObj{
+						ObjThumb: model.ObjThumb{
+							Object: model.Object{Name: films[index].Name},
+						},
+						Title: films[index].Name})
 				}
 
 			}

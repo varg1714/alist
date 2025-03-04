@@ -22,7 +22,7 @@ import (
 func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]model.EmbyFileObj, error) {
 
 	// 1. 获取所有影片
-	javFilms, err := virtual_file.GetFilmsWitchStorage("javdb", dirName, dirName, urlFunc,
+	javFilms, err := virtual_file.GetFilmsWithStorage("javdb", dirName, dirName, urlFunc,
 		func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 			return d.getJavPageInfo(urlFunc, index, data)
 		}, virtual_file.Option{CacheFile: false, MaxPageNum: 20})
@@ -479,23 +479,14 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 			// 2.2 首先爬取airav站点的
 			addr, searchResult := d.getAiravNamingAddr(films[index])
 
-			if searchResult.ID != "" {
-				// 2.2.1 有该作品信息
-				nameCache[splitCode(searchResult.Name)] = virtual_file.AppendFilmName(searchResult.Name)
-				if addr == "" || actorCache[addr] {
-					// 没有爬取到演员主页，直接记录该影片信息
-					savingNamingMapping = append(savingNamingMapping, searchResult)
-				}
-			}
-
 			if addr != "" && !actorCache[addr] {
-				// 2.2.2 爬取该主演所有作品
-				namingFilms, err := virtual_file.GetFilms("airav", dirName, func(index int) string {
+				// 2.2.1 爬取该主演所有作品
+				namingFilms, err := virtual_file.GetFilmsWithStorage("airav", dirName, addr, func(index int) string {
 					return addr + strconv.Itoa(index)
 				},
 					func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 						return d.getAiravPageInfo(urlFunc, index, data)
-					})
+					}, virtual_file.Option{CacheFile: false, MaxPageNum: 40})
 
 				if err != nil {
 					utils.Log.Info("airav影片列表爬取失败", err)
@@ -511,6 +502,15 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 
 				actorCache[addr] = true
 
+			}
+
+			if nameCache[code] == "" && searchResult.ID != "" {
+				// 2.2.2 有该作品信息
+				nameCache[splitCode(searchResult.Name)] = virtual_file.AppendFilmName(searchResult.Name)
+				if addr == "" || actorCache[addr] {
+					// 没有爬取到演员主页，直接记录该影片信息
+					savingNamingMapping = append(savingNamingMapping, searchResult)
+				}
 			}
 
 			if nameCache[code] == "" {

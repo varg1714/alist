@@ -38,7 +38,7 @@ func GetFilms(source, dirName string, urlFunc func(index int) string, pageFunc f
 
 }
 
-func GetFilmsWitchStorage(source, dirName, actorId string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error), option Option) ([]model.EmbyFileObj, error) {
+func GetFilmsWithStorage(source, dirName, actorId string, urlFunc func(index int) string, pageFunc func(urlFunc func(index int) string, index int, preFilms []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error), option Option) ([]model.EmbyFileObj, error) {
 
 	results := make([]model.EmbyFileObj, 0)
 	films := make([]model.EmbyFileObj, 0)

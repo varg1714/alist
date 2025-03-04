@@ -179,6 +179,8 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 
 	var nextPage bool
 
+	filter := strings.Split(d.Addition.Filter, ",")
+
 	collector := colly.NewCollector(func(c *colly.Collector) {
 		c.SetRequestTimeout(time.Second * 10)
 		_ = c.SetCookies("https://javdb.com", setCookieRaw(d.Cookie))
@@ -193,8 +195,15 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 				return
 			}
 
-			href := element.ChildAttr("a", "href")
 			title := element.ChildText(".video-title")
+
+			for _, filterItem := range filter {
+				if filterItem != "" && strings.Contains(title, filterItem) {
+					return
+				}
+			}
+
+			href := element.ChildAttr("a", "href")
 			image := element.ChildAttr("img", "src")
 
 			parse, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))

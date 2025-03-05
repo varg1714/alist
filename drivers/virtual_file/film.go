@@ -1,6 +1,7 @@
 package virtual_file
 
 import (
+	"encoding/xml"
 	"fmt"
 	"github.com/alist-org/alist/v3/cmd/flags"
 	"github.com/alist-org/alist/v3/drivers/base"
@@ -112,7 +113,8 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 				},
 				Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 			},
-			Title: ClearFilmName(film.Name),
+			Title:  ClearFilmName(film.Name),
+			Actors: film.Actors,
 		}
 
 		if strings.HasSuffix(film.Name, "mp4") {
@@ -251,6 +253,50 @@ func CacheImage(source string, dir string, fileName string, img string, requestH
 	}
 
 	return CreatedSuccess
+}
+
+func UpdateNfo(source, dir, fileName, title string, actors []string) {
+
+	cacheResult := cacheActorNfo(dir, fileName, title, actors, source)
+
+	if cacheResult == Exist {
+		sourceName := fileName[0:strings.LastIndex(fileName, ".")]
+		filePath := filepath.Join(flags.DataDir, "emby", source, dir, sourceName+".nfo")
+
+		file, err := os.ReadFile(filePath)
+		if err != nil {
+			utils.Log.Warnf("nfo文件读取失败:%s", err.Error())
+			return
+		}
+
+		var media Media
+
+		err = xml.Unmarshal(file, &media)
+		if err != nil {
+			utils.Log.Warnf("nfo文件转换失败:%s", err.Error())
+			return
+		}
+		var actorInfos []Actor
+		for _, actor := range actors {
+			actorInfos = append(actorInfos, Actor{
+				Name: actor,
+			})
+		}
+
+		media.Actor = actorInfos
+
+		mediaXml, err := mediaToXML(&media)
+		if err != nil {
+			utils.Log.Info("xml格式转换失败", err)
+			return
+		}
+		err = os.WriteFile(filePath, mediaXml, 0777)
+		if err != nil {
+			utils.Log.Infof("文件:%s的xml更新失败:%v", fileName, err)
+		}
+
+	}
+
 }
 
 func cacheActorNfo(dir, fileName, title string, actors []string, source string) int {

@@ -102,7 +102,19 @@ func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 	err = db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.EmbyFileObj{cachingFilm})
 	cachingFilm.Name = virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(cachingFilm.Name)))
 	cachingFilm.Path = "个人收藏"
-	_ = virtual_file.CacheImageAndNfo("javdb", "个人收藏", virtual_file.AppendImageName(cachingFilm.Name), cachingFilm.Name, cachingFilm.Thumb(), []string{"个人收藏"})
+
+	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
+	actorMapping := make(map[string]string)
+	for _, actor := range actors {
+		actorMapping[actor.Url] = actor.Name
+	}
+
+	actorNames := d.getJavActorNames(cachingFilm.ID, actorMapping)
+	if len(actorNames) == 0 {
+		actorNames = append(actorNames, "个人收藏")
+	}
+
+	_ = virtual_file.CacheImageAndNfo("javdb", "个人收藏", virtual_file.AppendImageName(cachingFilm.Name), cachingFilm.Name, cachingFilm.Thumb(), actorNames)
 
 	return cachingFilm, err
 
@@ -146,10 +158,42 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 		})
 	})
+
+	actorMapping := make(map[string]string)
+	collector.OnHTML(".panel.movie-panel-info", func(element *colly.HTMLElement) {
+		element.ForEach("a", func(i int, element *colly.HTMLElement) {
+
+			href := element.Attr("href")
+			if strings.Contains(href, "/actors/") {
+				actorUrl := strings.ReplaceAll(href, "/actors/", "")
+				actorMapping[actorUrl] = element.Text
+			}
+
+		})
+	})
+
 	err := collector.Visit(d.SpiderServer + file.GetID())
 
 	if len(magnets) == 0 {
 		return "", err
+	}
+
+	if embyObj, ok := file.(*model.EmbyFileObj); ok && len(embyObj.Actors) == 0 {
+
+		actors := db.QueryActor(strconv.Itoa(int(d.ID)))
+		for _, actor := range actors {
+			if actorMapping[actor.Url] != "" {
+				actorMapping[actor.Url] = actor.Name
+			}
+		}
+
+		var actorNames []string
+		for _, name := range actorMapping {
+			actorNames = append(actorNames, name)
+		}
+
+		virtual_file.UpdateNfo("javdb", embyObj.Path, virtual_file.AppendImageName(embyObj.Name), embyObj.Title, actorNames)
+
 	}
 
 	slices.SortFunc(magnets, func(a, b Magnet) int {
@@ -237,6 +281,48 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 	utils.Log.Debugf("开始爬取javdb页面：%s，错误：%v", url, err)
 
 	return data, nextPage, err
+
+}
+
+func (d *Javdb) getJavActorNames(filmUrl string, mapping map[string]string) []string {
+
+	collector := colly.NewCollector(func(c *colly.Collector) {
+		c.SetRequestTimeout(time.Second * 10)
+		_ = c.SetCookies("https://javdb.com", setCookieRaw(d.Cookie))
+	})
+	extensions.RandomUserAgent(collector)
+
+	actorMapping := make(map[string]string)
+
+	collector.OnHTML(".panel.movie-panel-info", func(element *colly.HTMLElement) {
+		element.ForEach("a", func(i int, element *colly.HTMLElement) {
+
+			href := element.Attr("href")
+			if strings.Contains(href, "/actors/") {
+				actorUrl := strings.ReplaceAll(href, "/actors/", "")
+				actorMapping[actorUrl] = element.Text
+			}
+
+		})
+	})
+
+	err := collector.Visit(filmUrl)
+
+	if err != nil {
+		utils.Log.Warnf("演员信息获取失败:%s", err.Error())
+		return []string{}
+	}
+
+	var actors []string
+	for url, name := range actorMapping {
+		if mapping[url] != "" {
+			actors = append(actors, mapping[url])
+		} else {
+			actors = append(actors, name)
+		}
+	}
+
+	return actors
 
 }
 

@@ -4,10 +4,10 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/alist-org/alist/v3/internal/open_ai"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/dustin/go-humanize"
 	"github.com/gocolly/colly/v2"
@@ -91,7 +91,7 @@ func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 	} else {
 		tempCode, name := splitName(cachingFilm.Name)
 
-		translatedText := d.GptTranslate(name)
+		translatedText := open_ai.Translate(virtual_file.ClearFilmName(name))
 		if translatedText != "" {
 			translatedText = fmt.Sprintf("%s %s", tempCode, translatedText)
 			cachingFilm.Name = translatedText
@@ -516,7 +516,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 			if nameCache[code] == "" {
 
 				// 2.2.3 AI翻译
-				translatedText := d.GptTranslate(name)
+				translatedText := open_ai.Translate(virtual_file.ClearFilmName(name))
 				if translatedText != "" {
 					translatedText = fmt.Sprintf("%s %s", code, translatedText)
 					nameCache[code] = virtual_file.AppendFilmName(translatedText)
@@ -549,56 +549,6 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 	utils.Log.Info("影片名称映射列表获取结束")
 
 	return nameCache, nil
-
-}
-
-func (d *Javdb) GptTranslate(text string) string {
-
-	text = virtual_file.ClearFilmName(text)
-
-	var result struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-
-	utils.Log.Debugf("开始翻译:%s", text)
-	response, err := base.RestyClient.R().SetAuthToken(d.OpenAiApiKey).SetHeaders(map[string]string{
-		"Content-Type": "application/json",
-		"Accept":       "application/json",
-	}).SetBody(base.Json{
-		"messages": []base.Json{
-			{
-				"role":    "system",
-				"content": d.TranslatePromote,
-			},
-			{
-				"role":    "system",
-				"content": text,
-			},
-		},
-		"model":             "gpt-4o",
-		"temperature":       0.5,
-		"presence_penalty":  0,
-		"frequency_penalty": 0,
-		"top_p":             1,
-	}).SetResult(&result).Post(d.OpenAiUrl)
-	if err != nil {
-		var detail string
-		if response != nil {
-			detail = string(response.Body())
-		}
-		utils.Log.Warnf("翻译失败:%s,响应信息为:%s", err.Error(), detail)
-		return text
-	}
-
-	if len(result.Choices) == 0 {
-		return text
-	}
-
-	return result.Choices[0].Message.Content
 
 }
 

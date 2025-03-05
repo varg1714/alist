@@ -128,6 +128,12 @@ const (
 	StreamMaxClientUploadSpeed            = "max_client_upload_speed"
 	StreamMaxServerDownloadSpeed          = "max_server_download_speed"
 	StreamMaxServerUploadSpeed            = "max_server_upload_speed"
+
+	// openai
+	OpenAiUrl              = "open_ai_url"
+	OpenAiApiKey           = "open_ai_api_key"
+	OpenAiTranslatePromote = "open_ai_translate_promote"
+	OpenAiTranslateModel   = "open_ai_translate_model"
 )
 
 const (

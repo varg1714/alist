@@ -7,6 +7,7 @@ import (
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/alist-org/alist/v3/internal/open_ai"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/dustin/go-humanize"
 	"github.com/gocolly/colly/v2"
@@ -252,7 +253,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 		return model.EmbyFileObj{}, errors.New("查询结果为空")
 	}
 
-	title = d.GptTranslate(title)
+	title = open_ai.Translate(virtual_file.ClearFilmName(title))
 	magnet := ""
 
 	collector.OnHTML(".card-footer-item", func(element *colly.HTMLElement) {
@@ -400,56 +401,6 @@ func (d *FC2) getPpvdbFilm(code string) (string, []string) {
 	}
 
 	return imageUrl, actors
-
-}
-
-func (d *FC2) GptTranslate(text string) string {
-
-	text = virtual_file.ClearFilmName(text)
-
-	var result struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-
-	utils.Log.Debugf("开始翻译:%s", text)
-	response, err := base.RestyClient.R().SetAuthToken(d.OpenAiApiKey).SetHeaders(map[string]string{
-		"Content-Type": "application/json",
-		"Accept":       "application/json",
-	}).SetBody(base.Json{
-		"messages": []base.Json{
-			{
-				"role":    "system",
-				"content": d.TranslatePromote,
-			},
-			{
-				"role":    "system",
-				"content": text,
-			},
-		},
-		"model":             "gpt-4o",
-		"temperature":       0.5,
-		"presence_penalty":  0,
-		"frequency_penalty": 0,
-		"top_p":             1,
-	}).SetResult(&result).Post(d.OpenAiUrl)
-	if err != nil {
-		var detail string
-		if response != nil {
-			detail = string(response.Body())
-		}
-		utils.Log.Warnf("翻译失败:%s,响应信息为:%s", err.Error(), detail)
-		return text
-	}
-
-	if len(result.Choices) == 0 {
-		return text
-	}
-
-	return result.Choices[0].Message.Content
 
 }
 

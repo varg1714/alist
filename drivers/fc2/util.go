@@ -96,7 +96,7 @@ func (d *FC2) getFilms(urlFunc func(index int) string) ([]model.EmbyFileObj, err
 
 func (d *FC2) getMagnet(file model.Obj) (string, error) {
 
-	magnetCache := db.QueryFileCacheByCode(file.GetID())
+	magnetCache := db.QueryMagnetCacheByCode(file.GetID())
 	if magnetCache.Magnet != "" {
 		utils.Log.Infof("返回缓存中的磁力地址:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil
@@ -123,7 +123,11 @@ func (d *FC2) getMagnet(file model.Obj) (string, error) {
 	magnet := magnetUrl.ReplaceAllString(tempMagnet, "$1")
 
 	if magnet != "" {
-		err = db.CreateCacheFile(magnet, "", id)
+		err = db.CreateMagnetCache(model.MagnetCache{
+			Magnet: magnet,
+			Name:   file.GetName(),
+			Code:   id,
+		})
 	}
 
 	return magnet, err
@@ -212,7 +216,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 		id = fmt.Sprintf("FC2-PPV-%s", code)
 	}
 
-	magnetCache := db.QueryFileCacheByCode(id)
+	magnetCache := db.QueryMagnetCacheByCode(id)
 	if magnetCache.Magnet != "" {
 		return model.EmbyFileObj{}, errors.New("已存在该文件")
 	}
@@ -319,7 +323,12 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
 	// 缓存磁力
 	for _, file := range cachingFiles {
-		err = db.CreateCacheFile(magnet, "", file.ID)
+		err = db.CreateMagnetCache(model.MagnetCache{
+			DriverType: "fc2",
+			Magnet:     magnet,
+			Name:       file.Name,
+			Code:       file.ID,
+		})
 	}
 
 	// 保存影片信息

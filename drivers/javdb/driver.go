@@ -151,7 +151,7 @@ func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 		return db.DeleteFilmsByActor("javdb", obj.GetName())
 	} else {
 
-		err := db.DeleteCacheByCode(obj.GetName())
+		err := db.DeleteAllMagnetCacheByCode(obj.GetName())
 		if err != nil {
 			utils.Log.Warnf("影片缓存信息删除失败：%s", err.Error())
 		}

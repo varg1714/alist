@@ -17,7 +17,6 @@ import (
 	"math"
 	"regexp"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -45,7 +44,7 @@ func CloudPlay(ctx context.Context, args model.LinkArgs, driverType, driverPath 
 	fileName := downloadingFile.GetName()
 
 	// 1.1 获取缓存的文件ID
-	fileCache := db.QueryFileCacheByName(fileName)
+	fileCache := db.QueryMagnetCacheByName(driverType, fileName)
 
 	// 1.2 缓存文件不为空，返回该文件
 	if fileCache.FileId != "" {
@@ -85,19 +84,24 @@ func CloudPlay(ctx context.Context, args model.LinkArgs, driverType, driverPath 
 	case "PikPak":
 		if len(fileList) == 0 {
 			downloadedFile.ID = status.FileInfo.FileId
-			err1 := db.CreateCacheFile(magnet, status.FileInfo.FileId, fileName)
+			err1 := db.CreateMagnetCache(model.MagnetCache{
+				DriverType: driverType,
+				Magnet:     magnet,
+				FileId:     status.FileInfo.FileId,
+				Name:       fileName,
+			})
 			if err1 != nil {
 				utils.Log.Infof("文件缓存失败:%s", err1.Error())
 			}
 			return storage.Link(ctx, downloadedFile, args)
 		} else {
-			lookedFile := cacheFiles(fileList, magnet, fileName, func(obj model.Obj) map[string]string {
+			lookedFile := cacheFiles(driverType, magnet, fileName, fileList, func(obj model.Obj) map[string]string {
 				return nil
 			})
 			return storage.Link(ctx, lookedFile, args)
 		}
 	case "115 Cloud":
-		lookedFile := cacheFiles(fileList, magnet, fileName, func(obj model.Obj) map[string]string {
+		lookedFile := cacheFiles(driverType, magnet, fileName, fileList, func(obj model.Obj) map[string]string {
 			return map[string]string{
 				"pickCode": obj.(*_115.FileObj).PickCode,
 			}
@@ -170,7 +174,7 @@ func downloadMagnet(ctx context.Context, driverType string, driverPath string, m
 
 }
 
-func cacheFiles(files []model.Obj, magnet, lookingFileName string, cacheOptionFunc func(obj model.Obj) map[string]string) model.Obj {
+func cacheFiles(driverType, magnet, lookingFileName string, files []model.Obj, cacheOptionFunc func(obj model.Obj) map[string]string) model.Obj {
 
 	// 仅包含100M大小以上的文件
 	validFiles := utils.SliceFilter(files, func(f model.Obj) bool {
@@ -185,7 +189,13 @@ func cacheFiles(files []model.Obj, magnet, lookingFileName string, cacheOptionFu
 	if len(validFiles) == 0 {
 		return nil
 	} else if len(validFiles) == 1 {
-		err := db.CreateCacheFileWithOption(magnet, validFiles[0].GetID(), lookingFileName, cacheOptionFunc(validFiles[0]))
+		err := db.CreateMagnetCache(model.MagnetCache{
+			DriverType: driverType,
+			Magnet:     magnet,
+			FileId:     validFiles[0].GetID(),
+			Name:       lookingFileName,
+			Option:     cacheOptionFunc(validFiles[0]),
+		})
 		if err != nil {
 			utils.Log.Warnf("文件缓存失败:%s", err.Error())
 		}
@@ -197,7 +207,13 @@ func cacheFiles(files []model.Obj, magnet, lookingFileName string, cacheOptionFu
 
 		if !nameRegexp.MatchString(lookingFileName) {
 			lookedFile = validFiles[0]
-			err := db.CreateCacheFileWithOption(magnet, lookedFile.GetID(), lookingFileName, cacheOptionFunc(lookedFile))
+			err := db.CreateMagnetCache(model.MagnetCache{
+				DriverType: driverType,
+				Magnet:     magnet,
+				FileId:     lookedFile.GetID(),
+				Name:       lookingFileName,
+				Option:     cacheOptionFunc(lookedFile),
+			})
 			if err != nil {
 				utils.Log.Warnf("文件缓存失败:%s", err.Error())
 			}
@@ -208,7 +224,13 @@ func cacheFiles(files []model.Obj, magnet, lookingFileName string, cacheOptionFu
 				if realName == lookingFileName {
 					lookedFile = file
 				}
-				err := db.CreateCacheFileWithOption(magnet, file.GetID(), realName, cacheOptionFunc(file))
+				err := db.CreateMagnetCache(model.MagnetCache{
+					DriverType: driverType,
+					Magnet:     magnet,
+					FileId:     file.GetID(),
+					Name:       realName,
+					Option:     cacheOptionFunc(file),
+				})
 				if err != nil {
 					utils.Log.Warnf("文件缓存失败:%s", err.Error())
 				}
@@ -227,16 +249,10 @@ func getLinkByCache(ctx context.Context, args model.LinkArgs, driverType string,
 			Object: model.Object{ID: magnetCache.FileId},
 		}, args)
 
-		if err != nil && strings.Contains(err.Error(), "file_in_recycle_bin") {
+		if err != nil {
 			utils.Log.Infof("缓存文件已被删除，清除原缓存的文件：%s", err.Error())
-			err2 := db.ClearCachedFileId(magnetCache.Magnet, magnetCache.Name)
-			if err2 != nil {
-				utils.Log.Warnf("缓存文件删除失败：%s", err2.Error())
-			}
-			return link, nil
-		} else {
-			return link, nil
 		}
+		return link, nil
 	case "115 Cloud":
 		link, err := storage.Link(ctx, &_115.FileObj{
 			File: driver2.File{
@@ -247,14 +263,8 @@ func getLinkByCache(ctx context.Context, args model.LinkArgs, driverType string,
 
 		if err != nil {
 			utils.Log.Infof("缓存文件已被删除，清除原缓存的文件：%s", err.Error())
-			err2 := db.ClearCachedFileId(magnetCache.Magnet, magnetCache.Name)
-			if err2 != nil {
-				utils.Log.Warnf("缓存文件删除失败：%s", err2.Error())
-			}
-			return link, nil
-		} else {
-			return link, nil
 		}
+		return link, nil
 	}
 
 	return nil, nil

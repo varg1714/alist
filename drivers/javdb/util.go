@@ -122,7 +122,7 @@ func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 
 func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
-	magnetCache := db.QueryFileCacheByName(file.GetName())
+	magnetCache := db.QueryMagnetCacheByCode(file.GetName())
 	if magnetCache.Magnet != "" {
 		utils.Log.Infof("返回缓存中的磁力地址:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil
@@ -213,8 +213,11 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 	mostTagMagnets := magnetGroup[maxLen]
 	magnet := mostTagMagnets[len(mostTagMagnets)/2]
 
-	err = db.CreateCacheFile(magnet.MagnetUrl, "", file.GetName())
-
+	err = db.CreateMagnetCache(model.MagnetCache{
+		DriverType: "javdb",
+		Magnet:     magnet.MagnetUrl,
+		Name:       file.GetName(),
+	})
 	return magnet.MagnetUrl, err
 
 }

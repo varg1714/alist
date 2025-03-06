@@ -18,11 +18,12 @@ type Film struct {
 }
 
 type MagnetCache struct {
-	Magnet string            `json:"magnet" gorm:"index"`
-	FileId string            `json:"file_id"`
-	Name   string            `json:"name"`
-	Code   string            `json:"code"`
-	Option map[string]string `json:"option" gorm:"type:json;serializer:json"`
+	Magnet     string            `json:"magnet" gorm:"index"`
+	FileId     string            `json:"file_id"`
+	Name       string            `json:"name"`
+	Code       string            `json:"code"`
+	DriverType string            `json:"driver_type"`
+	Option     map[string]string `json:"option" gorm:"type:json;serializer:json"`
 }
 
 type MissedFilm struct {

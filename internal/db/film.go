@@ -87,70 +87,6 @@ func DeleteFilmsByPrefixUrl(source, actor, url string) error {
 
 }
 
-func QueryFileCacheByName(name string) model.MagnetCache {
-
-	fileCache := model.MagnetCache{
-		Name: name,
-	}
-
-	db.Where(fileCache).First(&fileCache)
-
-	return fileCache
-
-}
-
-func QueryFileCacheByCode(code string) model.MagnetCache {
-
-	code = GetFilmCode(code)
-
-	fileCache := model.MagnetCache{
-		Code: code,
-	}
-
-	db.Where(fileCache).First(&fileCache)
-
-	return fileCache
-
-}
-
-func CreateCacheFile(magnet string, fileId string, name string) error {
-
-	code := GetFilmCode(name)
-
-	magnetCache := model.MagnetCache{
-		Magnet: magnet,
-		FileId: fileId,
-		Name:   name,
-		Code:   code,
-	}
-
-	err := DeleteCacheByName(name)
-	if err != nil {
-		return err
-	}
-
-	return errors.WithStack(db.Create(&magnetCache).Error)
-
-}
-
-func CreateCacheFileWithOption(magnet string, fileId string, name string, option map[string]string) error {
-
-	code := GetFilmCode(name)
-	magnetCache := model.MagnetCache{
-		Magnet: magnet,
-		FileId: fileId,
-		Name:   name,
-		Code:   code,
-		Option: option,
-	}
-
-	err := DeleteCacheByName(name)
-	if err != nil {
-		return err
-	}
-	return errors.WithStack(db.Create(&magnetCache).Error)
-}
-
 func GetFilmCode(name string) string {
 	code := name
 	split := strings.Split(name, " ")
@@ -163,44 +99,6 @@ func GetFilmCode(name string) string {
 		}
 	}
 	return code
-}
-
-func ClearCachedFileId(magnet string, name string) error {
-	return errors.WithStack(db.Model(&model.MagnetCache{}).
-		Where("code = ?", GetFilmCode(name)).
-		Where("magnet = ?", magnet).
-		Update("file_id", "").Error)
-
-}
-
-func DeleteCacheByCode(code string) error {
-
-	fileCache := model.MagnetCache{
-		Code: GetFilmCode(code),
-	}
-
-	return errors.WithStack(db.Where(fileCache).Delete(&fileCache).Error)
-
-}
-
-func DeleteCacheByName(name string) error {
-
-	fileCache := model.MagnetCache{
-		Name: name,
-	}
-
-	return errors.WithStack(db.Where(fileCache).Delete(&fileCache).Error)
-
-}
-
-func DeleteCacheFile(fileId string) error {
-
-	magnetCache := model.MagnetCache{
-		FileId: fileId,
-	}
-
-	return errors.WithStack(db.Where(magnetCache).Delete(&magnetCache).Error)
-
 }
 
 func CreateActor(dir string, name string, url string) error {

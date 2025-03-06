@@ -136,7 +136,7 @@ func downloadMagnet(ctx context.Context, driverType string, driverPath string, m
 	completed := false
 	status, err := downloadTask.tool.Status(downloadTask)
 
-	for i < 10 && !completed {
+	for i < 30 && !completed {
 		if err != nil {
 			return nil, nil, err
 		}
@@ -162,13 +162,6 @@ func downloadMagnet(ctx context.Context, driverType string, driverPath string, m
 	if status == nil || !completed {
 		return nil, nil, errors.New("文件仍未下载完成")
 	}
-
-	go func() {
-		err2 := downloadTask.tool.Remove(downloadTask)
-		if err2 != nil {
-			utils.Log.Warnf("离线任务记录删除失败：%s", err2.Error())
-		}
-	}()
 
 	return status, downloadTask, nil
 

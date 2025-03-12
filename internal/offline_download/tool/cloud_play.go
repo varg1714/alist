@@ -124,7 +124,7 @@ func downloadMagnet(ctx context.Context, driverType string, driverPath string, m
 		URL:          magnet,
 		DstDirPath:   driverPath,
 		Tool:         driverType,
-		DeletePolicy: DeleteOnUploadSucceed,
+		DeletePolicy: DeleteAlways,
 	})
 	if err != nil {
 		return nil, nil, err

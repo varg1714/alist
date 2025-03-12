@@ -81,6 +81,22 @@ func QueryNoSubtitlesCache(driverType string) ([]model.MagnetCache, error) {
 
 }
 
+func QueryNoMatchCache(driverType string) ([]model.MagnetCache, error) {
+
+	var caches []model.MagnetCache
+
+	subQuery1 := db.Model(&model.MagnetCache{}).Where("driver_type != ?", driverType)
+	subQuery2 := db.Model(&model.MagnetCache{}).Select("code, magnet").Where("driver_type = ? AND subtitle = ?", driverType, true)
+
+	err := db.Table("(?) as t1, (?) as t2", subQuery1, subQuery2).
+		Select("t1.*").
+		Where("t1.code = t2.code AND t1.magnet != t2.magnet").
+		Find(&caches).Error
+
+	return caches, err
+
+}
+
 func DeleteAllMagnetCacheByCode(code string) error {
 
 	fileCache := model.MagnetCache{

@@ -184,7 +184,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 	err = db.CreateMagnetCache(model.MagnetCache{
 		DriverType: "javdb",
-		Magnet:     javdbMeta.Magnets[0].Magnet,
+		Magnet:     magnet,
 		Name:       file.GetName(),
 		Subtitle:   subtitle,
 	})

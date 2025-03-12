@@ -81,13 +81,11 @@ outer:
 	if err != nil {
 		return err
 	}
-	if t.tool.Name() == "Pikpak" {
-		return nil
-	}
+
 	if t.tool.Name() == "Thunder" {
 		return nil
 	}
-	if t.tool.Name() == "115 Cloud" {
+	if t.tool.Name() == "115 Cloud" || t.tool.Name() == "PikPak" {
 		// hack for 115
 		<-time.After(time.Second * 1)
 		err := t.tool.Remove(t)

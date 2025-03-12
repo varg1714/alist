@@ -51,6 +51,16 @@ func QueryByActor(source string, actor string) []model.Film {
 
 }
 
+func QueryFilmByCode(source string, code string) (model.Film, error) {
+
+	var film model.Film
+
+	tx := db.Where("source = ? ", source).Where("name like ?", fmt.Sprintf("%s%%", code)).First(&film)
+
+	return film, tx.Error
+
+}
+
 func QueryByUrls(actor string, urls []string) []string {
 
 	films := make([]model.Film, 0)

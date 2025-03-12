@@ -1,5 +1,7 @@
 package av
 
+import "time"
+
 type Meta struct {
 	Magnets []Magnet
 	Actors  []Actor
@@ -14,6 +16,7 @@ type Magnet struct {
 	DownloadCount uint64
 	Files         []File
 	Source        string
+	Date          time.Time
 }
 
 type Actor struct {

@@ -36,6 +36,15 @@ func GetMetaFromJavdb(filmUrl string) (Meta, error) {
 				utils.Log.Infof("failed to format file size:%s,error message:%v", fileSizeText, err)
 			}
 
+			timeStr := magnetEle.ChildText(".time")
+			var releaseTime time.Time
+			if timeStr != "" {
+				releaseTime, err = time.Parse(time.DateOnly, timeStr)
+				if err != nil {
+					utils.Log.Warnf("failed to parse release time:%s,error message:%v", timeStr, err)
+				}
+			}
+
 			meta.Magnets = append(meta.Magnets, Magnet{
 				Magnet: magnetEle.ChildAttr("a", "href"),
 				Tags:   tags,
@@ -49,6 +58,7 @@ func GetMetaFromJavdb(filmUrl string) (Meta, error) {
 					return false
 				}(),
 				Source: filmUrl,
+				Date:   releaseTime,
 			})
 
 		})
@@ -101,6 +111,13 @@ func GetMetaFromSuke(code string) (Meta, error) {
 			sizeStr := trElement.ChildText("td:nth-child(4)")
 			size, _ := humanize.ParseBytes(sizeStr)
 
+			// time
+			timeStr := trElement.ChildText("td:nth-child(5)")
+			releaseTime, err := time.Parse("2006-01-02 15:04", timeStr)
+			if err != nil {
+				utils.Log.Infof("failed to parse release time:%s,error message:%v", timeStr, err)
+			}
+
 			// download count
 			downloadStr := trElement.ChildText("td:nth-child(8)")
 			count, _ := strconv.ParseInt(downloadStr, 10, 64)
@@ -111,6 +128,7 @@ func GetMetaFromSuke(code string) (Meta, error) {
 				DownloadCount: uint64(count),
 				Size:          size,
 				Source:        fmt.Sprintf("https://sukebei.nyaa.si/%s", href),
+				Date:          releaseTime,
 			})
 
 		})

@@ -160,8 +160,10 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 	}
 
 	magnet := ""
+	subtitle := false
 	if javdbMeta.Magnets[0].Subtitle {
 		magnet = javdbMeta.Magnets[0].Magnet
+		subtitle = true
 	} else {
 		sukeMeta, err2 := av.GetMetaFromSuke(db.GetFilmCode(file.GetName()))
 		if err2 != nil {
@@ -169,6 +171,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 		} else {
 			if len(sukeMeta.Magnets) > 0 && sukeMeta.Magnets[0].Subtitle {
 				magnet = sukeMeta.Magnets[0].Magnet
+				subtitle = true
 			}
 		}
 
@@ -176,12 +179,14 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 	if magnet == "" {
 		magnet = javdbMeta.Magnets[0].Magnet
+		subtitle = javdbMeta.Magnets[0].Subtitle
 	}
 
 	err = db.CreateMagnetCache(model.MagnetCache{
 		DriverType: "javdb",
 		Magnet:     javdbMeta.Magnets[0].Magnet,
 		Name:       file.GetName(),
+		Subtitle:   subtitle,
 	})
 	return magnet, err
 
@@ -603,6 +608,84 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 	utils.Log.Info("影片名称映射列表获取结束")
 
 	return nameCache, nil
+
+}
+
+func (d *Javdb) reMatchSubtitles() {
+
+	utils.Log.Info("start rematching subtitles for films without subtitles")
+
+	caches, err := db.QueryNoSubtitlesCache("javdb")
+	if err != nil {
+		utils.Log.Warnf("failed to query the films without subtitles")
+		return
+	}
+	if len(caches) == 0 {
+		utils.Log.Info("the films is empty, no need to rematch")
+		return
+	}
+
+	var savingCaches []model.MagnetCache
+	var unFindCaches []model.MagnetCache
+
+	for _, cache := range caches {
+
+		film, err1 := db.QueryFilmByCode("javdb", cache.Code)
+		if err1 != nil {
+			utils.Log.Warn("failed to query film:", err1.Error())
+		} else {
+			if film.Url != "" {
+				javdbMeta, err2 := av.GetMetaFromJavdb(film.Url)
+				if err2 != nil {
+					utils.Log.Warn("failed to get javdb magnet info:", err2.Error())
+				} else if len(javdbMeta.Magnets) > 0 && javdbMeta.Magnets[0].Subtitle {
+					cache.Subtitle = true
+					cache.Magnet = javdbMeta.Magnets[0].Magnet
+				}
+			}
+		}
+
+		if !cache.Subtitle {
+			sukeMeta, err2 := av.GetMetaFromSuke(cache.Code)
+			if err2 != nil {
+				utils.Log.Warn("failed to get suke magnet info:", err2.Error())
+			} else {
+				if len(sukeMeta.Magnets) > 0 && sukeMeta.Magnets[0].Subtitle {
+					cache.Subtitle = true
+					cache.Magnet = sukeMeta.Magnets[0].Magnet
+				}
+			}
+		}
+
+		if cache.Subtitle {
+			savingCaches = append(savingCaches, cache)
+		} else {
+			unFindCaches = append(unFindCaches, cache)
+		}
+
+	}
+
+	if len(savingCaches) > 0 {
+		err2 := db.BatchCreateMagnetCache(savingCaches)
+		if err2 != nil {
+			utils.Log.Warn("failed to create magnet cache:", err2.Error())
+		}
+		utils.Log.Infof("update films magnet cache:[%v]", savingCaches)
+	}
+
+	if len(unFindCaches) > 0 {
+		var names []string
+		for _, cache := range unFindCaches {
+			names = append(names, cache.Name)
+		}
+		err2 := db.UpdateScanData("javdb", names, time.Now())
+		if err2 != nil {
+			utils.Log.Warn("failed to update scan data:", err2.Error())
+		}
+		utils.Log.Infof("films:[%v] still have not matched with subtitles, update the scan info", names)
+	}
+
+	utils.Log.Info("rematching completed")
 
 }
 

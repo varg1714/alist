@@ -139,7 +139,7 @@ func downloadMagnet(ctx context.Context, driverType string, driverPath string, m
 	completed := false
 	status, err := downloadTask.tool.Status(downloadTask)
 
-	for i < 30 && !completed {
+	for i < 15 && !completed {
 		if err != nil {
 			return nil, nil, err
 		}

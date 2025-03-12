@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
+	"github.com/alist-org/alist/v3/internal/av"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -12,6 +13,7 @@ import (
 	"github.com/alist-org/alist/v3/pkg/cron"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/emirpasic/gods/v2/maps/linkedhashmap"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -35,6 +37,12 @@ func (d *Javdb) GetAddition() driver.Additional {
 }
 
 func (d *Javdb) Init(ctx context.Context) error {
+
+	d.cron = cron.NewCron(time.Hour * 24)
+	d.cron.Do(func() {
+		d.reMatchSubtitles()
+	})
+
 	return nil
 }
 
@@ -135,9 +143,26 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 		}, nil
 	}
 
-	return tool.CloudPlay(ctx, args, d.CloudPlayDriverType, d.CloudPlayDownloadPath, file, func(obj model.Obj) (string, error) {
+	link, err := tool.CloudPlay(ctx, args, d.CloudPlayDriverType, d.CloudPlayDownloadPath, file, func(obj model.Obj) (string, error) {
 		return d.getMagnet(obj)
 	})
+
+	if err != nil {
+		utils.Log.Infof("The first magnet download failed, using the second magnet instead.")
+		return tool.CloudPlay(ctx, args, d.CloudPlayDriverType, d.CloudPlayDownloadPath, file, func(obj model.Obj) (string, error) {
+			javdbMeta, _ := av.GetMetaFromJavdb(file.GetID())
+			magnets := javdbMeta.Magnets
+			if len(magnets) > 0 {
+				slices.SortFunc(magnets, func(a, b av.Magnet) int {
+					return a.Date.Compare(b.Date)
+				})
+				return magnets[0].Magnet, nil
+			}
+			return "", errors.New("javdb磁力信息获取为空")
+		})
+	}
+
+	return link, err
 }
 
 func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {

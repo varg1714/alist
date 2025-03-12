@@ -3,6 +3,8 @@ package db
 import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/pkg/errors"
+	"gorm.io/gorm"
+	"time"
 )
 
 func CreateMagnetCache(magnetCache model.MagnetCache) error {
@@ -64,6 +66,21 @@ func QueryMagnetCacheByCode(code string) model.MagnetCache {
 
 }
 
+func QueryNoSubtitlesCache(driverType string) ([]model.MagnetCache, error) {
+
+	var caches []model.MagnetCache
+
+	err := errors.WithStack(
+		db.Where("(scan_at is null or scan_at <= ?)", time.Now().AddDate(0, 0, -3)).
+			Where("(scan_count is null or scan_count < 10)").
+			Where("(subtitle is null or subtitle = 0)").
+			Where("driver_type = ?", driverType).
+			Find(&caches).Error)
+
+	return caches, err
+
+}
+
 func DeleteAllMagnetCacheByCode(code string) error {
 
 	fileCache := model.MagnetCache{
@@ -78,4 +95,12 @@ func DeleteCacheByName(driveType string, names []string) error {
 
 	return errors.WithStack(db.Where("driver_type = ?", driveType).Where("name in ?", names).Delete(&model.MagnetCache{}).Error)
 
+}
+
+func UpdateScanData(driveType string, names []string, scanAt time.Time) error {
+	return errors.WithStack(db.Model(&model.MagnetCache{}).Where("driver_type = ?", driveType).Where("name in ?", names).
+		Updates(map[string]any{
+			"scan_at":    scanAt,
+			"scan_count": gorm.Expr("ifnull(scan_count, 0) + ?", 1),
+		}).Error)
 }

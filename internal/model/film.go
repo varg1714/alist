@@ -20,10 +20,13 @@ type Film struct {
 type MagnetCache struct {
 	Magnet     string            `json:"magnet" gorm:"index"`
 	FileId     string            `json:"file_id"`
-	Name       string            `json:"name"`
-	Code       string            `json:"code"`
+	Name       string            `json:"name" gorm:"index"`
+	Code       string            `json:"code" gorm:"index"`
 	DriverType string            `json:"driver_type"`
 	Option     map[string]string `json:"option" gorm:"type:json;serializer:json"`
+	Subtitle   bool              `json:"subtitle"`
+	ScanAt     time.Time         `json:"scan_at"`
+	ScanCount  uint              `json:"scan_count"`
 }
 
 type MissedFilm struct {

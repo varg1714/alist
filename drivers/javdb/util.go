@@ -120,7 +120,7 @@ func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 
 func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
-	magnetCache := db.QueryMagnetCacheByCode(file.GetName())
+	magnetCache := db.QueryMagnetCacheByName("javdb", file.GetName())
 	if magnetCache.Magnet != "" {
 		utils.Log.Infof("return the magnet link from the cache:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil

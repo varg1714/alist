@@ -63,6 +63,9 @@ func CloudPlay(ctx context.Context, args model.LinkArgs, driverType, driverPath 
 		utils.Log.Info("磁力链接获取失败", err)
 	}
 	utils.Log.Infof("获取:[%s]的磁力链接结果为:[%s]耗时:[%d]", downloadingFile.GetName(), magnet, time.Now().UnixMilli()-start)
+	if magnet == "" {
+		return nil, errors.New("磁力信息获取为空")
+	}
 
 	// 3. 下载文件
 	status, _, err := downloadMagnet(ctx, driverType, driverPath, magnet, fileName)

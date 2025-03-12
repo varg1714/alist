@@ -11,11 +11,30 @@ func CreateMagnetCache(magnetCache model.MagnetCache) error {
 		magnetCache.Code = GetFilmCode(magnetCache.Name)
 	}
 
-	err := DeleteCacheByName(magnetCache.DriverType, magnetCache.Name)
+	err := DeleteCacheByName(magnetCache.DriverType, []string{magnetCache.Name})
 	if err != nil {
 		return err
 	}
 	return errors.WithStack(db.Create(&magnetCache).Error)
+}
+
+func BatchCreateMagnetCache(magnetCaches []model.MagnetCache) error {
+
+	var names []string
+	for index := range magnetCaches {
+		if magnetCaches[index].Code == "" {
+			magnetCaches[index].Code = GetFilmCode(magnetCaches[index].Name)
+		}
+		names = append(names, magnetCaches[index].Name)
+	}
+
+	err := DeleteCacheByName(magnetCaches[0].DriverType, names)
+	if err != nil {
+		return err
+	}
+
+	return errors.WithStack(db.CreateInBatches(&magnetCaches, 100).Error)
+
 }
 
 func QueryMagnetCacheByName(driverType, name string) model.MagnetCache {
@@ -55,13 +74,8 @@ func DeleteAllMagnetCacheByCode(code string) error {
 
 }
 
-func DeleteCacheByName(driveType, name string) error {
+func DeleteCacheByName(driveType string, names []string) error {
 
-	fileCache := model.MagnetCache{
-		Name:       name,
-		DriverType: driveType,
-	}
-
-	return errors.WithStack(db.Where(fileCache).Delete(&fileCache).Error)
+	return errors.WithStack(db.Where("driver_type = ?", driveType).Where("name in ?", names).Delete(&model.MagnetCache{}).Error)
 
 }

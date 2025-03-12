@@ -1,19 +1,17 @@
 package javdb
 
 import (
-	"cmp"
 	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
+	"github.com/alist-org/alist/v3/internal/av"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/open_ai"
 	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/dustin/go-humanize"
 	"github.com/gocolly/colly/v2"
 	"github.com/gocolly/colly/v2/extensions"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -124,58 +122,23 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 	magnetCache := db.QueryMagnetCacheByCode(file.GetName())
 	if magnetCache.Magnet != "" {
-		utils.Log.Infof("返回缓存中的磁力地址:%s", magnetCache.Magnet)
+		utils.Log.Infof("return the magnet link from the cache:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil
 	}
 
-	collector := colly.NewCollector(func(c *colly.Collector) {
-		c.SetRequestTimeout(time.Second * 10)
-	})
+	javdbMeta, err := av.GetMetaFromJavdb(file.GetID())
+	if err != nil {
+		utils.Log.Warn("failed to get javdb magnet info:", err.Error())
+		return "", err
+	}
 
-	var magnets []Magnet
-
-	collector.OnHTML(".magnet-links", func(element *colly.HTMLElement) {
-		element.ForEach(".item", func(i int, magnetEle *colly.HTMLElement) {
-
-			var tags []string
-
-			magnetEle.ForEach(".tag", func(i int, tag *colly.HTMLElement) {
-				tags = append(tags, tag.Text)
-			})
-
-			fileSizeText := magnetEle.ChildText(".meta")
-			fileSize := strings.Split(fileSizeText, ",")[0]
-			bytes, err := humanize.ParseBytes(fileSize)
-			if err != nil {
-				utils.Log.Infof("格式化文件大小失败:%s,错误原因:%v", fileSizeText, err)
-			}
-
-			magnets = append(magnets, Magnet{
-				MagnetUrl: magnetEle.ChildAttr("a", "href"),
-				Tag:       tags,
-				FileSize:  bytes,
-			})
-
-		})
-	})
+	if len(javdbMeta.Magnets) == 0 {
+		return "", errors.New("javdb磁力信息获取为空")
+	}
 
 	actorMapping := make(map[string]string)
-	collector.OnHTML(".panel.movie-panel-info", func(element *colly.HTMLElement) {
-		element.ForEach("a", func(i int, element *colly.HTMLElement) {
-
-			href := element.Attr("href")
-			if strings.Contains(href, "/actors/") {
-				actorUrl := strings.ReplaceAll(href, "/actors/", "")
-				actorMapping[actorUrl] = element.Text
-			}
-
-		})
-	})
-
-	err := collector.Visit(d.SpiderServer + file.GetID())
-
-	if len(magnets) == 0 {
-		return "", err
+	for _, actor := range javdbMeta.Actors {
+		actorMapping[actor.Id] = actor.Name
 	}
 
 	if embyObj, ok := file.(*model.EmbyFileObj); ok && len(embyObj.Actors) == 0 {
@@ -196,29 +159,31 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 	}
 
-	slices.SortFunc(magnets, func(a, b Magnet) int {
-		tagCmp := cmp.Compare(len(b.Tag), len(a.Tag))
-		if tagCmp != 0 {
-			return tagCmp
+	magnet := ""
+	if javdbMeta.Magnets[0].Subtitle {
+		magnet = javdbMeta.Magnets[0].Magnet
+	} else {
+		sukeMeta, err2 := av.GetMetaFromSuke(db.GetFilmCode(file.GetName()))
+		if err2 != nil {
+			utils.Log.Warn("failed to get suke magnet info:", err2.Error())
+		} else {
+			if len(sukeMeta.Magnets) > 0 && sukeMeta.Magnets[0].Subtitle {
+				magnet = sukeMeta.Magnets[0].Magnet
+			}
 		}
 
-		return cmp.Compare(a.FileSize, b.FileSize)
+	}
 
-	})
-
-	maxLen := len(magnets[0].Tag)
-	magnetGroup := utils.GroupByProperty(magnets, func(t Magnet) int {
-		return len(t.Tag)
-	})
-	mostTagMagnets := magnetGroup[maxLen]
-	magnet := mostTagMagnets[len(mostTagMagnets)/2]
+	if magnet == "" {
+		magnet = javdbMeta.Magnets[0].Magnet
+	}
 
 	err = db.CreateMagnetCache(model.MagnetCache{
 		DriverType: "javdb",
-		Magnet:     magnet.MagnetUrl,
+		Magnet:     javdbMeta.Magnets[0].Magnet,
 		Name:       file.GetName(),
 	})
-	return magnet.MagnetUrl, err
+	return magnet, err
 
 }
 

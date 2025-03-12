@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
+	"github.com/alist-org/alist/v3/internal/av"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/open_ai"
 	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/dustin/go-humanize"
 	"github.com/gocolly/colly/v2"
 	"regexp"
 	"strings"
@@ -216,76 +216,96 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 		id = fmt.Sprintf("FC2-PPV-%s", code)
 	}
 
+	// 1. get cache from db
 	magnetCache := db.QueryMagnetCacheByCode(id)
 	if magnetCache.Magnet != "" {
 		return model.EmbyFileObj{}, errors.New("已存在该文件")
 	}
 
-	searchUrl := fmt.Sprintf("https://sukebei.nyaa.si/?f=0&c=0_0&q=%s&s=downloads&o=desc", id)
-
-	collector := colly.NewCollector(func(c *colly.Collector) {
-		c.SetRequestTimeout(time.Second * 10)
-	})
-
-	title := ""
-	detailUrl := ""
-
-	collector.OnHTML(`.table-responsive td[colspan="2"]`, func(element *colly.HTMLElement) {
-		if title == "" {
-
-			element.ForEach("a", func(i int, aElement *colly.HTMLElement) {
-
-				if attr := aElement.Attr("class"); attr != "comments" {
-					title = strings.ReplaceAll(aElement.Attr("title"), "+++ ", "")
-					href := aElement.Attr("href")
-					if href != "" {
-						detailUrl = fmt.Sprintf("https://sukebei.nyaa.si/%s", href)
-					}
-				}
-
-			})
-
-		}
-	})
-
-	err := collector.Visit(searchUrl)
+	// 2. get magnet from suke
+	sukeMeta, err := av.GetMetaFromSuke(id)
 	if err != nil {
+		utils.Log.Warn("failed to get the magnet info from suke:", err.Error())
 		return model.EmbyFileObj{}, err
-	}
-
-	if detailUrl == "" {
+	} else if len(sukeMeta.Magnets) == 0 || sukeMeta.Magnets[0].Magnet == "" {
 		return model.EmbyFileObj{}, errors.New("查询结果为空")
 	}
 
-	title = open_ai.Translate(virtual_file.ClearFilmName(title))
-	magnet := ""
+	// 3. translate film name
+	title := open_ai.Translate(virtual_file.ClearFilmName(sukeMeta.Magnets[0].Name))
+	magnet := sukeMeta.Magnets[0].Magnet
 
-	collector.OnHTML(".card-footer-item", func(element *colly.HTMLElement) {
-		magnet = element.Attr("href")
-	})
+	// 4. save film info
 
-	fileCount := 0
-	collector.OnHTML(".torrent-file-list.panel-body", func(element *colly.HTMLElement) {
-		element.ForEach(".file-size", func(i int, liElement *colly.HTMLElement) {
-			text := liElement.Text
-			if len(text) > 2 {
-				bytes, _ := humanize.ParseBytes(text[1 : len(text)-1])
-				if bytes/(1024*1024) > 100 {
-					fileCount++
-				}
-			}
-		})
-	})
-
-	err = collector.Visit(detailUrl)
-	if err != nil {
-		return model.EmbyFileObj{}, err
-	}
-
+	// 4.1 get film thumbnail
 	thumbnail, actors := d.getPpvdbFilm(code)
 	if len(actors) == 0 {
 		actors = append(actors, "个人收藏")
 	}
+
+	// 4.2 build the film info to be cached
+	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].Files), id, thumbnail, title)
+
+	// 4.3 save the magnets info
+	var magnetCaches []model.MagnetCache
+	for _, file := range cachingFiles {
+		magnetCaches = append(magnetCaches, model.MagnetCache{
+			DriverType: "fc2",
+			Magnet:     magnet,
+			Name:       file.Name,
+		})
+	}
+	err = db.BatchCreateMagnetCache(magnetCaches)
+	if err != nil {
+		utils.Log.Warn("failed to cache film magnet:", err.Error())
+		return model.EmbyFileObj{}, err
+	}
+
+	// 4.4 save the film info
+	err = db.CreateFilms("fc2", "个人收藏", "个人收藏", cachingFiles)
+	if err != nil {
+		utils.Log.Warn("failed to cache film info:", err.Error())
+		return model.EmbyFileObj{}, err
+	}
+
+	// 4.5 save the film meta, including nfo and images
+	_ = virtual_file.CacheImageAndNfo("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), title, thumbnail, actors)
+
+	whatLinkInfo := d.getWhatLinkInfo(magnet)
+	if len(cachingFiles) > 1 {
+		// 4.5.1 multiple images need to be cached
+		cachingImageFiles := cachingFiles
+		if thumbnail != "" {
+			cachingImageFiles = cachingFiles[1:]
+		}
+
+		for index, file := range cachingImageFiles {
+			if index < len(whatLinkInfo.Screenshots) {
+				_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(file.Name), whatLinkInfo.Screenshots[index].Screenshot, map[string]string{
+					"Referer": "https://mypikpak.com/",
+				})
+			} else {
+				if thumbnail == "" && len(whatLinkInfo.Screenshots) > 0 {
+					thumbnail = whatLinkInfo.Screenshots[0].Screenshot
+				}
+				_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(file.Name), thumbnail, map[string]string{})
+			}
+		}
+
+	} else if len(cachingFiles) == 1 && thumbnail == "" {
+		// 4.5.2 use the images as thumbnail when the thumbnail doesn't exist
+		if len(whatLinkInfo.Screenshots) > 0 {
+			_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), whatLinkInfo.Screenshots[0].Screenshot, map[string]string{
+				"Referer": "https://mypikpak.com/",
+			})
+		}
+	}
+
+	return cachingFiles[0], err
+
+}
+
+func buildCacheFile(fileCount int, id string, thumbnail string, title string) []model.EmbyFileObj {
 
 	var cachingFiles []model.EmbyFileObj
 	if fileCount <= 1 {
@@ -320,54 +340,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 				Title: title})
 		}
 	}
-
-	// 缓存磁力
-	for _, file := range cachingFiles {
-		err = db.CreateMagnetCache(model.MagnetCache{
-			DriverType: "fc2",
-			Magnet:     magnet,
-			Name:       file.Name,
-			Code:       file.ID,
-		})
-	}
-
-	// 保存影片信息
-	err = db.CreateFilms("fc2", "个人收藏", "个人收藏", cachingFiles)
-	_ = virtual_file.CacheImageAndNfo("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), title, thumbnail, actors)
-
-	if len(cachingFiles) > 1 {
-
-		whatLinkInfo := d.getWhatLinkInfo(magnet)
-
-		cachingImageFiles := cachingFiles
-		if thumbnail != "" {
-			cachingImageFiles = cachingFiles[1:]
-		}
-
-		for index, file := range cachingImageFiles {
-			if index < len(whatLinkInfo.Screenshots) {
-				_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(file.Name), whatLinkInfo.Screenshots[index].Screenshot, map[string]string{
-					"Referer": "https://mypikpak.com/",
-				})
-			} else {
-				if thumbnail == "" && len(whatLinkInfo.Screenshots) > 0 {
-					thumbnail = whatLinkInfo.Screenshots[0].Screenshot
-				}
-				_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(file.Name), thumbnail, map[string]string{})
-			}
-		}
-
-	} else if len(cachingFiles) == 1 && thumbnail == "" {
-		whatLinkInfo := d.getWhatLinkInfo(magnet)
-		if len(whatLinkInfo.Screenshots) > 0 {
-			_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), whatLinkInfo.Screenshots[0].Screenshot, map[string]string{
-				"Referer": "https://mypikpak.com/",
-			})
-		}
-	}
-
-	return cachingFiles[0], err
-
+	return cachingFiles
 }
 
 func (d *FC2) getPpvdbFilm(code string) (string, []string) {

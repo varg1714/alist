@@ -68,7 +68,7 @@ func CloudPlay(ctx context.Context, args model.LinkArgs, driverType, driverPath 
 	}
 
 	// 3. 下载文件
-	status, _, err := downloadMagnet(ctx, driverType, driverPath, magnet, fileName)
+	status, _, err := downloadMagnet(ctx, driverType, fmt.Sprintf("%s/%s", driverPath, downloadingFile.GetPath()), magnet, fileName)
 	if err != nil {
 		return nil, err
 	}

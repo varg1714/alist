@@ -38,7 +38,12 @@ func (d *Javdb) GetAddition() driver.Additional {
 
 func (d *Javdb) Init(ctx context.Context) error {
 
-	d.cron = cron.NewCron(time.Hour * 24)
+	duration := time.Minute * time.Duration(d.SubtitleScanTime)
+	if duration <= 0 {
+		duration = time.Minute * 60
+	}
+
+	d.cron = cron.NewCron(duration)
 	d.cron.Do(func() {
 		d.reMatchSubtitles()
 	})

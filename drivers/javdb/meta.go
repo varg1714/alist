@@ -17,6 +17,7 @@ type Addition struct {
 	CloudPlayDriverType   string `json:"cloud_play_driver_type" required:"true" default:"PikPak" type:"select" options:"PikPak,115 Cloud"`
 	CloudPlayDownloadPath string `json:"cloud_play_download_path" required:"false" help:"If empty then use global setting."`
 	Filter                string `json:"filter" required:"false" help:"Multi values must separated by commas."`
+	SubtitleScanTime      uint64 `json:"subtitle_scan_time" required:"true" type:"number" `
 }
 
 var config = driver.Config{

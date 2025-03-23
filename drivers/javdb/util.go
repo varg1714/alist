@@ -31,6 +31,16 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 	}
 
 	// 2. 根据影片名字映射名称
+	return d.mappingNames(dirName, javFilms)
+
+}
+
+func (d *Javdb) mappingNames(dirName string, javFilms []model.EmbyFileObj) ([]model.EmbyFileObj, error) {
+
+	if len(javFilms) == 0 {
+		return javFilms, nil
+	}
+
 	// 2.1 获取所有映射名称
 	namingFilms, err := d.getAiravNamingFilms(javFilms, dirName)
 	if err != nil || len(namingFilms) == 0 {
@@ -48,7 +58,15 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 	}
 
 	for _, film := range javFilms {
-		created := virtual_file.CacheImageAndNfo("javdb", dirName, virtual_file.AppendImageName(film.Name), film.Title, film.Thumb(), []string{dirName})
+		created := virtual_file.CacheImageAndNfo(virtual_file.MediaInfo{
+			Source:   "javdb",
+			Dir:      dirName,
+			FileName: virtual_file.AppendImageName(film.Name),
+			Title:    film.Title,
+			ImgUrl:   film.Thumb(),
+			Actors:   []string{dirName},
+			Release:  film.ReleaseTime,
+		})
 
 		if created == virtual_file.Exist && d.QuickCache {
 			// 已经创建过了，后续不再创建
@@ -57,14 +75,23 @@ func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]mode
 
 	}
 
-	utils.Log.Info("中文影片名称映射完毕")
+	utils.Log.Infof("name mapping finished for:[%s]", dirName)
 
 	return javFilms, err
-
 }
 
 func (d *Javdb) getStars() []model.EmbyFileObj {
-	return virtual_file.GetStorageFilms("javdb", "个人收藏", true)
+	films := virtual_file.GetStorageFilms("javdb", "个人收藏", true)
+
+	if d.RefreshNfo {
+		var filmNames []string
+		for _, film := range films {
+			filmNames = append(filmNames, film.Name)
+		}
+		virtual_file.ClearUnUsedFiles("javdb", "个人收藏", filmNames)
+	}
+
+	return films
 }
 
 func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
@@ -112,7 +139,15 @@ func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 		actorNames = append(actorNames, "个人收藏")
 	}
 
-	_ = virtual_file.CacheImageAndNfo("javdb", "个人收藏", virtual_file.AppendImageName(cachingFilm.Name), cachingFilm.Name, cachingFilm.Thumb(), actorNames)
+	_ = virtual_file.CacheImageAndNfo(virtual_file.MediaInfo{
+		Source:   "javdb",
+		Dir:      "个人收藏",
+		FileName: virtual_file.AppendImageName(cachingFilm.Name),
+		Title:    cachingFilm.Name,
+		ImgUrl:   cachingFilm.Thumb(),
+		Actors:   actorNames,
+		Release:  cachingFilm.ReleaseTime,
+	})
 
 	return cachingFilm, err
 
@@ -155,7 +190,14 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 			actorNames = append(actorNames, name)
 		}
 
-		virtual_file.UpdateNfo("javdb", embyObj.Path, virtual_file.AppendImageName(embyObj.Name), embyObj.Title, actorNames)
+		virtual_file.UpdateNfo(virtual_file.MediaInfo{
+			Source:   "javdb",
+			Dir:      embyObj.Path,
+			FileName: virtual_file.AppendImageName(embyObj.Name),
+			Title:    embyObj.Title,
+			Actors:   actorNames,
+			Release:  embyObj.ReleaseTime,
+		})
 
 	}
 
@@ -223,9 +265,9 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 			href := element.ChildAttr("a", "href")
 			image := element.ChildAttr("img", "src")
 
-			parse, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))
-			if parse.After(time.Now()) {
-				parse = time.Now()
+			releaseTime, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))
+			if releaseTime.Year() == 1 {
+				releaseTime = time.Now()
 			}
 
 			data = append(data, model.EmbyFileObj{
@@ -235,11 +277,12 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 						IsFolder: false,
 						ID:       "https://javdb.com/" + href,
 						Size:     622857143,
-						Modified: parse,
+						Modified: time.Now(),
 					},
 					Thumbnail: model.Thumbnail{Thumbnail: image},
 				},
-				Title: title,
+				Title:       title,
+				ReleaseTime: releaseTime,
 			})
 
 		})
@@ -605,7 +648,6 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 			utils.Log.Infof("影片名称映射入库失败:%s", err.Error())
 		}
 	}
-	utils.Log.Info("影片名称映射列表获取结束")
 
 	return nameCache, nil
 
@@ -704,6 +746,46 @@ func (d *Javdb) reMatchSubtitles() {
 	}
 
 	utils.Log.Info("rematching completed")
+
+}
+
+func (d *Javdb) refreshNfo() {
+
+	utils.Log.Info("start refresh nfo for javdb")
+
+	var actorNames []string
+	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
+	for _, actor := range actors {
+		actorNames = append(actorNames, actor.Name)
+	}
+	for _, actor := range actorNames {
+
+		films := virtual_file.GetStorageFilms("javdb", actor, false)
+
+		// refresh nfo
+		mappingNameFilms, err := d.mappingNames(actor, films)
+		if err != nil {
+			utils.Log.Warn("failed to get mapping names:", err.Error())
+			continue
+		}
+
+		var filmNames []string
+		for _, film := range mappingNameFilms {
+			virtual_file.UpdateNfo(virtual_file.MediaInfo{
+				Source:   "javdb",
+				Dir:      film.Path,
+				FileName: virtual_file.AppendImageName(film.Name),
+				Release:  film.ReleaseTime,
+			})
+			filmNames = append(filmNames, film.Name)
+		}
+
+		// clear unused files
+		virtual_file.ClearUnUsedFiles("javdb", actor, filmNames)
+
+	}
+
+	utils.Log.Info("finish refresh nfo")
 
 }
 

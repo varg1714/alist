@@ -2,7 +2,19 @@ package virtual_file
 
 import (
 	"encoding/xml"
+	"time"
 )
+
+type MediaInfo struct {
+	Source        string
+	Dir           string
+	FileName      string
+	Title         string
+	ImgUrl        string
+	ImgUrlHeaders map[string]string
+	Release       time.Time
+	Actors        []string
+}
 
 type Media struct {
 	XMLName   xml.Name `xml:"movie"`

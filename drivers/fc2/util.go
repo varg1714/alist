@@ -238,13 +238,16 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 	// 4. save film info
 
 	// 4.1 get film thumbnail
-	thumbnail, actors := d.getPpvdbFilm(code)
+	thumbnail, actors, releaseTime := d.getPpvdbFilm(code)
 	if len(actors) == 0 {
 		actors = append(actors, "个人收藏")
 	}
 
 	// 4.2 build the film info to be cached
-	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].Files), id, thumbnail, title)
+	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].Files), id, title)
+	if len(cachingFiles) > 0 {
+		cachingFiles[0].Thumbnail.Thumbnail = thumbnail
+	}
 
 	// 4.3 save the magnets info
 	var magnetCaches []model.MagnetCache
@@ -269,43 +272,50 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 	}
 
 	// 4.5 save the film meta, including nfo and images
-	_ = virtual_file.CacheImageAndNfo("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), title, thumbnail, actors)
+	_ = virtual_file.CacheImageAndNfo(virtual_file.MediaInfo{
+		Source:   "fc2",
+		Dir:      "个人收藏",
+		FileName: virtual_file.AppendImageName(cachingFiles[0].Name),
+		Title:    title,
+		ImgUrl:   thumbnail,
+		Actors:   actors,
+		Release:  releaseTime,
+	})
 
-	whatLinkInfo := d.getWhatLinkInfo(magnet)
-	if len(cachingFiles) > 1 {
-		// 4.5.1 multiple images need to be cached
-		cachingImageFiles := cachingFiles
-		if thumbnail != "" {
-			cachingImageFiles = cachingFiles[1:]
+	var noImageFiles []model.EmbyFileObj
+	for _, file := range cachingFiles {
+		if file.Thumb() == "" {
+			noImageFiles = append(noImageFiles, file)
 		}
+	}
+	if len(noImageFiles) > 0 {
 
-		for index, file := range cachingImageFiles {
-			if index < len(whatLinkInfo.Screenshots) {
-				_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(file.Name), whatLinkInfo.Screenshots[index].Screenshot, map[string]string{
-					"Referer": "https://mypikpak.com/",
+		whatLinkInfo := d.getWhatLinkInfo(magnet)
+		imgs := whatLinkInfo.Screenshots
+		if len(imgs) > 0 {
+			for index, file := range noImageFiles {
+				_ = virtual_file.CacheImage(virtual_file.MediaInfo{
+					Source:   "fc2",
+					Dir:      "个人收藏",
+					FileName: virtual_file.AppendImageName(file.Name),
+					Title:    title,
+					ImgUrl:   imgs[index%len(imgs)].Screenshot,
+					ImgUrlHeaders: map[string]string{
+						"Referer": "https://mypikpak.com/",
+					},
+					Actors:  actors,
+					Release: releaseTime,
 				})
-			} else {
-				if thumbnail == "" && len(whatLinkInfo.Screenshots) > 0 {
-					thumbnail = whatLinkInfo.Screenshots[0].Screenshot
-				}
-				_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(file.Name), thumbnail, map[string]string{})
 			}
 		}
 
-	} else if len(cachingFiles) == 1 && thumbnail == "" {
-		// 4.5.2 use the images as thumbnail when the thumbnail doesn't exist
-		if len(whatLinkInfo.Screenshots) > 0 {
-			_ = virtual_file.CacheImage("fc2", "个人收藏", virtual_file.AppendImageName(cachingFiles[0].Name), whatLinkInfo.Screenshots[0].Screenshot, map[string]string{
-				"Referer": "https://mypikpak.com/",
-			})
-		}
 	}
 
 	return cachingFiles[0], err
 
 }
 
-func buildCacheFile(fileCount int, id string, thumbnail string, title string) []model.EmbyFileObj {
+func buildCacheFile(fileCount int, id string, title string) []model.EmbyFileObj {
 
 	var cachingFiles []model.EmbyFileObj
 	if fileCount <= 1 {
@@ -319,7 +329,6 @@ func buildCacheFile(fileCount int, id string, thumbnail string, title string) []
 					Modified: time.Now(),
 					Path:     "个人收藏",
 				},
-				Thumbnail: model.Thumbnail{Thumbnail: thumbnail},
 			},
 			Title: title})
 	} else {
@@ -335,7 +344,6 @@ func buildCacheFile(fileCount int, id string, thumbnail string, title string) []
 						Modified: time.Now(),
 						Path:     "个人收藏",
 					},
-					Thumbnail: model.Thumbnail{Thumbnail: thumbnail},
 				},
 				Title: title})
 		}
@@ -343,7 +351,7 @@ func buildCacheFile(fileCount int, id string, thumbnail string, title string) []
 	return cachingFiles
 }
 
-func (d *FC2) getPpvdbFilm(code string) (string, []string) {
+func (d *FC2) getPpvdbFilm(code string) (string, []string, time.Time) {
 
 	split := strings.Split(code, "-")
 	code = split[len(split)-1]
@@ -373,16 +381,30 @@ func (d *FC2) getPpvdbFilm(code string) (string, []string) {
 
 	})
 
+	var releaseTime time.Time
+	collector.OnHTML("div[class*='lg:pl-8'][class*='lg:w-3/5']", func(element *colly.HTMLElement) {
+		timeStr := element.ChildText("div:nth-child(6) span")
+		if timeStr != "" {
+			tempTime, err := time.Parse("2006-01-02", timeStr)
+			if err == nil {
+				releaseTime = tempTime
+			} else {
+				utils.Log.Infof("failed to parse release time:%s,error message:%v", timeStr, err)
+			}
+		}
+
+	})
+
 	err := collector.Visit(fmt.Sprintf("https://fc2ppvdb.com/articles/%s", code))
 	if err != nil {
-		utils.Log.Infof("影片:%s的缩略图获取失败:%s", code, err.Error())
+		utils.Log.Infof("failed to query fc2 film info for:[%s], error message:%s", code, err.Error())
 	}
 
 	for actor, _ := range actorMap {
 		actors = append(actors, actor)
 	}
 
-	return imageUrl, actors
+	return imageUrl, actors, releaseTime
 
 }
 
@@ -401,5 +423,73 @@ func (d *FC2) getWhatLinkInfo(magnet string) WhatLinkInfo {
 	}
 
 	return whatLinkInfo
+
+}
+
+func (d *FC2) refreshNfo() {
+
+	utils.Log.Info("start refresh nfo for fc2")
+
+	films := d.getStars()
+	fileNames := make(map[string][]string)
+
+	for _, film := range films {
+		virtual_file.UpdateNfo(virtual_file.MediaInfo{
+			Source:   "fc2",
+			Dir:      film.Path,
+			FileName: virtual_file.AppendImageName(film.Name),
+			Release:  film.ReleaseTime,
+		})
+		fileNames[film.Path] = append(fileNames[film.Path], film.Name)
+	}
+
+	// clear unused files
+	for dir, names := range fileNames {
+		virtual_file.ClearUnUsedFiles("fc2", dir, names)
+	}
+
+	utils.Log.Info("finish refresh nfo")
+}
+
+func (d *FC2) reMatchReleaseTime() {
+
+	// rematch release time
+
+	utils.Log.Infof("start rematching release time for fc2")
+
+	unDateFilms, err := db.QueryNoDateFilms("fc2")
+	if err != nil {
+		utils.Log.Warnf("failed to query no date films: %s", err.Error())
+		return
+	}
+
+	timeMap := make(map[string]time.Time)
+
+	for _, film := range unDateFilms {
+
+		code := db.GetFilmCode(film.Name)
+		if existTime, exist := timeMap[code]; exist {
+			film.Date = existTime
+		} else {
+			_, _, releaseTime := d.getPpvdbFilm(code)
+			if releaseTime.Year() != 1 {
+				film.Date = releaseTime
+			} else {
+				film.Date = film.CreatedAt
+			}
+			timeMap[code] = film.Date
+		}
+
+		err1 := db.UpdateFilmDate(film)
+		if err1 != nil {
+			utils.Log.Warnf("failed to update film info: %s", err1.Error())
+		}
+
+		// avoid 429
+		time.Sleep(time.Duration(d.ScanTimeLimit) * time.Second)
+
+	}
+
+	utils.Log.Info("rematching completed")
 
 }

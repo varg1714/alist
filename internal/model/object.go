@@ -106,6 +106,7 @@ type ObjThumbURL struct {
 
 type EmbyFileObj struct {
 	ObjThumb
-	Title  string
-	Actors []string
+	Title       string
+	Actors      []string
+	ReleaseTime time.Time
 }

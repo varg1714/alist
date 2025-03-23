@@ -14,6 +14,9 @@ type Addition struct {
 	MockedLink            string `json:"mocked_link" `
 	CloudPlayDriverType   string `json:"cloud_play_driver_type" required:"true" default:"PikPak" type:"select" options:"PikPak,115 Cloud"`
 	CloudPlayDownloadPath string `json:"cloud_play_download_path" required:"false" help:"If empty then use global setting."`
+	ReleaseScanTime       uint64 `json:"ReleaseScanTime" required:"true" type:"number" `
+	ScanTimeLimit         uint64 `json:"ScanTimeLimit" required:"true" type:"number" `
+	RefreshNfo            bool   `json:"refresh_nfo"`
 }
 
 var config = driver.Config{

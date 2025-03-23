@@ -34,6 +34,20 @@ func (d *FC2) GetAddition() driver.Additional {
 }
 
 func (d *FC2) Init(ctx context.Context) error {
+
+	duration := time.Minute * time.Duration(d.ReleaseScanTime)
+	if duration <= 0 {
+		duration = time.Minute * 60
+	}
+
+	d.cron = cron.NewCron(duration)
+	d.cron.Do(func() {
+		if d.RefreshNfo {
+			d.reMatchReleaseTime()
+			d.refreshNfo()
+		}
+	})
+
 	return nil
 }
 

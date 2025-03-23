@@ -46,6 +46,9 @@ func (d *Javdb) Init(ctx context.Context) error {
 	d.cron = cron.NewCron(duration)
 	d.cron.Do(func() {
 		d.reMatchSubtitles()
+		if d.RefreshNfo {
+			d.refreshNfo()
+		}
 	})
 
 	return nil

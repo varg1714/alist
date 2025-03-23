@@ -7,7 +7,6 @@ import (
 	"github.com/pkg/errors"
 	"regexp"
 	"strings"
-	"time"
 )
 
 func CreateFilms(source string, actor, actorId string, models []model.EmbyFileObj) error {
@@ -18,9 +17,7 @@ func CreateFilms(source string, actor, actorId string, models []model.EmbyFileOb
 
 	films := make([]model.Film, 0)
 
-	now := time.Now()
 	for _, obj := range models {
-		now = now.Add(-1 * time.Hour)
 		films = append(films, model.Film{
 			Url:       obj.GetID(),
 			Name:      obj.GetName(),
@@ -28,8 +25,8 @@ func CreateFilms(source string, actor, actorId string, models []model.EmbyFileOb
 			Source:    source,
 			Actor:     actor,
 			ActorId:   actorId,
-			CreatedAt: now,
-			Date:      obj.Modified,
+			CreatedAt: obj.Modified,
+			Date:      obj.ReleaseTime,
 		})
 	}
 
@@ -59,6 +56,22 @@ func QueryFilmByCode(source string, code string) (model.Film, error) {
 
 	return film, tx.Error
 
+}
+
+func QueryNoDateFilms(source string) ([]model.Film, error) {
+
+	films := make([]model.Film, 0)
+	err := db.Where("source = ?", source).Where("date is null").Find(&films).Error
+
+	return films, err
+
+}
+
+func UpdateFilmDate(film model.Film) error {
+	return db.Model(&film).
+		Where("source = ?", film.Source).
+		Where("name = ?", film.Name).
+		Update("date", film.Date).Error
 }
 
 func QueryByUrls(actor string, urls []string) []string {

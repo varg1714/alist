@@ -292,7 +292,7 @@ func UpdateNfo(mediaInfo MediaInfo) {
 
 	err = xml.Unmarshal(file, &media)
 	if err != nil {
-		utils.Log.Warnf("failer to parse file[%s], error message:%s", filePath, err.Error())
+		utils.Log.Warnf("failed to parse file[%s], error message:%s", filePath, err.Error())
 		return
 	}
 	if len(mediaInfo.Actors) > 0 {

@@ -191,13 +191,18 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 	}
 
 	javdbMeta, err := av.GetMetaFromJavdb(file.GetID())
-	if err != nil {
-		utils.Log.Warn("failed to get javdb magnet info:", err.Error())
+	if err != nil || len(javdbMeta.Magnets) == 0 {
+		utils.Log.Warnf("failed to get javdb magnet info: %v,error message: %v, using the suke magnet instead.", javdbMeta, err)
+		sukeMeta, err2 := av.GetMetaFromSuke(db.GetFilmCode(file.GetName()))
+		if err2 != nil {
+			utils.Log.Warn("failed to get suke magnet info:", err2.Error())
+			return "", err2
+		} else {
+			if len(sukeMeta.Magnets) > 0 {
+				return sukeMeta.Magnets[0].Magnet, nil
+			}
+		}
 		return "", err
-	}
-
-	if len(javdbMeta.Magnets) == 0 {
-		return "", errors.New("javdb磁力信息获取为空")
 	}
 
 	actorMapping := make(map[string]string)

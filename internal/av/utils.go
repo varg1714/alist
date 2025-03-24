@@ -108,8 +108,11 @@ func GetMetaFromSuke(code string) (Meta, error) {
 			title := strings.ReplaceAll(trElement.ChildAttr("td:nth-child(2) a", "title"), "+++ ", "")
 
 			// size
+			size := uint64(0)
 			sizeStr := trElement.ChildText("td:nth-child(4)")
-			size, _ := humanize.ParseBytes(sizeStr)
+			if !strings.Contains(sizeStr, "bytes") {
+				size, _ = humanize.ParseBytes(sizeStr)
+			}
 
 			// time
 			timeStr := trElement.ChildText("td:nth-child(5)")

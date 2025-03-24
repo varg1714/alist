@@ -27,6 +27,7 @@ func CreateFilms(source string, actor, actorId string, models []model.EmbyFileOb
 			ActorId:   actorId,
 			CreatedAt: obj.Modified,
 			Date:      obj.ReleaseTime,
+			Title:     obj.Title,
 		})
 	}
 
@@ -61,17 +62,20 @@ func QueryFilmByCode(source string, code string) (model.Film, error) {
 func QueryNoDateFilms(source string) ([]model.Film, error) {
 
 	films := make([]model.Film, 0)
-	err := db.Where("source = ?", source).Where("date is null").Find(&films).Error
+	err := db.Where("source = ?", source).Where(`(date is null or (title is null or title = ""))`).Find(&films).Error
 
 	return films, err
 
 }
 
-func UpdateFilmDate(film model.Film) error {
+func UpdateFilmDateAndTitle(film model.Film) error {
 	return db.Model(&film).
 		Where("source = ?", film.Source).
 		Where("name = ?", film.Name).
-		Update("date", film.Date).Error
+		Updates(map[string]any{
+			"date":  film.Date,
+			"title": film.Title,
+		}).Error
 }
 
 func QueryByUrls(actor string, urls []string) []string {
@@ -95,9 +99,9 @@ func DeleteFilmsByActor(source string, actor string) error {
 
 }
 
-func DeleteFilmsByUrl(source, actor, url string) error {
+func DeleteFilmsByUrl(source, actor string, urls []string) error {
 
-	return errors.WithStack(db.Where("source = ?", source).Where("actor = ?", actor).Where("url = ?", url).Delete(&model.Film{}).Error)
+	return errors.WithStack(db.Where("source = ?", source).Where("actor = ?", actor).Where("url in ?", urls).Delete(&model.Film{}).Error)
 
 }
 

@@ -21,6 +21,8 @@ var magnetUrl, _ = regexp.Compile(".*<a href=\"(.*)\" class=\".*\"><i class=\".*
 
 var actorUrlsRegexp, _ = regexp.Compile(".*/article_search.php\\?id=(.*)")
 
+var dateRegexp, _ = regexp.Compile("\\d{4}-\\d{2}-\\d{2}")
+
 func (d *FC2) findMagnet(url string) (string, error) {
 
 	res, err := base.RestyClient.R().Get(url)
@@ -238,15 +240,18 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 	// 4. save film info
 
 	// 4.1 get film thumbnail
-	thumbnail, actors, releaseTime := d.getPpvdbFilm(code)
-	if len(actors) == 0 {
-		actors = append(actors, "个人收藏")
+	ppvFilmInfo := d.getPpvdbFilm(code)
+	if len(ppvFilmInfo.Actors) == 0 {
+		ppvFilmInfo.Actors = append(ppvFilmInfo.Actors, "个人收藏")
+	}
+	if ppvFilmInfo.ReleaseTime.Year() == 1 {
+		ppvFilmInfo.ReleaseTime = time.Now()
 	}
 
 	// 4.2 build the film info to be cached
-	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].Files), id, title)
+	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].Files), id, title, ppvFilmInfo.ReleaseTime)
 	if len(cachingFiles) > 0 {
-		cachingFiles[0].Thumbnail.Thumbnail = thumbnail
+		cachingFiles[0].Thumbnail.Thumbnail = ppvFilmInfo.Thumb()
 	}
 
 	// 4.3 save the magnets info
@@ -277,9 +282,9 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 		Dir:      "个人收藏",
 		FileName: virtual_file.AppendImageName(cachingFiles[0].Name),
 		Title:    title,
-		ImgUrl:   thumbnail,
-		Actors:   actors,
-		Release:  releaseTime,
+		ImgUrl:   ppvFilmInfo.Thumb(),
+		Actors:   ppvFilmInfo.Actors,
+		Release:  ppvFilmInfo.ReleaseTime,
 	})
 
 	var noImageFiles []model.EmbyFileObj
@@ -303,8 +308,8 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 					ImgUrlHeaders: map[string]string{
 						"Referer": "https://mypikpak.com/",
 					},
-					Actors:  actors,
-					Release: releaseTime,
+					Actors:  ppvFilmInfo.Actors,
+					Release: ppvFilmInfo.ReleaseTime,
 				})
 			}
 		}
@@ -315,7 +320,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
 }
 
-func buildCacheFile(fileCount int, id string, title string) []model.EmbyFileObj {
+func buildCacheFile(fileCount int, id string, title string, releaseTime time.Time) []model.EmbyFileObj {
 
 	var cachingFiles []model.EmbyFileObj
 	if fileCount <= 1 {
@@ -330,7 +335,8 @@ func buildCacheFile(fileCount int, id string, title string) []model.EmbyFileObj 
 					Path:     "个人收藏",
 				},
 			},
-			Title: title})
+			Title:       title,
+			ReleaseTime: releaseTime})
 	} else {
 		for index := range fileCount {
 			realName := virtual_file.AppendFilmName(fmt.Sprintf("%s-cd%d", id, index+1))
@@ -345,13 +351,14 @@ func buildCacheFile(fileCount int, id string, title string) []model.EmbyFileObj 
 						Path:     "个人收藏",
 					},
 				},
-				Title: title})
+				Title:       title,
+				ReleaseTime: releaseTime})
 		}
 	}
 	return cachingFiles
 }
 
-func (d *FC2) getPpvdbFilm(code string) (string, []string, time.Time) {
+func (d *FC2) getPpvdbFilm(code string) model.EmbyFileObj {
 
 	split := strings.Split(code, "-")
 	code = split[len(split)-1]
@@ -383,16 +390,24 @@ func (d *FC2) getPpvdbFilm(code string) (string, []string, time.Time) {
 
 	var releaseTime time.Time
 	collector.OnHTML("div[class*='lg:pl-8'][class*='lg:w-3/5']", func(element *colly.HTMLElement) {
-		timeStr := element.ChildText("div:nth-child(6) span")
-		if timeStr != "" {
-			tempTime, err := time.Parse("2006-01-02", timeStr)
-			if err == nil {
-				releaseTime = tempTime
-			} else {
-				utils.Log.Infof("failed to parse release time:%s,error message:%v", timeStr, err)
-			}
-		}
 
+		element.ForEach("span", func(i int, spanElement *colly.HTMLElement) {
+			timeStr := spanElement.Text
+			if dateRegexp.MatchString(timeStr) {
+				tempTime, err := time.Parse("2006-01-02", timeStr)
+				if err == nil {
+					releaseTime = tempTime
+				} else {
+					utils.Log.Infof("failed to parse release time:%s,error message:%v", timeStr, err)
+				}
+			}
+		})
+
+	})
+
+	title := ""
+	collector.OnHTML(".items-center.text-white.text-lg.title-font.font-medium.mb-1 a", func(element *colly.HTMLElement) {
+		title = element.Text
 	})
 
 	err := collector.Visit(fmt.Sprintf("https://fc2ppvdb.com/articles/%s", code))
@@ -404,7 +419,18 @@ func (d *FC2) getPpvdbFilm(code string) (string, []string, time.Time) {
 		actors = append(actors, actor)
 	}
 
-	return imageUrl, actors, releaseTime
+	return model.EmbyFileObj{
+		ObjThumb: model.ObjThumb{
+			Object: model.Object{
+				IsFolder: false,
+				Name:     title,
+			},
+			Thumbnail: model.Thumbnail{Thumbnail: imageUrl},
+		},
+		Title:       title,
+		Actors:      actors,
+		ReleaseTime: releaseTime,
+	}
 
 }
 
@@ -439,6 +465,7 @@ func (d *FC2) refreshNfo() {
 			Dir:      film.Path,
 			FileName: virtual_file.AppendImageName(film.Name),
 			Release:  film.ReleaseTime,
+			Title:    film.Title,
 		})
 		fileNames[film.Path] = append(fileNames[film.Path], film.Name)
 	}
@@ -458,29 +485,52 @@ func (d *FC2) reMatchReleaseTime() {
 	utils.Log.Infof("start rematching release time for fc2")
 
 	unDateFilms, err := db.QueryNoDateFilms("fc2")
+
 	if err != nil {
 		utils.Log.Warnf("failed to query no date films: %s", err.Error())
 		return
 	}
 
 	timeMap := make(map[string]time.Time)
+	titleMap := make(map[string]string)
 
 	for _, film := range unDateFilms {
 
 		code := db.GetFilmCode(film.Name)
+
 		if existTime, exist := timeMap[code]; exist {
 			film.Date = existTime
+			if film.Title == "" {
+				film.Title = titleMap[code]
+			}
 		} else {
-			_, _, releaseTime := d.getPpvdbFilm(code)
-			if releaseTime.Year() != 1 {
-				film.Date = releaseTime
+
+			ppvdbMediaInfo := d.getPpvdbFilm(code)
+
+			if ppvdbMediaInfo.ReleaseTime.Year() != 1 {
+				film.Date = ppvdbMediaInfo.ReleaseTime
 			} else {
 				film.Date = film.CreatedAt
 			}
 			timeMap[code] = film.Date
+
+			if film.Title == "" && ppvdbMediaInfo.Title != "" {
+				film.Title = open_ai.Translate(ppvdbMediaInfo.Title)
+			}
+
 		}
 
-		err1 := db.UpdateFilmDate(film)
+		if film.Title == "" {
+			sukeMediaInfo, err2 := av.GetMetaFromSuke(code)
+			if err2 != nil {
+				utils.Log.Warnf("failed to query suke: %s", code)
+			} else if len(sukeMediaInfo.Magnets) > 0 {
+				film.Title = open_ai.Translate(sukeMediaInfo.Magnets[0].Name)
+			}
+		}
+		titleMap[code] = film.Title
+
+		err1 := db.UpdateFilmDateAndTitle(film)
 		if err1 != nil {
 			utils.Log.Warnf("failed to update film info: %s", err1.Error())
 		}

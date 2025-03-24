@@ -41,19 +41,48 @@ func (d *Javdb) mappingNames(dirName string, javFilms []model.EmbyFileObj) ([]mo
 		return javFilms, nil
 	}
 
+	var noTitleFilms []model.EmbyFileObj
+	for _, film := range javFilms {
+		if film.Title == "" {
+			noTitleFilms = append(noTitleFilms, film)
+		}
+	}
+	if len(noTitleFilms) == 0 {
+		return javFilms, nil
+	}
+
 	// 2.1 获取所有映射名称
-	namingFilms, err := d.getAiravNamingFilms(javFilms, dirName)
+	namingFilms, err := d.getAiravNamingFilms(noTitleFilms, dirName)
 	if err != nil || len(namingFilms) == 0 {
 		utils.Log.Info("中文影片名称获取失败", err)
 		return javFilms, nil
 	}
 
 	// 2.2 进行映射
+	var savingFilms []model.EmbyFileObj
+	var deletingFilms []string
+
 	for index, film := range javFilms {
-		code := splitCode(film.Name)
-		if newName, exist := namingFilms[code]; exist && strings.HasSuffix(javFilms[index].Name, "mp4") {
-			javFilms[index].Name = virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(newName)))
-			javFilms[index].Title = virtual_file.ClearFilmName(newName)
+		if film.Title == "" {
+			code := splitCode(film.Name)
+			if newName, exist := namingFilms[code]; exist {
+				javFilms[index].Name = virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(newName)))
+				javFilms[index].Title = virtual_file.ClearFilmName(newName)
+
+				savingFilms = append(savingFilms, javFilms[index])
+				deletingFilms = append(deletingFilms, film.ID)
+			}
+		}
+	}
+	if len(savingFilms) > 0 {
+		err1 := db.DeleteFilmsByUrl("javdb", dirName, deletingFilms)
+		if err1 != nil {
+			utils.Log.Warnf("failed to delete films:[%s], error message: %s", deletingFilms, err1.Error())
+		} else {
+			err2 := db.CreateFilms("javdb", dirName, dirName, savingFilms)
+			if err2 != nil {
+				utils.Log.Infof("failed to save films:[%s], error message: %s", deletingFilms, err2.Error())
+			}
 		}
 	}
 
@@ -281,7 +310,6 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 					},
 					Thumbnail: model.Thumbnail{Thumbnail: image},
 				},
-				Title:       title,
 				ReleaseTime: releaseTime,
 			})
 
@@ -574,7 +602,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 	// 2. 爬取新的数据
 	for index := range films {
 
-		code, name := splitName(films[index].Title)
+		code, name := splitName(films[index].Name)
 
 		// 2.1 仅当未爬取到才爬取
 		if nameCache[code] == "" {
@@ -776,6 +804,7 @@ func (d *Javdb) refreshNfo() {
 				Dir:      film.Path,
 				FileName: virtual_file.AppendImageName(film.Name),
 				Release:  film.ReleaseTime,
+				Title:    film.Title,
 			})
 			filmNames = append(filmNames, film.Name)
 		}

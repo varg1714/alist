@@ -113,7 +113,7 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 				},
 				Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 			},
-			Title:       ClearFilmName(film.Name),
+			Title:       film.Title,
 			Actors:      film.Actors,
 			ReleaseTime: film.Date,
 		}
@@ -157,14 +157,14 @@ func convertObj(source, dirName string, actor []model.EmbyFileObj, results []mod
 				},
 				Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
 			},
-			Title: film.Name,
+			Title: film.Title,
 		})
 
 		_ = CacheImageAndNfo(MediaInfo{
 			Source:   source,
 			Dir:      dirName,
 			FileName: AppendImageName(film.Name),
-			Title:    film.Name,
+			Title:    film.Title,
 			ImgUrl:   film.Thumb(),
 			Actors:   []string{dirName},
 			Release:  film.ReleaseTime,
@@ -275,11 +275,12 @@ func CacheImage(mediaInfo MediaInfo) int {
 
 func UpdateNfo(mediaInfo MediaInfo) {
 
-	source := mediaInfo.Source
-	filePath := filepath.Join(flags.DataDir, "emby", source, mediaInfo.Dir, clearFileName(mediaInfo.FileName)+".nfo")
-	if !utils.Exists(filePath) {
+	cacheResult := cacheActorNfo(mediaInfo)
+	if cacheResult != Exist {
 		return
 	}
+
+	filePath := filepath.Join(flags.DataDir, "emby", mediaInfo.Source, mediaInfo.Dir, clearFileName(mediaInfo.FileName)+".nfo")
 
 	file, err := os.ReadFile(filePath)
 	if err != nil {
@@ -309,6 +310,11 @@ func UpdateNfo(mediaInfo MediaInfo) {
 		media.Premiered = media.Release
 		media.Year = mediaInfo.Release.Format("2006")
 		media.Month = mediaInfo.Release.Format("01")
+	}
+
+	if mediaInfo.Title != "" {
+		media.Title.Inner = mediaInfo.Title
+		media.Plot.Inner = fmt.Sprintf("<![CDATA[%s]]>", mediaInfo.Title)
 	}
 
 	mediaXml, err := mediaToXML(&media)
@@ -403,8 +409,13 @@ func cacheActorNfo(mediaInfo MediaInfo) int {
 }
 
 func clearFileName(fileName string) string {
-	sourceName := fileName[0:strings.LastIndex(fileName, ".")]
-	return sourceName
+
+	index := strings.LastIndex(fileName, ".")
+	if index == -1 {
+		return fileName
+	}
+
+	return fileName[0:index]
 }
 
 func CutString(name string) string {

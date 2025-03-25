@@ -68,14 +68,11 @@ func QueryNoDateFilms(source string) ([]model.Film, error) {
 
 }
 
-func UpdateFilmDateAndTitle(film model.Film) error {
-	return db.Model(&film).
-		Where("source = ?", film.Source).
-		Where("name = ?", film.Name).
-		Updates(map[string]any{
-			"date":  film.Date,
-			"title": film.Title,
-		}).Error
+func UpdateFilm(film model.Film) error {
+	return db.Model(&film).Updates(map[string]any{
+		"date":  film.Date,
+		"title": film.Title,
+	}).Error
 }
 
 func QueryByUrls(actor string, urls []string) []string {
@@ -126,122 +123,6 @@ func GetFilmCode(name string) string {
 		}
 	}
 	return code
-}
-
-func CreateActor(dir string, name string, url string) error {
-
-	actor := model.Actor{
-		Dir:  dir,
-		Name: name,
-		Url:  url,
-	}
-
-	err := db.Create(&actor).Error
-	return errors.WithStack(err)
-
-}
-
-func QueryActor(source string) []model.Actor {
-
-	actors := make([]model.Actor, 0)
-	actor := model.Actor{
-		Dir: source,
-	}
-
-	db.Where(actor).Order("updated_at desc").Find(&actors)
-
-	return actors
-
-}
-
-func DeleteActor(source string, actor string) error {
-
-	return errors.WithStack(db.Where("dir = ?", source).Where("name = ?", actor).Delete(&model.Actor{}).Error)
-
-}
-
-func QueryVirtualFiles(storageId string) []model.VirtualFile {
-
-	names := make([]model.VirtualFile, 0)
-	db.Where("storage_id = ?", storageId).Order("modified DESC").Find(&names)
-
-	return names
-
-}
-
-func QueryVirtualFilm(storageId uint, name string) model.VirtualFile {
-
-	file := model.VirtualFile{
-		StorageId: storageId,
-		Name:      name,
-	}
-
-	db.Where(file).Take(&file)
-
-	return file
-
-}
-
-func CreateVirtualFile(virtualFile model.VirtualFile) error {
-
-	return errors.WithStack(db.Create(&virtualFile).Error)
-
-}
-
-func DeleteVirtualFile(storageId uint, obj model.Obj) error {
-
-	virtualFile := model.VirtualFile{}
-	db.Where("storage_id = ?", storageId).Where("name = ?", obj.GetName()).Take(&virtualFile)
-	if virtualFile.ShareID != "" {
-		// virtual share file
-		return errors.WithStack(db.Where("storage_id = ?", storageId).Where("name = ?", obj.GetName()).Delete(&model.VirtualFile{}).Error)
-	} else {
-		// delete file
-		replacement := model.Replacement{
-			StorageId: storageId,
-			DirName: func() string {
-				virtualFile = QueryVirtualFilm(storageId, strings.Split(obj.GetPath(), "/")[0])
-				return virtualFile.ShareID
-			}(),
-			Type:    1,
-			OldName: obj.GetID(),
-		}
-		return errors.WithStack(db.Create(&replacement).Error)
-	}
-
-}
-
-func Rename(storageId uint, dir, oldName, newName string) error {
-
-	replacement := model.Replacement{
-		StorageId: storageId,
-		DirName:   dir,
-		OldName:   oldName,
-	}
-	db.Where("storage_id = ?", storageId).Where("dir_name = ?", dir).Where("old_name = ?", oldName).Take(&replacement)
-
-	if replacement.NewName != "" {
-		replacement.NewName = newName
-		return db.Where("storage_id = ? and dir_name = ? and old_name = ?", storageId, dir, oldName).Save(replacement).Error
-	} else {
-		replacement.NewName = newName
-		return errors.WithStack(db.Create(&replacement).Error)
-	}
-
-}
-
-func QueryReplacements(storageId uint, dir string) []model.Replacement {
-
-	param := model.Replacement{
-		StorageId: storageId,
-		DirName:   dir,
-	}
-
-	result := make([]model.Replacement, 0)
-	db.Where(param).Find(&result)
-
-	return result
-
 }
 
 func QueryUnCachedFilms(fileIds []string) []string {

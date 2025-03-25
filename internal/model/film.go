@@ -6,6 +6,7 @@ import (
 )
 
 type Film struct {
+	ID        uint      `gorm:"primarykey"`
 	Url       string    `json:"url" gorm:"index"`
 	Name      string    `json:"name"`
 	Image     string    `json:"image"`
@@ -19,6 +20,7 @@ type Film struct {
 }
 
 type MagnetCache struct {
+	ID         uint              `gorm:"primarykey"`
 	Magnet     string            `json:"magnet" gorm:"index"`
 	FileId     string            `json:"file_id"`
 	Name       string            `json:"name" gorm:"index"`
@@ -43,6 +45,7 @@ type Actor struct {
 }
 
 type VirtualFile struct {
+	ID              uint          `gorm:"primarykey"`
 	StorageId       uint          `json:"storage_id"`
 	Name            string        `json:"name"`
 	ShareID         string        `json:"shareId"`
@@ -67,6 +70,7 @@ type ReplaceItem struct {
 }
 
 type Replacement struct {
+	ID        uint   `gorm:"primarykey"`
 	StorageId uint   `json:"storage_id"`
 	DirName   string `json:"dir_name"`
 	OldName   string `json:"old_name"`

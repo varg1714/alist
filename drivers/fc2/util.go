@@ -530,7 +530,7 @@ func (d *FC2) reMatchReleaseTime() {
 		}
 		titleMap[code] = film.Title
 
-		err1 := db.UpdateFilmDateAndTitle(film)
+		err1 := db.UpdateFilm(film)
 		if err1 != nil {
 			utils.Log.Warnf("failed to update film info: %s", err1.Error())
 		}

@@ -42,8 +42,8 @@ func (d *FC2) Init(ctx context.Context) error {
 
 	d.cron = cron.NewCron(duration)
 	d.cron.Do(func() {
+		d.reMatchReleaseTime()
 		if d.RefreshNfo {
-			d.reMatchReleaseTime()
 			d.refreshNfo()
 		}
 	})

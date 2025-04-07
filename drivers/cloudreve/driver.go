@@ -1,13 +1,10 @@
 package cloudreve
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/alist-org/alist/v3/drivers/base"
@@ -149,7 +146,7 @@ func (d *Cloudreve) Put(ctx context.Context, dstDir model.Obj, stream model.File
 		"size":          stream.GetSize(),
 		"name":          stream.GetName(),
 		"policy_id":     r.Policy.Id,
-		"last_modified": stream.ModTime().Unix(),
+		"last_modified": stream.ModTime().UnixMilli(),
 	}
 
 	// 获取上传会话信息
@@ -165,42 +162,18 @@ func (d *Cloudreve) Put(ctx context.Context, dstDir model.Obj, stream model.File
 	switch r.Policy.Type {
 	case "onedrive":
 		err = d.upOneDrive(ctx, stream, u, up)
+	case "s3":
+		err = d.upS3(ctx, stream, u, up)
 	case "remote": // 从机存储
 		err = d.upRemote(ctx, stream, u, up)
 	case "local": // 本机存储
-		var chunkSize = u.ChunkSize
-		var buf []byte
-		var chunk int
-		for {
-			var n int
-			buf = make([]byte, chunkSize)
-			n, err = io.ReadAtLeast(stream, buf, chunkSize)
-			if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-				if err == io.EOF {
-					return nil
-				}
-				return err
-			}
-			if n == 0 {
-				break
-			}
-			buf = buf[:n]
-			err = d.request(http.MethodPost, "/file/upload/"+u.SessionID+"/"+strconv.Itoa(chunk), func(req *resty.Request) {
-				req.SetHeader("Content-Type", "application/octet-stream")
-				req.SetHeader("Content-Length", strconv.Itoa(n))
-				req.SetBody(driver.NewLimitedUploadStream(ctx, bytes.NewReader(buf)))
-			}, nil)
-			if err != nil {
-				break
-			}
-			chunk++
-		}
+		err = d.upLocal(ctx, stream, u, up)
 	default:
 		err = errs.NotImplement
 	}
 	if err != nil {
 		// 删除失败的会话
-		err = d.request(http.MethodDelete, "/file/upload/"+u.SessionID, nil, nil)
+		_ = d.request(http.MethodDelete, "/file/upload/"+u.SessionID, nil, nil)
 		return err
 	}
 	return nil

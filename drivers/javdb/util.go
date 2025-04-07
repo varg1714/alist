@@ -823,6 +823,50 @@ func (d *Javdb) refreshNfo() {
 
 }
 
+func (d *Javdb) filterFilms() {
+
+	utils.Log.Info("start to filter javdb films")
+
+	films, err := db.QueryFilmsByNamePrefix("javdb", strings.Split(d.Filter, ","))
+	if err != nil {
+		utils.Log.Warn("failed to query films:", err.Error())
+		return
+	}
+
+	if len(films) > 0 {
+		utils.Log.Infof("deleting films:[%v]", films)
+		for _, film := range films {
+			err1 := d.deleteFilm(film.Actor, virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(film.Name))), film.Url)
+			if err1 != nil {
+				utils.Log.Warn("failed to delete film:", err1.Error())
+			}
+		}
+	}
+
+	utils.Log.Info("finish filter javdb films")
+
+}
+
+func (d *Javdb) deleteFilm(dir, fileName, id string) error {
+	err := db.DeleteAllMagnetCacheByCode(fileName)
+	if err != nil {
+		utils.Log.Warnf("failed to delete film cache:[%s], error message:[%s]", fileName, err.Error())
+	}
+
+	err = db.DeleteFilmsByUrl("javdb", dir, []string{id})
+	if err != nil {
+		utils.Log.Infof("failed to delete film:[%s], error message:[%s]", fileName, err.Error())
+		return err
+	}
+
+	err = virtual_file.DeleteImageAndNfo("javdb", dir, fileName)
+	if err != nil {
+		utils.Log.Infof("failed to delete film nfo:[%s], error message:[%s]", fileName, err)
+		return err
+	}
+	return nil
+}
+
 func splitName(sourceName string) (string, string) {
 
 	index := strings.Index(sourceName, " ")

@@ -90,6 +90,21 @@ func QueryByUrls(actor string, urls []string) []string {
 
 }
 
+func QueryFilmsByNamePrefix(source string, prefixes []string) ([]model.Film, error) {
+
+	var films []model.Film
+
+	nameQuery := db.Where("name like ?", prefixes[0]+"%")
+	for _, p := range prefixes[1:] {
+		nameQuery = nameQuery.Or("name like ?", p+"%")
+	}
+
+	query := db.Where(db.Where("source = ?", source)).Where(db.Where(nameQuery))
+
+	return films, query.Find(&films).Error
+
+}
+
 func DeleteFilmsByActor(source string, actor string) error {
 
 	return errors.WithStack(db.Where("source = ?", source).Where("actor = ?", actor).Delete(&model.Film{}).Error)

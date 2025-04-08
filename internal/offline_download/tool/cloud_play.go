@@ -143,6 +143,9 @@ func downloadMagnet(ctx context.Context, driverType string, driverPath string, m
 		if err != nil {
 			return nil, nil, err
 		}
+		if downloadTask.GetErr() != nil {
+			return nil, nil, downloadTask.GetErr()
+		}
 
 		utils.Log.Infof("当前任务下载进度：%f", func() float64 {
 			if status == nil {

@@ -229,13 +229,13 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 	if err != nil {
 		utils.Log.Warn("failed to get the magnet info from suke:", err.Error())
 		return model.EmbyFileObj{}, err
-	} else if len(sukeMeta.Magnets) == 0 || sukeMeta.Magnets[0].Magnet == "" {
+	} else if len(sukeMeta.Magnets) == 0 || sukeMeta.Magnets[0].GetMagnet() == "" {
 		return model.EmbyFileObj{}, errors.New("查询结果为空")
 	}
 
 	// 3. translate film name
-	title := open_ai.Translate(virtual_file.ClearFilmName(sukeMeta.Magnets[0].Name))
-	magnet := sukeMeta.Magnets[0].Magnet
+	title := open_ai.Translate(virtual_file.ClearFilmName(sukeMeta.Magnets[0].GetName()))
+	magnet := sukeMeta.Magnets[0].GetMagnet()
 
 	// 4. save film info
 
@@ -249,7 +249,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 	}
 
 	// 4.2 build the film info to be cached
-	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].Files), id, title, ppvFilmInfo.ReleaseTime)
+	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].GetFiles()), id, title, ppvFilmInfo.ReleaseTime)
 	if len(cachingFiles) > 0 {
 		cachingFiles[0].Thumbnail.Thumbnail = ppvFilmInfo.Thumb()
 	}
@@ -525,7 +525,7 @@ func (d *FC2) reMatchReleaseTime() {
 			if err2 != nil {
 				utils.Log.Warnf("failed to query suke: %s", code)
 			} else if len(sukeMediaInfo.Magnets) > 0 {
-				film.Title = open_ai.Translate(sukeMediaInfo.Magnets[0].Name)
+				film.Title = open_ai.Translate(sukeMediaInfo.Magnets[0].GetName())
 			}
 		}
 		titleMap[code] = film.Title

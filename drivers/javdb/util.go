@@ -199,7 +199,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 			return "", err2
 		} else {
 			if len(sukeMeta.Magnets) > 0 {
-				return sukeMeta.Magnets[0].Magnet, nil
+				return sukeMeta.Magnets[0].GetMagnet(), nil
 			}
 		}
 		return "", err
@@ -237,16 +237,16 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
 	magnet := ""
 	subtitle := false
-	if javdbMeta.Magnets[0].Subtitle {
-		magnet = javdbMeta.Magnets[0].Magnet
+	if javdbMeta.Magnets[0].IsSubTitle() {
+		magnet = javdbMeta.Magnets[0].GetMagnet()
 		subtitle = true
 	} else {
 		sukeMeta, err2 := av.GetMetaFromSuke(db.GetFilmCode(file.GetName()))
 		if err2 != nil {
 			utils.Log.Warn("failed to get suke magnet info:", err2.Error())
 		} else {
-			if len(sukeMeta.Magnets) > 0 && sukeMeta.Magnets[0].Subtitle {
-				magnet = sukeMeta.Magnets[0].Magnet
+			if len(sukeMeta.Magnets) > 0 {
+				magnet = sukeMeta.Magnets[0].GetMagnet()
 				subtitle = true
 			}
 		}
@@ -254,8 +254,8 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 	}
 
 	if magnet == "" {
-		magnet = javdbMeta.Magnets[0].Magnet
-		subtitle = javdbMeta.Magnets[0].Subtitle
+		magnet = javdbMeta.Magnets[0].GetMagnet()
+		subtitle = javdbMeta.Magnets[0].IsSubTitle()
 	}
 
 	err = db.CreateMagnetCache(model.MagnetCache{
@@ -709,9 +709,9 @@ func (d *Javdb) reMatchSubtitles() {
 					javdbMeta, err2 := av.GetMetaFromJavdb(film.Url)
 					if err2 != nil {
 						utils.Log.Warn("failed to get javdb magnet info:", err2.Error())
-					} else if len(javdbMeta.Magnets) > 0 && javdbMeta.Magnets[0].Subtitle {
+					} else if len(javdbMeta.Magnets) > 0 && javdbMeta.Magnets[0].IsSubTitle() {
 						cache.Subtitle = true
-						cache.Magnet = javdbMeta.Magnets[0].Magnet
+						cache.Magnet = javdbMeta.Magnets[0].GetMagnet()
 					}
 				}
 			}
@@ -721,9 +721,9 @@ func (d *Javdb) reMatchSubtitles() {
 				if err2 != nil {
 					utils.Log.Warn("failed to get suke magnet info:", err2.Error())
 				} else {
-					if len(sukeMeta.Magnets) > 0 && sukeMeta.Magnets[0].Subtitle {
+					if len(sukeMeta.Magnets) > 0 && sukeMeta.Magnets[0].IsSubTitle() {
 						cache.Subtitle = true
-						cache.Magnet = sukeMeta.Magnets[0].Magnet
+						cache.Magnet = sukeMeta.Magnets[0].GetMagnet()
 					}
 				}
 			}

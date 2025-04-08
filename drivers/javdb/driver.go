@@ -12,7 +12,6 @@ import (
 	"github.com/alist-org/alist/v3/pkg/cron"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/emirpasic/gods/v2/maps/linkedhashmap"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -156,15 +155,12 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 	})
 
 	if err != nil {
-		utils.Log.Infof("The first magnet download failed, using the second magnet instead.")
+		utils.Log.Infof("The first magnet download failed:[%s], using the second magnet instead.", err.Error())
 		return tool.CloudPlay(ctx, args, d.CloudPlayDriverType, d.CloudPlayDownloadPath, file, func(obj model.Obj) (string, error) {
-			javdbMeta, _ := av.GetMetaFromJavdb(file.GetID())
-			magnets := javdbMeta.Magnets
+			sukeMeta, _ := av.GetMetaFromSuke(db.GetFilmCode(file.GetName()))
+			magnets := sukeMeta.Magnets
 			if len(magnets) > 0 {
-				slices.SortFunc(magnets, func(a, b av.Magnet) int {
-					return a.Date.Compare(b.Date)
-				})
-				return magnets[0].Magnet, nil
+				return magnets[0].GetMagnet(), nil
 			}
 			return "", errors.New("javdb磁力信息获取为空")
 		})

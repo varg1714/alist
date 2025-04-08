@@ -7,16 +7,15 @@ type Meta struct {
 	Actors  []Actor
 }
 
-type Magnet struct {
-	Magnet        string
-	Name          string
-	Size          uint64
-	Subtitle      bool
-	Tags          []string
-	DownloadCount uint64
-	Files         []File
-	Source        string
-	Date          time.Time
+type Magnet interface {
+	GetMagnet() string
+	GetName() string
+	GetSize() uint64
+	IsSubTitle() bool
+	GetTags() []string
+	GetDownloadCount() uint64
+	GetFiles() []File
+	GetReleaseDate() time.Time
 }
 
 type Actor struct {

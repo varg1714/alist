@@ -1,12 +1,14 @@
 package javdb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/av"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/alist-org/alist/v3/internal/offline_download/tool"
 	"github.com/alist-org/alist/v3/internal/open_ai"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/gocolly/colly/v2"
@@ -865,6 +867,21 @@ func (d *Javdb) deleteFilm(dir, fileName, id string) error {
 		return err
 	}
 	return nil
+}
+
+func (d *Javdb) tryAcquireLink(ctx context.Context, file model.Obj, args model.LinkArgs, magnetGetter func(obj model.Obj) (string, error)) (*model.Link, error) {
+
+	link, err := tool.CloudPlay(ctx, args, d.CloudPlayDriverType, d.CloudPlayDownloadPath, file, magnetGetter)
+
+	if err != nil {
+		utils.Log.Infof("The first cloud drive download failed:[%s]", err.Error())
+		if d.BackPlayDriverType != "" {
+			utils.Log.Infof("using the second cloud drive instead.")
+			return tool.CloudPlay(ctx, args, d.BackPlayDriverType, d.CloudPlayDownloadPath, file, magnetGetter)
+		}
+	}
+
+	return link, err
 }
 
 func splitName(sourceName string) (string, string) {

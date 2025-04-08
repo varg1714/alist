@@ -8,7 +8,6 @@ import (
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/offline_download/tool"
 	"github.com/alist-org/alist/v3/pkg/cron"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/emirpasic/gods/v2/maps/linkedhashmap"
@@ -150,23 +149,35 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 		}, nil
 	}
 
-	link, err := tool.CloudPlay(ctx, args, d.CloudPlayDriverType, d.CloudPlayDownloadPath, file, func(obj model.Obj) (string, error) {
-		return d.getMagnet(obj)
+	firstMagnet := ""
+	firstLink, err2 := d.tryAcquireLink(ctx, file, args, func(obj model.Obj) (string, error) {
+		magnet, err := d.getMagnet(obj)
+		firstMagnet = magnet
+		return magnet, err
 	})
 
-	if err != nil {
-		utils.Log.Infof("The first magnet download failed:[%s], using the second magnet instead.", err.Error())
-		return tool.CloudPlay(ctx, args, d.CloudPlayDriverType, d.CloudPlayDownloadPath, file, func(obj model.Obj) (string, error) {
-			sukeMeta, _ := av.GetMetaFromSuke(db.GetFilmCode(file.GetName()))
-			magnets := sukeMeta.Magnets
-			if len(magnets) > 0 {
+	if err2 != nil {
+		utils.Log.Infof("The first magnet download failed:[%s], using the second magnet instead.", err2.Error())
+		sukeMeta, _ := av.GetMetaFromSuke(db.GetFilmCode(file.GetName()))
+		magnets := sukeMeta.Magnets
+		if len(magnets) > 0 && firstMagnet != magnets[0].GetMagnet() {
+			secondLink, err3 := d.tryAcquireLink(ctx, file, args, func(obj model.Obj) (string, error) {
 				return magnets[0].GetMagnet(), nil
+			})
+			if err3 != nil {
+				utils.Log.Infof("The second magnet download failed:[%s].", err3.Error())
+				if d.FallbackPlay {
+					return &model.Link{
+						URL: d.MockedLink,
+					}, nil
+				}
 			}
-			return "", errors.New("javdb磁力信息获取为空")
-		})
+			return secondLink, err3
+
+		}
 	}
 
-	return link, err
+	return firstLink, err2
 }
 
 func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {

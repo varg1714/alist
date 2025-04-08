@@ -15,6 +15,8 @@ type Addition struct {
 	MockedLink            string `json:"mocked_link" `
 	QuickCache            bool   `json:"quick_cache" required:"true"`
 	CloudPlayDriverType   string `json:"cloud_play_driver_type" required:"true" default:"PikPak" type:"select" options:"PikPak,115 Cloud"`
+	BackPlayDriverType    string `json:"back_play_driver_type" required:"false" default:"PikPak" type:"select" options:"PikPak,115 Cloud"`
+	FallbackPlay          bool   `json:"fallback_play" required:"false"`
 	CloudPlayDownloadPath string `json:"cloud_play_download_path" required:"false" help:"If empty then use global setting."`
 	Filter                string `json:"filter" required:"false" help:"Multi values must separated by commas."`
 	SubtitleScanTime      uint64 `json:"subtitle_scan_time" required:"true" type:"number" `

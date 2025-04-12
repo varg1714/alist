@@ -113,9 +113,15 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 				},
 				Thumbnail: model.Thumbnail{Thumbnail: film.Image},
 			},
-			Title:       film.Title,
+			Title: func() string {
+				if film.Title != "" {
+					return film.Title
+				}
+				return film.Name
+			}(),
 			Actors:      film.Actors,
 			ReleaseTime: film.Date,
+			Translated:  film.Title != "",
 		}
 
 		if strings.HasSuffix(film.Name, "mp4") {

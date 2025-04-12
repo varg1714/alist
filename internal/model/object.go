@@ -109,4 +109,5 @@ type EmbyFileObj struct {
 	Title       string
 	Actors      []string
 	ReleaseTime time.Time
+	Translated  bool
 }

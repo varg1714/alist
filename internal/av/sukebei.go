@@ -144,7 +144,7 @@ func (s *SukebeiMagnet) findSukeMagnetInfo() {
 			fileName := liElement.Text
 			fileSize := liElement.ChildText(".file-size")
 
-			if len(fileSize) > 2 && !strings.Contains(fileSize, "bytes") {
+			if len(fileSize) > 2 && !strings.Contains(fileSize, "Bytes") {
 				bytes, err := humanize.ParseBytes(fileSize[1 : len(fileSize)-1])
 				if err != nil {
 					utils.Log.Warnf("failed to format file size:%s, error message:%s", fileSize, err.Error())
@@ -163,5 +163,6 @@ func (s *SukebeiMagnet) findSukeMagnetInfo() {
 	if err != nil {
 		utils.Log.Warn("failed to get the magnet info from suke:", err.Error())
 	}
+	s.queried = true
 
 }

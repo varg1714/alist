@@ -74,8 +74,8 @@ func GetMetaFromSuke(code string) (Meta, error) {
 		element.ForEach("tr", func(i int, trElement *colly.HTMLElement) {
 
 			// title
-			href := trElement.ChildAttr("td:nth-child(2) a", "href")
-			title := strings.ReplaceAll(trElement.ChildAttr("td:nth-child(2) a", "title"), "+++ ", "")
+			href := trElement.ChildAttr("td:nth-child(2) a:last-of-type", "href")
+			title := strings.ReplaceAll(trElement.ChildAttr("td:nth-child(2) a:last-of-type", "title"), "+++ ", "")
 
 			// size
 			size := uint64(0)

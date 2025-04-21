@@ -13,6 +13,7 @@ type Addition struct {
 	OrderDirection        string `json:"order_direction" type:"select" options:"ASC,DESC"`
 	Mocked                bool   `json:"mocked"`
 	MockedLink            string `json:"mocked_link" `
+	MockedByMatchUa       string `json:"mocked_by_match_ua"`
 	QuickCache            bool   `json:"quick_cache" required:"true"`
 	CloudPlayDriverType   string `json:"cloud_play_driver_type" required:"true" default:"PikPak" type:"select" options:"PikPak,115 Cloud"`
 	BackPlayDriverType    string `json:"back_play_driver_type" required:"false" default:"PikPak" type:"select" options:"PikPak,115 Cloud"`

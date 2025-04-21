@@ -128,17 +128,17 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 
 func (d *FC2) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
-	if d.Mocked && d.MockedLink != "" {
-		utils.Log.Infof("fc2返回的地址: %s", d.MockedLink)
-		return &model.Link{
-			URL: d.MockedLink,
-		}, nil
+	mockedLink := &model.Link{
+		URL: d.MockedLink,
 	}
 
-	if strings.HasSuffix(file.GetID(), "jpg") {
-		return &model.Link{
-			URL: file.GetID(),
-		}, nil
+	if d.MockedByMatchUa != "" && args.Header.Get("User-Agent") != d.MockedByMatchUa && d.MockedLink != "" {
+		utils.Log.Info("match ua match rule.")
+		return mockedLink, nil
+	}
+
+	if d.Mocked && d.MockedLink != "" {
+		return mockedLink, nil
 	}
 
 	return tool.CloudPlay(ctx, args, d.CloudPlayDriverType, d.CloudPlayDownloadPath, file, func(obj model.Obj) (string, error) {

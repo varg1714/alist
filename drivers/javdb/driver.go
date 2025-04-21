@@ -136,17 +136,16 @@ func (d *Javdb) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 
 func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
-	if d.Mocked && d.MockedLink != "" {
-		utils.Log.Infof("jdvdb返回的地址: %s", d.MockedLink)
-		return &model.Link{
-			URL: d.MockedLink,
-		}, nil
+	mockedLink := &model.Link{
+		URL: d.MockedLink,
+	}
+	if d.MockedByMatchUa != "" && args.Header.Get("User-Agent") != d.MockedByMatchUa && d.MockedLink != "" {
+		utils.Log.Info("match ua match rule.")
+		return mockedLink, nil
 	}
 
-	if strings.HasSuffix(file.GetID(), "jpg") {
-		return &model.Link{
-			URL: file.GetID(),
-		}, nil
+	if d.Mocked && d.MockedLink != "" {
+		return mockedLink, nil
 	}
 
 	firstMagnet := ""
@@ -167,9 +166,7 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 			if err3 != nil {
 				utils.Log.Infof("The second magnet download failed:[%s].", err3.Error())
 				if d.FallbackPlay {
-					return &model.Link{
-						URL: d.MockedLink,
-					}, nil
+					return mockedLink, nil
 				}
 			}
 			return secondLink, err3

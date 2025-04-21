@@ -9,8 +9,10 @@ import (
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/open_ai"
+	"github.com/alist-org/alist/v3/internal/spider"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/gocolly/colly/v2"
+	"github.com/tebeka/selenium"
 	"regexp"
 	"strings"
 	"time"
@@ -35,32 +37,21 @@ func (d *FC2) findMagnet(url string) (string, error) {
 
 func (d *FC2) getFilms(urlFunc func(index int) string) ([]model.EmbyFileObj, error) {
 
-	collector := colly.NewCollector(func(c *colly.Collector) {
-		c.SetRequestTimeout(time.Second * 10)
-	})
-
 	var result []model.EmbyFileObj
 	var filmIds []string
 	page := 1
 	preSize := len(filmIds)
 
-	collector.OnHTML(".flex.flex-wrap.-m-4.pb-4", func(e *colly.HTMLElement) {
-
-		e.ForEach(".absolute.top-0.left-0.text-white.bg-gray-800.px-1", func(i int, film *colly.HTMLElement) {
-			filmIds = append(filmIds, fmt.Sprintf("FC2-PPV-%s", film.Text))
-		})
-
-	})
-
 	for page == 1 || (preSize != len(filmIds)) {
 
-		err := collector.Visit(urlFunc(page))
-		if err != nil {
-			utils.Log.Warnf("影片爬取失败: %s", err.Error())
+		ids, err2 := d.getPageFilms(urlFunc(page))
+		if err2 != nil {
+			utils.Log.Warnf("影片爬取失败: %s", err2.Error())
 			return result, nil
 		} else {
 			page++
 			preSize = len(filmIds)
+			filmIds = append(filmIds, ids...)
 		}
 
 	}
@@ -541,5 +532,25 @@ func (d *FC2) reMatchReleaseTime() {
 	}
 
 	utils.Log.Info("rematching completed")
+
+}
+
+func (d *FC2) getPageFilms(url string) ([]string, error) {
+
+	var ids []string
+
+	err := spider.Visit(d.SpiderServer, url, time.Duration(d.SpiderMaxWaitTime)*time.Second, func(wd selenium.WebDriver) {
+		elements, _ := wd.FindElements(selenium.ByCSSSelector, ".absolute.top-0.left-0.text-white.bg-gray-800.px-1")
+		for _, element := range elements {
+			text, err1 := element.Text()
+			if err1 != nil {
+				utils.Log.Warnf("failed to fetch element: %s", err1.Error())
+			} else {
+				ids = append(ids, fmt.Sprintf("FC2-PPV-%s", text))
+			}
+		}
+	})
+
+	return ids, err
 
 }

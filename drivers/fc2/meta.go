@@ -6,7 +6,8 @@ import (
 )
 
 type Addition struct {
-	SpiderServer string `json:"spider_server" required:"true"`
+	SpiderServer      string `json:"spider_server" required:"true"`
+	SpiderMaxWaitTime uint64 `json:"spider_max_wait_time" required:"true" type:"number" `
 	driver.RootID
 	OrderBy               string `json:"order_by" type:"select" options:"name,size,updated_at,created_at"`
 	OrderDirection        string `json:"order_direction" type:"select" options:"ASC,DESC"`

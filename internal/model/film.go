@@ -85,6 +85,9 @@ type Replacement struct {
 type StringArray []string
 
 func (o *StringArray) Scan(src any) error {
+	if src == nil {
+		return nil
+	}
 	bytes, ok := src.([]byte)
 	if !ok {
 		return errors.New("src value cannot cast to []byte")
@@ -92,5 +95,8 @@ func (o *StringArray) Scan(src any) error {
 	return json.Unmarshal(bytes, o)
 }
 func (o StringArray) Value() (driver.Value, error) {
+	if len(o) == 0 {
+		return nil, nil
+	}
 	return json.Marshal(o)
 }

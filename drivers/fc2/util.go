@@ -505,6 +505,8 @@ func (d *FC2) reMatchReleaseTime() {
 			if err1 != nil {
 				if strings.Contains(err1.Error(), "Not Found") {
 					film.Actors = []string{"个人收藏"}
+				} else {
+					return
 				}
 			} else {
 				if ppvdbMediaInfo.ReleaseTime.Year() != 1 {

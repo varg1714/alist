@@ -1,22 +1,25 @@
 package model
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
 	"gorm.io/gorm"
 	"time"
 )
 
 type Film struct {
-	ID        uint      `gorm:"primarykey"`
-	Url       string    `json:"url" gorm:"index"`
-	Name      string    `json:"name"`
-	Image     string    `json:"image"`
-	Source    string    `json:"source"`
-	Actor     string    `json:"actor"`
-	ActorId   string    `json:"actor_id"`
-	Date      time.Time `json:"date"`
-	CreatedAt time.Time `json:"created_at"`
-	Actors    []string  `json:"actors" gorm:"type:json;serializer:json"`
-	Title     string    `json:"title"`
+	ID        uint        `gorm:"primarykey"`
+	Url       string      `json:"url" gorm:"index"`
+	Name      string      `json:"name"`
+	Image     string      `json:"image"`
+	Source    string      `json:"source"`
+	Actor     string      `json:"actor"`
+	ActorId   string      `json:"actor_id"`
+	Date      time.Time   `json:"date"`
+	CreatedAt time.Time   `json:"created_at"`
+	Actors    StringArray `json:"actors" gorm:"type:json;serializer:json"`
+	Title     string      `json:"title"`
 }
 
 type MagnetCache struct {
@@ -77,4 +80,17 @@ type Replacement struct {
 	NewName   string `json:"new_name"`
 	// 0: 重命名 1: 删除
 	Type int `json:"type"`
+}
+
+type StringArray []string
+
+func (o *StringArray) Scan(src any) error {
+	bytes, ok := src.([]byte)
+	if !ok {
+		return errors.New("src value cannot cast to []byte")
+	}
+	return json.Unmarshal(bytes, o)
+}
+func (o StringArray) Value() (driver.Value, error) {
+	return json.Marshal(o)
 }

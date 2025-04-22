@@ -231,7 +231,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 	// 4. save film info
 
 	// 4.1 get film thumbnail
-	ppvFilmInfo := d.getPpvdbFilm(code)
+	ppvFilmInfo, _ := d.getPpvdbFilm(code)
 	if len(ppvFilmInfo.Actors) == 0 {
 		ppvFilmInfo.Actors = append(ppvFilmInfo.Actors, "个人收藏")
 	}
@@ -349,7 +349,7 @@ func buildCacheFile(fileCount int, id string, title string, releaseTime time.Tim
 	return cachingFiles
 }
 
-func (d *FC2) getPpvdbFilm(code string) model.EmbyFileObj {
+func (d *FC2) getPpvdbFilm(code string) (model.EmbyFileObj, error) {
 
 	split := strings.Split(code, "-")
 	code = split[len(split)-1]
@@ -404,6 +404,7 @@ func (d *FC2) getPpvdbFilm(code string) model.EmbyFileObj {
 	err := collector.Visit(fmt.Sprintf("https://fc2ppvdb.com/articles/%s", code))
 	if err != nil {
 		utils.Log.Infof("failed to query fc2 film info for:[%s], error message:%s", code, err.Error())
+		return model.EmbyFileObj{}, err
 	}
 
 	for actor, _ := range actorMap {
@@ -421,7 +422,7 @@ func (d *FC2) getPpvdbFilm(code string) model.EmbyFileObj {
 		Title:       title,
 		Actors:      actors,
 		ReleaseTime: releaseTime,
-	}
+	}, nil
 
 }
 
@@ -457,6 +458,7 @@ func (d *FC2) refreshNfo() {
 			FileName: virtual_file.AppendImageName(film.Name),
 			Release:  film.ReleaseTime,
 			Title:    film.Title,
+			Actors:   film.Actors,
 		})
 		fileNames[film.Path] = append(fileNames[film.Path], film.Name)
 	}
@@ -475,38 +477,53 @@ func (d *FC2) reMatchReleaseTime() {
 
 	utils.Log.Infof("start rematching release time for fc2")
 
-	unDateFilms, err := db.QueryNoDateFilms("fc2")
+	incompleteFilms, err := db.QueryIncompleteFilms("fc2")
 
 	if err != nil {
 		utils.Log.Warnf("failed to query no date films: %s", err.Error())
 		return
 	}
 
-	timeMap := make(map[string]time.Time)
-	titleMap := make(map[string]string)
+	filmMap := make(map[string]model.Film)
 
-	for _, film := range unDateFilms {
+	for _, film := range incompleteFilms {
 
 		code := db.GetFilmCode(film.Name)
 
-		if existTime, exist := timeMap[code]; exist {
-			film.Date = existTime
+		if existFilm, exist := filmMap[code]; exist {
 			if film.Title == "" {
-				film.Title = titleMap[code]
+				film.Title = existFilm.Title
+			}
+			if len(film.Actors) == 0 {
+				if len(existFilm.Actors) > 0 {
+					film.Actors = append(film.Actors, existFilm.Actors...)
+				}
 			}
 		} else {
 
-			ppvdbMediaInfo := d.getPpvdbFilm(code)
-
-			if ppvdbMediaInfo.ReleaseTime.Year() != 1 {
-				film.Date = ppvdbMediaInfo.ReleaseTime
+			ppvdbMediaInfo, err1 := d.getPpvdbFilm(code)
+			if err1 != nil {
+				if strings.Contains(err1.Error(), "Not Found") {
+					film.Actors = []string{"个人收藏"}
+				}
 			} else {
-				film.Date = film.CreatedAt
-			}
-			timeMap[code] = film.Date
+				if ppvdbMediaInfo.ReleaseTime.Year() != 1 {
+					film.Date = ppvdbMediaInfo.ReleaseTime
+				} else {
+					film.Date = film.CreatedAt
+				}
 
-			if film.Title == "" && ppvdbMediaInfo.Title != "" {
-				film.Title = open_ai.Translate(ppvdbMediaInfo.Title)
+				if film.Title == "" && ppvdbMediaInfo.Title != "" {
+					film.Title = open_ai.Translate(ppvdbMediaInfo.Title)
+				}
+
+				if len(film.Actors) == 0 {
+					if len(ppvdbMediaInfo.Actors) > 0 {
+						film.Actors = ppvdbMediaInfo.Actors
+					} else {
+						film.Actors = []string{"个人收藏"}
+					}
+				}
 			}
 
 		}
@@ -519,7 +536,7 @@ func (d *FC2) reMatchReleaseTime() {
 				film.Title = open_ai.Translate(sukeMediaInfo.Magnets[0].GetName())
 			}
 		}
-		titleMap[code] = film.Title
+		filmMap[code] = film
 
 		err1 := db.UpdateFilm(film)
 		if err1 != nil {

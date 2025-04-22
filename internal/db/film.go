@@ -59,10 +59,10 @@ func QueryFilmByCode(source string, code string) (model.Film, error) {
 
 }
 
-func QueryNoDateFilms(source string) ([]model.Film, error) {
+func QueryIncompleteFilms(source string) ([]model.Film, error) {
 
 	films := make([]model.Film, 0)
-	err := db.Where("source = ?", source).Where(`(date is null or (title is null or title = ""))`).Find(&films).Error
+	err := db.Where("source = ?", source).Where(`(date is null or (title is null or title = "") or (actors is null))`).Find(&films).Error
 
 	return films, err
 
@@ -70,8 +70,9 @@ func QueryNoDateFilms(source string) ([]model.Film, error) {
 
 func UpdateFilm(film model.Film) error {
 	return db.Model(&film).Updates(map[string]any{
-		"date":  film.Date,
-		"title": film.Title,
+		"date":   film.Date,
+		"title":  film.Title,
+		"actors": film.Actors,
 	}).Error
 }
 

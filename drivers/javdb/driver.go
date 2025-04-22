@@ -140,7 +140,6 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 		URL: d.MockedLink,
 	}
 	if d.MockedByMatchUa != "" && args.Header.Get("User-Agent") != d.MockedByMatchUa && d.MockedLink != "" {
-		utils.Log.Info("match ua match rule.")
 		return mockedLink, nil
 	}
 

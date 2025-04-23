@@ -51,7 +51,7 @@ func GetFilmsWithStorage(source, dirName, actorId string, urlFunc func(index int
 
 	var urls []string
 	for _, item := range films {
-		urls = append(urls, item.ID)
+		urls = append(urls, item.Url)
 	}
 
 	existFilms := db.QueryByUrls(actorId, urls)
@@ -65,7 +65,7 @@ func GetFilmsWithStorage(source, dirName, actorId string, urlFunc func(index int
 		}
 		clear(urls)
 		for _, item := range films {
-			urls = append(urls, item.ID)
+			urls = append(urls, item.Url)
 		}
 
 		existFilms = db.QueryByUrls(actorId, urls)
@@ -73,7 +73,7 @@ func GetFilmsWithStorage(source, dirName, actorId string, urlFunc func(index int
 	}
 	// exist
 	for index, item := range films {
-		if utils.SliceContains(existFilms, item.ID) {
+		if utils.SliceContains(existFilms, item.Url) {
 			if index == 0 {
 				films = []model.EmbyFileObj{}
 			} else {
@@ -106,7 +106,7 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 			ObjThumb: model.ObjThumb{
 				Object: model.Object{
 					IsFolder: false,
-					ID:       film.Url,
+					ID:       fmt.Sprintf("%d", film.ID),
 					Size:     1417381701,
 					Modified: film.CreatedAt,
 					Path:     dirName,
@@ -122,6 +122,7 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 			Actors:      film.Actors,
 			ReleaseTime: film.Date,
 			Translated:  film.Title != "",
+			Url:         film.Url,
 		}
 
 		if strings.HasSuffix(film.Name, "mp4") {
@@ -164,6 +165,7 @@ func convertObj(source, dirName string, actor []model.EmbyFileObj, results []mod
 				Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
 			},
 			Title: film.Title,
+			Url:   film.Url,
 		})
 
 		_ = CacheImageAndNfo(MediaInfo{

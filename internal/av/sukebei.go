@@ -62,6 +62,8 @@ func (s *SukebeiMagnet) GetReleaseDate() time.Time {
 
 func GetMetaFromSuke(code string) (Meta, error) {
 
+	code = GetFilmCode(code)
+
 	searchUrl := fmt.Sprintf("https://sukebei.nyaa.si/?f=0&c=0_0&q=%s&s=downloads&o=desc", code)
 	var meta Meta
 

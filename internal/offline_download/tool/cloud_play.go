@@ -7,6 +7,7 @@ import (
 	"fmt"
 	driver2 "github.com/SheltonZhu/115driver/pkg/driver"
 	_115 "github.com/alist-org/alist/v3/drivers/115"
+	"github.com/alist-org/alist/v3/internal/av"
 	"github.com/alist-org/alist/v3/internal/conf"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
@@ -92,6 +93,7 @@ func CloudPlay(ctx context.Context, args model.LinkArgs, driverType, driverPath 
 				Magnet:     magnet,
 				FileId:     status.FileInfo.FileId,
 				Name:       fileName,
+				Code:       av.GetFilmCode(fileName),
 			})
 			if err1 != nil {
 				utils.Log.Infof("文件缓存失败:%s", err1.Error())
@@ -193,6 +195,7 @@ func cacheFiles(driverType, magnet, lookingFileName string, files []model.Obj, c
 			Magnet:     magnet,
 			FileId:     validFiles[0].GetID(),
 			Name:       lookingFileName,
+			Code:       av.GetFilmCode(lookingFileName),
 			Option:     cacheOptionFunc(validFiles[0]),
 		})
 		if err != nil {
@@ -211,6 +214,7 @@ func cacheFiles(driverType, magnet, lookingFileName string, files []model.Obj, c
 				Magnet:     magnet,
 				FileId:     lookedFile.GetID(),
 				Name:       lookingFileName,
+				Code:       av.GetFilmCode(lookingFileName),
 				Option:     cacheOptionFunc(lookedFile),
 			})
 			if err != nil {
@@ -228,6 +232,7 @@ func cacheFiles(driverType, magnet, lookingFileName string, files []model.Obj, c
 					Magnet:     magnet,
 					FileId:     file.GetID(),
 					Name:       realName,
+					Code:       av.GetFilmCode(realName),
 					Option:     cacheOptionFunc(file),
 				})
 				if err != nil {

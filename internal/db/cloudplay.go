@@ -9,10 +9,6 @@ import (
 
 func CreateMagnetCache(magnetCache model.MagnetCache) error {
 
-	if magnetCache.Code == "" {
-		magnetCache.Code = GetFilmCode(magnetCache.Name)
-	}
-
 	err := DeleteCacheByName(magnetCache.DriverType, []string{magnetCache.Name})
 	if err != nil {
 		return err
@@ -24,9 +20,6 @@ func BatchCreateMagnetCache(magnetCaches []model.MagnetCache) error {
 
 	var names []string
 	for index := range magnetCaches {
-		if magnetCaches[index].Code == "" {
-			magnetCaches[index].Code = GetFilmCode(magnetCaches[index].Name)
-		}
 		names = append(names, magnetCaches[index].Name)
 	}
 
@@ -53,8 +46,6 @@ func QueryMagnetCacheByName(driverType, name string) model.MagnetCache {
 }
 
 func QueryMagnetCacheByCode(code string) model.MagnetCache {
-
-	code = GetFilmCode(code)
 
 	fileCache := model.MagnetCache{
 		Code: code,
@@ -100,7 +91,7 @@ func QueryNoMatchCache(driverType string) ([]model.MagnetCache, error) {
 func DeleteAllMagnetCacheByCode(code string) error {
 
 	fileCache := model.MagnetCache{
-		Code: GetFilmCode(code),
+		Code: code,
 	}
 
 	return errors.WithStack(db.Where(fileCache).Delete(&fileCache).Error)

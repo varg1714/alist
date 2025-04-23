@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
+	"github.com/alist-org/alist/v3/internal/av"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -156,7 +157,7 @@ func (d *FC2) Remove(ctx context.Context, obj model.Obj) error {
 
 		return db.DeleteFilmsByActor("fc2", obj.GetName())
 	} else {
-		err := db.DeleteAllMagnetCacheByCode(obj.GetName())
+		err := db.DeleteAllMagnetCacheByCode(av.GetFilmCode(obj.GetName()))
 		if err != nil {
 			utils.Log.Warnf("影片缓存信息删除失败：%s", err.Error())
 		}
@@ -165,12 +166,12 @@ func (d *FC2) Remove(ctx context.Context, obj model.Obj) error {
 			utils.Log.Warnf("影片附件信息删除失败：%s", err.Error())
 		}
 
-		err = db.CreateMissedFilms([]string{db.GetFilmCode(obj.GetName())})
+		err = db.CreateMissedFilms([]string{av.GetFilmCode(obj.GetName())})
 		if err != nil {
 			utils.Log.Warnf("影片黑名单信息失败：%s", err.Error())
 		}
 
-		err = db.DeleteFilmsByPrefixUrl("fc2", "个人收藏", obj.GetID())
+		err = db.DeleteFilmsByCode("fc2", "个人收藏", av.GetFilmCode(obj.GetName()))
 		if err != nil {
 			utils.Log.Warnf("影片删除失败：%s", err.Error())
 		}
@@ -204,17 +205,6 @@ func (d *FC2) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) 
 	}
 
 	return db.CreateActor(strconv.Itoa(int(d.ID)), split[0], url)
-
-}
-
-func (d *FC2) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
-
-	if len(db.QueryByUrls("个人收藏", []string{srcObj.GetID()})) == 0 {
-		thumb := srcObj.(*model.EmbyFileObj)
-		return db.CreateFilms("fc2", "个人收藏", "个人收藏", []model.EmbyFileObj{*thumb})
-	}
-
-	return nil
 
 }
 

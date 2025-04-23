@@ -156,7 +156,7 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 
 	if err2 != nil {
 		utils.Log.Infof("The first magnet download failed:[%s], using the second magnet instead.", err2.Error())
-		sukeMeta, _ := av.GetMetaFromSuke(db.GetFilmCode(file.GetName()))
+		sukeMeta, _ := av.GetMetaFromSuke(file.GetName())
 		magnets := sukeMeta.Magnets
 		if len(magnets) > 0 && firstMagnet != magnets[0].GetMagnet() {
 			secondLink, err3 := d.tryAcquireLink(ctx, file, args, func(obj model.Obj) (string, error) {
@@ -206,17 +206,6 @@ func (d *Javdb) MakeDir(ctx context.Context, parentDir model.Obj, dirName string
 	}
 
 	return db.CreateActor(strconv.Itoa(int(d.ID)), split[0], split[1])
-
-}
-
-func (d *Javdb) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
-
-	if len(db.QueryByUrls("个人收藏", []string{srcObj.GetID()})) == 0 {
-		thumb := srcObj.(*model.EmbyFileObj)
-		return db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.EmbyFileObj{*thumb})
-	}
-
-	return nil
 
 }
 

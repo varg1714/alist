@@ -89,15 +89,15 @@ func (d *FC2) getFilms(urlFunc func(index int) string) ([]model.EmbyFileObj, err
 
 func (d *FC2) getMagnet(file model.Obj) (string, error) {
 
-	magnetCache := db.QueryMagnetCacheByCode(file.GetID())
+	code := av.GetFilmCode(file.GetName())
+
+	magnetCache := db.QueryMagnetCacheByCode(code)
 	if magnetCache.Magnet != "" {
 		utils.Log.Infof("返回缓存中的磁力地址:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil
 	}
 
-	id := file.GetID()
-
-	res, err := d.findMagnet(fmt.Sprintf("https://sukebei.nyaa.si/?f=0&c=0_0&q=%s&s=downloads&o=desc", id))
+	res, err := d.findMagnet(fmt.Sprintf("https://sukebei.nyaa.si/?f=0&c=0_0&q=%s&s=downloads&o=desc", code))
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +119,7 @@ func (d *FC2) getMagnet(file model.Obj) (string, error) {
 		err = db.CreateMagnetCache(model.MagnetCache{
 			Magnet: magnet,
 			Name:   file.GetName(),
-			Code:   id,
+			Code:   code,
 		})
 	}
 
@@ -179,12 +179,12 @@ func (d *FC2) getPageInfo(urlFunc func(index int) string, index int, data []mode
 					Object: model.Object{
 						Name:     title,
 						IsFolder: true,
-						ID:       id,
 						Size:     622857143,
 					},
 					Thumbnail: model.Thumbnail{Thumbnail: image},
 				},
 				Title: title,
+				Url:   id,
 			})
 		})
 	})
@@ -204,19 +204,19 @@ func (d *FC2) getStars() []model.EmbyFileObj {
 
 func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
-	id := code
-	if !strings.HasPrefix(id, "FC2-PPV") {
-		id = fmt.Sprintf("FC2-PPV-%s", code)
+	fc2Id := code
+	if !strings.HasPrefix(fc2Id, "FC2-PPV") {
+		fc2Id = fmt.Sprintf("FC2-PPV-%s", code)
 	}
 
 	// 1. get cache from db
-	magnetCache := db.QueryMagnetCacheByCode(id)
+	magnetCache := db.QueryMagnetCacheByCode(fc2Id)
 	if magnetCache.Magnet != "" {
 		return model.EmbyFileObj{}, errors.New("已存在该文件")
 	}
 
 	// 2. get magnet from suke
-	sukeMeta, err := av.GetMetaFromSuke(id)
+	sukeMeta, err := av.GetMetaFromSuke(fc2Id)
 	if err != nil {
 		utils.Log.Warn("failed to get the magnet info from suke:", err.Error())
 		return model.EmbyFileObj{}, err
@@ -240,7 +240,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 	}
 
 	// 4.2 build the film info to be cached
-	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].GetFiles()), id, title, ppvFilmInfo.ReleaseTime)
+	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].GetFiles()), fc2Id, title, ppvFilmInfo.ReleaseTime)
 	if len(cachingFiles) > 0 {
 		cachingFiles[0].Thumbnail.Thumbnail = ppvFilmInfo.Thumb()
 	}
@@ -252,6 +252,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 			DriverType: "fc2",
 			Magnet:     magnet,
 			Name:       file.Name,
+			Code:       av.GetFilmCode(file.Name),
 		})
 	}
 	err = db.BatchCreateMagnetCache(magnetCaches)
@@ -311,39 +312,41 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
 }
 
-func buildCacheFile(fileCount int, id string, title string, releaseTime time.Time) []model.EmbyFileObj {
+func buildCacheFile(fileCount int, fc2Id string, title string, releaseTime time.Time) []model.EmbyFileObj {
 
 	var cachingFiles []model.EmbyFileObj
 	if fileCount <= 1 {
 		cachingFiles = append(cachingFiles, model.EmbyFileObj{
 			ObjThumb: model.ObjThumb{
 				Object: model.Object{
-					Name:     virtual_file.AppendFilmName(id),
+					Name:     virtual_file.AppendFilmName(fc2Id),
 					IsFolder: false,
-					ID:       id,
 					Size:     622857143,
 					Modified: time.Now(),
 					Path:     "个人收藏",
 				},
 			},
 			Title:       title,
-			ReleaseTime: releaseTime})
+			ReleaseTime: releaseTime,
+			Url:         fc2Id,
+		})
 	} else {
 		for index := range fileCount {
-			realName := virtual_file.AppendFilmName(fmt.Sprintf("%s-cd%d", id, index+1))
+			realName := virtual_file.AppendFilmName(fmt.Sprintf("%s-cd%d", fc2Id, index+1))
 			cachingFiles = append(cachingFiles, model.EmbyFileObj{
 				ObjThumb: model.ObjThumb{
 					Object: model.Object{
 						Name:     realName,
 						IsFolder: false,
-						ID:       realName,
 						Size:     622857143,
 						Modified: time.Now(),
 						Path:     "个人收藏",
 					},
 				},
 				Title:       title,
-				ReleaseTime: releaseTime})
+				ReleaseTime: releaseTime,
+				Url:         fc2Id,
+			})
 		}
 	}
 	return cachingFiles
@@ -488,7 +491,7 @@ func (d *FC2) reMatchReleaseTime() {
 
 	for _, film := range incompleteFilms {
 
-		code := db.GetFilmCode(film.Name)
+		code := av.GetFilmCode(film.Name)
 
 		if existFilm, exist := filmMap[code]; exist {
 			if film.Title == "" {

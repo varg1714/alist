@@ -2,7 +2,9 @@ package av
 
 import (
 	"cmp"
+	"regexp"
 	"slices"
+	"strings"
 )
 
 func sortMagnet(meta *Meta) {
@@ -30,4 +32,18 @@ func sortMagnet(meta *Meta) {
 
 	})
 
+}
+
+func GetFilmCode(name string) string {
+	code := name
+	split := strings.Split(name, " ")
+	if len(split) >= 2 {
+		code = split[0]
+	} else {
+		nameRegexp, _ := regexp.Compile("(.*?)(-cd\\d+)?.mp4")
+		if nameRegexp.MatchString(name) {
+			code = nameRegexp.ReplaceAllString(name, "$1")
+		}
+	}
+	return code
 }

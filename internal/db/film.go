@@ -5,7 +5,6 @@ import (
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/pkg/errors"
-	"regexp"
 	"strings"
 )
 
@@ -19,7 +18,7 @@ func CreateFilms(source string, actor, actorId string, models []model.EmbyFileOb
 
 	for _, obj := range models {
 		films = append(films, model.Film{
-			Url:       obj.GetID(),
+			Url:       obj.Url,
 			Name:      obj.GetName(),
 			Image:     obj.Thumb(),
 			Source:    source,
@@ -28,6 +27,7 @@ func CreateFilms(source string, actor, actorId string, models []model.EmbyFileOb
 			CreatedAt: obj.Modified,
 			Date:      obj.ReleaseTime,
 			Title:     obj.Title,
+			Actors:    obj.Actors,
 		})
 	}
 
@@ -69,10 +69,10 @@ func QueryIncompleteFilms(source string) ([]model.Film, error) {
 }
 
 func UpdateFilm(film model.Film) error {
-	return db.Model(&film).Updates(map[string]any{
-		"date":   film.Date,
-		"title":  film.Title,
-		"actors": film.Actors,
+	return db.Model(&film).Updates(model.Film{
+		Date:   film.Date,
+		Title:  film.Title,
+		Actors: film.Actors,
 	}).Error
 }
 
@@ -118,27 +118,21 @@ func DeleteFilmsByUrl(source, actor string, urls []string) error {
 
 }
 
-func DeleteFilmsByPrefixUrl(source, actor, url string) error {
+func DeleteFilmById(id string) error {
+	return errors.WithStack(db.Delete(&model.Film{}, id).Error)
+}
+
+func DeleteFilmsByCode(source, actor, code string) error {
+
+	if code == "" {
+		return nil
+	}
 
 	return errors.WithStack(db.Where("source = ?", source).
 		Where("actor = ?", actor).
-		Where("url like ?", fmt.Sprintf("%s%%", GetFilmCode(url))).
+		Where("url like ?", fmt.Sprintf("%s%%", code)).
 		Delete(&model.Film{}).Error)
 
-}
-
-func GetFilmCode(name string) string {
-	code := name
-	split := strings.Split(name, " ")
-	if len(split) >= 2 {
-		code = split[0]
-	} else {
-		nameRegexp, _ := regexp.Compile("(.*?)(-cd\\d+)?.mp4")
-		if nameRegexp.MatchString(name) {
-			code = nameRegexp.ReplaceAllString(name, "$1")
-		}
-	}
-	return code
 }
 
 func QueryUnCachedFilms(fileIds []string) []string {

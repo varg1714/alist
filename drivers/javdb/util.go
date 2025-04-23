@@ -72,7 +72,7 @@ func (d *Javdb) mappingNames(dirName string, javFilms []model.EmbyFileObj) ([]mo
 				javFilms[index].Title = virtual_file.ClearFilmName(newName)
 
 				savingFilms = append(savingFilms, javFilms[index])
-				deletingFilms = append(deletingFilms, film.ID)
+				deletingFilms = append(deletingFilms, film.Url)
 			}
 		}
 	}
@@ -155,20 +155,21 @@ func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 		}
 	}
 
-	err = db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.EmbyFileObj{cachingFilm})
-	cachingFilm.Name = virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(cachingFilm.Name)))
-	cachingFilm.Path = "个人收藏"
-
 	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
 	actorMapping := make(map[string]string)
 	for _, actor := range actors {
 		actorMapping[actor.Url] = actor.Name
 	}
 
-	actorNames := d.getJavActorNames(cachingFilm.ID, actorMapping)
+	actorNames := d.getJavActorNames(cachingFilm.Url, actorMapping)
 	if len(actorNames) == 0 {
 		actorNames = append(actorNames, "个人收藏")
 	}
+	cachingFilm.Actors = actorNames
+
+	err = db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.EmbyFileObj{cachingFilm})
+	cachingFilm.Name = virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(cachingFilm.Name)))
+	cachingFilm.Path = "个人收藏"
 
 	_ = virtual_file.CacheImageAndNfo(virtual_file.MediaInfo{
 		Source:   "javdb",
@@ -186,16 +187,21 @@ func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 
 func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 
-	magnetCache := db.QueryMagnetCacheByName("javdb", file.GetName())
+	embyObj, ok := file.(*model.EmbyFileObj)
+	if !ok {
+		return "", errors.New("this film doesn't contains film info")
+	}
+
+	magnetCache := db.QueryMagnetCacheByName("javdb", embyObj.GetName())
 	if magnetCache.Magnet != "" {
 		utils.Log.Infof("return the magnet link from the cache:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil
 	}
 
-	javdbMeta, err := av.GetMetaFromJavdb(file.GetID())
+	javdbMeta, err := av.GetMetaFromJavdb(embyObj.Url)
 	if err != nil || len(javdbMeta.Magnets) == 0 {
 		utils.Log.Warnf("failed to get javdb magnet info: %v,error message: %v, using the suke magnet instead.", javdbMeta, err)
-		sukeMeta, err2 := av.GetMetaFromSuke(db.GetFilmCode(file.GetName()))
+		sukeMeta, err2 := av.GetMetaFromSuke(embyObj.GetName())
 		if err2 != nil {
 			utils.Log.Warn("failed to get suke magnet info:", err2.Error())
 			return "", err2
@@ -212,7 +218,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 		actorMapping[actor.Id] = actor.Name
 	}
 
-	if embyObj, ok := file.(*model.EmbyFileObj); ok && len(embyObj.Actors) == 0 {
+	if len(embyObj.Actors) == 0 {
 
 		actors := db.QueryActor(strconv.Itoa(int(d.ID)))
 		for _, actor := range actors {
@@ -235,6 +241,19 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 			Release:  embyObj.ReleaseTime,
 		})
 
+		tempId, err1 := strconv.ParseInt(embyObj.ID, 10, 64)
+		if err1 == nil {
+			err1 = db.UpdateFilm(model.Film{
+				ID:     uint(tempId),
+				Actors: actorNames,
+			})
+			if err1 != nil {
+				utils.Log.Warnf("failed to save film: %s, error message: %s", embyObj.GetName(), err1.Error())
+			}
+		} else {
+			utils.Log.Warnf("failed to parse films: %s id to int, error message: %s", embyObj.GetName(), err1.Error())
+		}
+
 	}
 
 	magnet := ""
@@ -243,7 +262,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 		magnet = javdbMeta.Magnets[0].GetMagnet()
 		subtitle = true
 	} else {
-		sukeMeta, err2 := av.GetMetaFromSuke(db.GetFilmCode(file.GetName()))
+		sukeMeta, err2 := av.GetMetaFromSuke(embyObj.GetName())
 		if err2 != nil {
 			utils.Log.Warn("failed to get suke magnet info:", err2.Error())
 		} else {
@@ -263,8 +282,9 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 	err = db.CreateMagnetCache(model.MagnetCache{
 		DriverType: "javdb",
 		Magnet:     magnet,
-		Name:       file.GetName(),
+		Name:       embyObj.GetName(),
 		Subtitle:   subtitle,
+		Code:       av.GetFilmCode(embyObj.GetName()),
 	})
 	return magnet, err
 
@@ -311,13 +331,13 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 					Object: model.Object{
 						Name:     title,
 						IsFolder: false,
-						ID:       "https://javdb.com/" + href,
 						Size:     622857143,
 						Modified: time.Now(),
 					},
 					Thumbnail: model.Thumbnail{Thumbnail: image},
 				},
 				ReleaseTime: releaseTime,
+				Url:         "https://javdb.com/" + href,
 			})
 
 		})
@@ -377,7 +397,7 @@ func (d *Javdb) getJavActorNames(filmUrl string, mapping map[string]string) []st
 
 }
 
-func (d *Javdb) getNajavPageInfo(urlFunc func(index int) string, index int, data []model.ObjThumb) ([]model.ObjThumb, bool, error) {
+func (d *Javdb) getNajavPageInfo(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 
 	preLen := len(data)
 
@@ -393,14 +413,16 @@ func (d *Javdb) getNajavPageInfo(urlFunc func(index int) string, index int, data
 			title := element.ChildText(".detail a")
 
 			parse, _ := time.Parse(time.DateOnly, element.ChildText(".meta"))
-			data = append(data, model.ObjThumb{
-				Object: model.Object{
-					Name:     title,
-					IsFolder: false,
-					ID:       "https://njav.tv/zh/" + href,
-					Size:     622857143,
-					Modified: parse,
+			data = append(data, model.EmbyFileObj{
+				ObjThumb: model.ObjThumb{
+					Object: model.Object{
+						Name:     title,
+						IsFolder: false,
+						Size:     622857143,
+						Modified: parse,
+					},
 				},
+				Url: "https://njav.tv/zh/" + href,
 			})
 		})
 
@@ -436,12 +458,12 @@ func (d *Javdb) getAiravPageInfo(urlFunc func(index int) string, index int, data
 						Object: model.Object{
 							Name:     title,
 							IsFolder: false,
-							ID:       "https://airav.io" + href,
 							Size:     622857143,
 							Modified: parse,
 						},
 					},
 					Title: title,
+					Url:   "https://airav.io" + href,
 				})
 			}
 
@@ -485,7 +507,7 @@ func setCookieRaw(cookieRaw string) []*http.Cookie {
 	return cookies
 }
 
-func (d *Javdb) getNjavAddr(films model.ObjThumb) (string, model.ObjThumb) {
+func (d *Javdb) getNjavAddr(films model.ObjThumb) (string, model.EmbyFileObj) {
 
 	actorUrl := ""
 	actorPageUrl := ""
@@ -494,15 +516,15 @@ func (d *Javdb) getNjavAddr(films model.ObjThumb) (string, model.ObjThumb) {
 
 	searchResult, _, err := d.getNajavPageInfo(func(index int) string {
 		return fmt.Sprintf("https://njav.tv/zh/search?keyword=%s", code)
-	}, 1, []model.ObjThumb{})
+	}, 1, []model.EmbyFileObj{})
 
 	if err != nil {
 		utils.Log.Info("njav页面爬取错误", err)
-		return "", model.ObjThumb{}
+		return "", model.EmbyFileObj{}
 	}
 
 	if len(searchResult) > 0 && splitCode(searchResult[0].Name) == code {
-		actorUrl = searchResult[0].ID
+		actorUrl = searchResult[0].Url
 	}
 
 	if actorUrl != "" {
@@ -527,7 +549,7 @@ func (d *Javdb) getNjavAddr(films model.ObjThumb) (string, model.ObjThumb) {
 		return actorPageUrl, searchResult[0]
 	}
 
-	return "", model.ObjThumb{}
+	return "", model.EmbyFileObj{}
 
 }
 
@@ -549,7 +571,7 @@ func (d *Javdb) getAiravNamingAddr(film model.EmbyFileObj) (string, model.EmbyFi
 
 	for _, item := range searchResult {
 		if splitCode(item.Name) == code {
-			actorUrl = item.ID
+			actorUrl = item.Url
 			matchedFilm = item
 			if actorUrl == "" {
 				return actorPageUrl, item
@@ -640,7 +662,7 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 
 			}
 
-			if nameCache[code] == "" && searchResult.ID != "" {
+			if nameCache[code] == "" && searchResult.Url != "" {
 				// 2.2.2 有该作品信息
 				nameCache[splitCode(searchResult.Title)] = virtual_file.AppendFilmName(searchResult.Title)
 				if addr == "" || actorCache[addr] {
@@ -849,12 +871,12 @@ func (d *Javdb) filterFilms() {
 }
 
 func (d *Javdb) deleteFilm(dir, fileName, id string) error {
-	err := db.DeleteAllMagnetCacheByCode(fileName)
+	err := db.DeleteAllMagnetCacheByCode(av.GetFilmCode(fileName))
 	if err != nil {
 		utils.Log.Warnf("failed to delete film cache:[%s], error message:[%s]", fileName, err.Error())
 	}
 
-	err = db.DeleteFilmsByUrl("javdb", dir, []string{id})
+	err = db.DeleteFilmById(id)
 	if err != nil {
 		utils.Log.Infof("failed to delete film:[%s], error message:[%s]", fileName, err.Error())
 		return err

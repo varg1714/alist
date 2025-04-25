@@ -111,9 +111,17 @@ func (d *FC2) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 		})
 	} else if categories[dirName] != "" {
 		// 自定义目录
-		films, err := d.getFilms(func(index int) string {
-			return fmt.Sprintf(categories[dirName], index)
-		})
+		var films []model.EmbyFileObj
+		var err error
+		if strings.Contains(categories[dirName], "missav.ai/dm99") {
+			films, err = d.getMissAvFilms(dirName, func(index int) string {
+				return d.ScraperApi + fmt.Sprintf(categories[dirName], index)
+			})
+		} else {
+			films, err = d.getFilms(func(index int) string {
+				return fmt.Sprintf(categories[dirName], index)
+			})
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -200,8 +208,11 @@ func (d *FC2) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) 
 	} else if actorType == 1 {
 		// 贩卖者
 		url = fmt.Sprintf("https://fc2ppvdb.com/writers/%s", split[1]) + "?page=%d"
+	} else if actorType == 2 {
+		// missAv fc2收藏榜
+		url = "https://missav.ai/dm99/cn/fc2?sort=saved&page=%d"
 	} else {
-		return err
+		return errors.New("illegal actorType")
 	}
 
 	return db.CreateActor(strconv.Itoa(int(d.ID)), split[0], url)
@@ -209,7 +220,7 @@ func (d *FC2) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) 
 }
 
 func (d *FC2) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) (model.Obj, error) {
-	star, err := d.addStar(stream.GetName())
+	star, err := d.addStar(stream.GetName(), []string{})
 	return &star, err
 
 }

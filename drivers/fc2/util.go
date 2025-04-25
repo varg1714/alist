@@ -69,7 +69,7 @@ func (d *FC2) getFilms(urlFunc func(index int) string) ([]model.EmbyFileObj, err
 	utils.Log.Infof("以下影片首次扫描到需添加入库：%v", unCachedFilms)
 	var notExitedFilms []string
 	for _, id := range unCachedFilms {
-		_, err := d.addStar(id)
+		_, err := d.addStar(id, []string{})
 		if err != nil {
 			notExitedFilms = append(notExitedFilms, id)
 		}
@@ -202,7 +202,11 @@ func (d *FC2) getStars() []model.EmbyFileObj {
 	return virtual_file.GetStorageFilms("fc2", "个人收藏", false)
 }
 
-func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
+func (d *FC2) addStar(code string, tags []string) (model.EmbyFileObj, error) {
+
+	if code == "" {
+		return model.EmbyFileObj{}, nil
+	}
 
 	fc2Id := code
 	if !strings.HasPrefix(fc2Id, "FC2-PPV") {
@@ -240,7 +244,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 	}
 
 	// 4.2 build the film info to be cached
-	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].GetFiles()), fc2Id, title, ppvFilmInfo.ReleaseTime)
+	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].GetFiles()), fc2Id, title, ppvFilmInfo.ReleaseTime, ppvFilmInfo.Actors, tags)
 	if len(cachingFiles) > 0 {
 		cachingFiles[0].Thumbnail.Thumbnail = ppvFilmInfo.Thumb()
 	}
@@ -277,6 +281,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 		ImgUrl:   ppvFilmInfo.Thumb(),
 		Actors:   ppvFilmInfo.Actors,
 		Release:  ppvFilmInfo.ReleaseTime,
+		Tags:     tags,
 	})
 
 	var noImageFiles []model.EmbyFileObj
@@ -302,6 +307,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 					},
 					Actors:  ppvFilmInfo.Actors,
 					Release: ppvFilmInfo.ReleaseTime,
+					Tags:    tags,
 				})
 			}
 		}
@@ -312,7 +318,7 @@ func (d *FC2) addStar(code string) (model.EmbyFileObj, error) {
 
 }
 
-func buildCacheFile(fileCount int, fc2Id string, title string, releaseTime time.Time) []model.EmbyFileObj {
+func buildCacheFile(fileCount int, fc2Id string, title string, releaseTime time.Time, actors, tags []string) []model.EmbyFileObj {
 
 	var cachingFiles []model.EmbyFileObj
 	if fileCount <= 1 {
@@ -329,6 +335,8 @@ func buildCacheFile(fileCount int, fc2Id string, title string, releaseTime time.
 			Title:       title,
 			ReleaseTime: releaseTime,
 			Url:         fc2Id,
+			Actors:      actors,
+			Tags:        tags,
 		})
 	} else {
 		for index := range fileCount {
@@ -346,6 +354,8 @@ func buildCacheFile(fileCount int, fc2Id string, title string, releaseTime time.
 				Title:       title,
 				ReleaseTime: releaseTime,
 				Url:         fc2Id,
+				Actors:      actors,
+				Tags:        tags,
 			})
 		}
 	}

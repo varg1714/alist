@@ -19,6 +19,8 @@ type Addition struct {
 	ReleaseScanTime       uint64 `json:"ReleaseScanTime" required:"true" type:"number" `
 	ScanTimeLimit         uint64 `json:"ScanTimeLimit" required:"true" type:"number" `
 	RefreshNfo            bool   `json:"refresh_nfo"`
+	ScraperApi            string `json:"scraper_api" required:"false"`
+	MissAvMaxPage         int    `json:"miss_av_max_page" required:"true" type:"number" `
 }
 
 var config = driver.Config{

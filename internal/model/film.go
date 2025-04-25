@@ -20,6 +20,7 @@ type Film struct {
 	CreatedAt time.Time   `json:"created_at"`
 	Actors    StringArray `json:"actors" gorm:"type:json;serializer:json"`
 	Title     string      `json:"title"`
+	Tags      StringArray `json:"tags" gorm:"type:json;serializer:json"`
 }
 
 type MagnetCache struct {

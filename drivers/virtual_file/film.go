@@ -325,6 +325,25 @@ func UpdateNfo(mediaInfo MediaInfo) {
 		media.Plot.Inner = fmt.Sprintf("<![CDATA[%s]]>", mediaInfo.Title)
 	}
 
+	if len(mediaInfo.Tags) > 0 {
+		tagSet := make(map[string]bool)
+		for _, tag := range mediaInfo.Tags {
+			tagSet[tag] = true
+		}
+		for _, tag := range media.Tag {
+			tagSet[tag.Inner] = true
+		}
+
+		var tags []Inner
+		for tag := range tagSet {
+			tags = append(tags, Inner{
+				Inner: tag,
+			})
+		}
+		media.Tag = tags
+
+	}
+
 	mediaXml, err := mediaToXML(&media)
 	if err != nil {
 		utils.Log.Infof("failed to parse media info:[%v] to xml, error message:%s", media, err.Error())
@@ -391,6 +410,13 @@ func cacheActorNfo(mediaInfo MediaInfo) int {
 		})
 	}
 
+	var tags []Inner
+	for _, tag := range mediaInfo.Tags {
+		tags = append(tags, Inner{
+			Inner: tag,
+		})
+	}
+
 	releaseTime := mediaInfo.Release.Format(time.DateOnly)
 	media := Media{
 		Plot:      Inner{Inner: fmt.Sprintf("<![CDATA[%s]]>", mediaInfo.Title)},
@@ -400,6 +426,7 @@ func cacheActorNfo(mediaInfo MediaInfo) int {
 		Premiered: releaseTime,
 		Year:      mediaInfo.Release.Format("2006"),
 		Month:     mediaInfo.Release.Format("01"),
+		Tag:       tags,
 	}
 
 	xml, err := mediaToXML(&media)

@@ -14,6 +14,7 @@ type MediaInfo struct {
 	ImgUrlHeaders map[string]string
 	Release       time.Time
 	Actors        []string
+	Tags          []string
 }
 
 type Media struct {

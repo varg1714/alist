@@ -28,6 +28,7 @@ func CreateFilms(source string, actor, actorId string, models []model.EmbyFileOb
 			Date:      obj.ReleaseTime,
 			Title:     obj.Title,
 			Actors:    obj.Actors,
+			Tags:      obj.Tags,
 		})
 	}
 
@@ -73,6 +74,7 @@ func UpdateFilm(film model.Film) error {
 		Date:   film.Date,
 		Title:  film.Title,
 		Actors: film.Actors,
+		Tags:   film.Tags,
 	}).Error
 }
 
@@ -184,4 +186,18 @@ where temp.id not in (select code from %s);`, strings.Join(placeHolders, ","), d
 	}
 
 	return result
+}
+
+func QueryNotMatchTagFilms(url []string, tag string) ([]model.Film, error) {
+
+	var result []model.Film
+
+	tx := db.Where("tags is null or tags not like ?", fmt.Sprintf("%%%s%%", tag))
+	if len(url) > 0 {
+		tx = tx.Where("url in ?", url)
+	}
+
+	find := tx.Find(&result)
+	return result, errors.WithStack(find.Error)
+
 }

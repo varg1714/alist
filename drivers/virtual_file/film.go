@@ -123,6 +123,7 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 			ReleaseTime: film.Date,
 			Translated:  film.Title != "",
 			Url:         film.Url,
+			Tags:        film.Tags,
 		}
 
 		if strings.HasSuffix(film.Name, "mp4") {
@@ -138,8 +139,9 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 				FileName: AppendImageName(thumb.Name),
 				Title:    thumb.Title,
 				ImgUrl:   film.Image,
-				Actors:   []string{dirName},
+				Actors:   film.Actors,
 				Release:  thumb.ReleaseTime,
+				Tags:     film.Tags,
 			})
 		}
 
@@ -164,8 +166,10 @@ func convertObj(source, dirName string, actor []model.EmbyFileObj, results []mod
 				},
 				Thumbnail: model.Thumbnail{Thumbnail: film.Thumb()},
 			},
-			Title: film.Title,
-			Url:   film.Url,
+			Title:  film.Title,
+			Url:    film.Url,
+			Tags:   film.Tags,
+			Actors: film.Actors,
 		})
 
 		_ = CacheImageAndNfo(MediaInfo{
@@ -176,6 +180,7 @@ func convertObj(source, dirName string, actor []model.EmbyFileObj, results []mod
 			ImgUrl:   film.Thumb(),
 			Actors:   []string{dirName},
 			Release:  film.ReleaseTime,
+			Tags:     film.Tags,
 		})
 
 	}

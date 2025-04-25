@@ -235,14 +235,16 @@ func (d *FC2) addStar(code string, tags []string) (model.EmbyFileObj, error) {
 	// 4. save film info
 
 	// 4.1 get film thumbnail
-	ppvFilmInfo, _ := d.getPpvdbFilm(code)
-	if len(ppvFilmInfo.Actors) == 0 {
-		ppvFilmInfo.Actors = append(ppvFilmInfo.Actors, "个人收藏")
+	ppvFilmInfo, err := d.getPpvdbFilm(code)
+	if err == nil {
+		if len(ppvFilmInfo.Actors) == 0 {
+			ppvFilmInfo.Actors = append(ppvFilmInfo.Actors, "个人收藏")
+		}
 	}
+
 	if ppvFilmInfo.ReleaseTime.Year() == 1 {
 		ppvFilmInfo.ReleaseTime = time.Now()
 	}
-
 	// 4.2 build the film info to be cached
 	cachingFiles := buildCacheFile(len(sukeMeta.Magnets[0].GetFiles()), fc2Id, title, ppvFilmInfo.ReleaseTime, ppvFilmInfo.Actors, tags)
 	if len(cachingFiles) > 0 {
@@ -472,6 +474,7 @@ func (d *FC2) refreshNfo() {
 			Release:  film.ReleaseTime,
 			Title:    film.Title,
 			Actors:   film.Actors,
+			Tags:     film.Tags,
 		})
 		fileNames[film.Path] = append(fileNames[film.Path], film.Name)
 	}

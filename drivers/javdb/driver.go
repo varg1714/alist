@@ -7,6 +7,7 @@ import (
 	"github.com/alist-org/alist/v3/internal/av"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
+	"github.com/alist-org/alist/v3/internal/emby"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/cron"
 	"github.com/alist-org/alist/v3/pkg/utils"
@@ -211,6 +212,9 @@ func (d *Javdb) MakeDir(ctx context.Context, parentDir model.Obj, dirName string
 
 func (d *Javdb) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) (model.Obj, error) {
 	star, err := d.addStar(stream.GetName())
+	if err == nil && d.EmbyServers != "" {
+		emby.Refresh(d.EmbyServers)
+	}
 	return &star, err
 
 }

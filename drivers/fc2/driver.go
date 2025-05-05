@@ -8,8 +8,10 @@ import (
 	"github.com/alist-org/alist/v3/internal/av"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
+	"github.com/alist-org/alist/v3/internal/emby"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/offline_download/tool"
+	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/pkg/cron"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"strconv"
@@ -221,6 +223,13 @@ func (d *FC2) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) 
 
 func (d *FC2) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) (model.Obj, error) {
 	star, err := d.addStar(stream.GetName(), []string{})
+	if err == nil {
+		op.ClearCache(d, "个人收藏")
+		if d.EmbyServers != "" {
+			emby.Refresh(d.EmbyServers)
+		}
+
+	}
 	return &star, err
 
 }

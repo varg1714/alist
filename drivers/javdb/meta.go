@@ -22,6 +22,7 @@ type Addition struct {
 	Filter                string `json:"filter" required:"false" help:"Multi values must separated by commas."`
 	SubtitleScanTime      uint64 `json:"subtitle_scan_time" required:"true" type:"number" `
 	RefreshNfo            bool   `json:"refresh_nfo"`
+	EmbyServers           string `json:"emby_servers" required:"false" type:"text"`
 }
 
 var config = driver.Config{

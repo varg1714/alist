@@ -21,6 +21,7 @@ type Addition struct {
 	RefreshNfo            bool   `json:"refresh_nfo"`
 	ScraperApi            string `json:"scraper_api" required:"false"`
 	MissAvMaxPage         int    `json:"miss_av_max_page" required:"true" type:"number" `
+	EmbyServers           string `json:"emby_servers" required:"false" type:"text"`
 }
 
 var config = driver.Config{

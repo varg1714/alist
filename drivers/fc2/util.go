@@ -225,7 +225,14 @@ func (d *FC2) addStar(code string, tags []string) (model.EmbyFileObj, error) {
 		utils.Log.Warn("failed to get the magnet info from suke:", err.Error())
 		return model.EmbyFileObj{}, err
 	} else if len(sukeMeta.Magnets) == 0 || sukeMeta.Magnets[0].GetMagnet() == "" {
-		return model.EmbyFileObj{}, errors.New("查询结果为空")
+
+		sukeMeta, err = av.GetMetaFromSuke(code)
+		if err == nil && len(sukeMeta.Magnets) > 0 {
+			fc2Id = code
+		} else {
+			return model.EmbyFileObj{}, errors.New("查询结果为空")
+		}
+
 	}
 
 	// 3. translate film name

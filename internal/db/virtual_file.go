@@ -8,10 +8,15 @@ import (
 func QueryVirtualFiles(storageId uint, parent string) []model.VirtualFile {
 
 	names := make([]model.VirtualFile, 0)
-	db.Where(&model.VirtualFile{
-		StorageId: storageId,
-		Parent:    parent,
-	}).Order("modified DESC").Find(&names)
+
+	tx := db.Where("storage_id = ?", storageId)
+	if parent == "" {
+		tx.Where("(parent is null or parent = '')")
+	} else {
+		tx.Where("parent = ?", parent)
+	}
+
+	tx.Order("modified DESC").Find(&names)
 
 	return names
 

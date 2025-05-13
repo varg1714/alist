@@ -5,7 +5,6 @@ import (
 	"errors"
 	quark "github.com/alist-org/alist/v3/drivers/quark_uc"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
-	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -13,7 +12,6 @@ import (
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"path/filepath"
-	"strings"
 )
 
 type QuarkShare struct {
@@ -90,8 +88,7 @@ func (d *QuarkShare) Link(ctx context.Context, file model.Obj, args model.LinkAr
 		}, nil
 	}
 
-	split := strings.Split(file.GetPath(), "/")
-	virtualFile := db.QueryVirtualFilm(d.ID, split[0])
+	virtualFile := virtual_file.GetVirtualFile(d.ID, file.GetPath())
 
 	transformFile, err := d.transformFile(virtualFile, *fileObject)
 	if err != nil {
@@ -119,7 +116,7 @@ func (d *QuarkShare) Link(ctx context.Context, file model.Obj, args model.LinkAr
 }
 
 func (d *QuarkShare) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
-	return virtual_file.MakeDir(d.ID, dirName)
+	return virtual_file.MakeDir(d.ID, parentDir, dirName)
 }
 
 func (d *QuarkShare) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
@@ -137,7 +134,7 @@ func (d *QuarkShare) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *QuarkShare) Remove(ctx context.Context, obj model.Obj) error {
-	return db.DeleteVirtualFile(d.ID, obj)
+	return virtual_file.DeleteVirtualFile(d.ID, obj)
 }
 
 func (d *QuarkShare) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {

@@ -7,13 +7,11 @@ import (
 	"time"
 
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
-	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"path/filepath"
-	"strings"
 )
 
 type PikPakShare struct {
@@ -109,8 +107,7 @@ func (d *PikPakShare) Link(ctx context.Context, file model.Obj, args model.LinkA
 
 	var resp ShareResp
 
-	split := strings.Split(file.GetPath(), "/")
-	virtualFile := db.QueryVirtualFilm(d.ID, split[0])
+	virtualFile := virtual_file.GetVirtualFile(d.ID, file.GetPath())
 
 	sharePassToken, err := d.getSharePassToken(virtualFile)
 
@@ -149,12 +146,12 @@ func (d *PikPakShare) Link(ctx context.Context, file model.Obj, args model.LinkA
 
 func (d *PikPakShare) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
 
-	return virtual_file.MakeDir(d.ID, dirName)
+	return virtual_file.MakeDir(d.ID, parentDir, dirName)
 
 }
 
 func (d *PikPakShare) Remove(ctx context.Context, obj model.Obj) error {
-	return db.DeleteVirtualFile(d.ID, obj)
+	return virtual_file.DeleteVirtualFile(d.ID, obj)
 }
 
 var _ driver.Driver = (*PikPakShare)(nil)

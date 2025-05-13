@@ -37,3 +37,7 @@ func QueryReplacements(storageId uint, dir string) []model.Replacement {
 	return result
 
 }
+
+func CreateReplacement(replacement model.Replacement) error {
+	return errors.WithStack(db.Create(&replacement).Error)
+}

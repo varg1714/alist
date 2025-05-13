@@ -10,7 +10,6 @@ import (
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/dlclark/regexp2"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -20,42 +19,48 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 	results := make([]model.Obj, 0)
 
 	dirName := dir.GetName()
-	utils.Log.Infof("list file:[%s]\n", dirName)
+	utils.Log.Infof("list file:[%s]", dirName)
 
-	virtualFilms := db.QueryVirtualFiles(strconv.Itoa(int(storageId)))
-
-	virtualFileMap := make(map[string]model.VirtualFile)
-
-	for _, film := range virtualFilms {
-		virtualFileMap[film.Name] = film
+	parent := ""
+	dbQuery := false
+	if dirName == "root" {
+		dbQuery = true
+	} else if virDir, ok := dir.(*model.ObjVirtualDir); ok && virDir.VirtualFile.DirType == 1 {
+		parent = fmt.Sprintf("%d", virDir.VirtualFile.ID)
+		dbQuery = true
 	}
 
-	if "root" == dirName {
+	if dbQuery {
 		// 1. 顶级目录
-		for _, category := range virtualFilms {
-			results = append(results, &model.ObjThumb{
-				Object: model.Object{
-					Name:     category.Name,
-					IsFolder: true,
-					ID:       category.Name,
-					Size:     622857143,
-					Modified: category.Modified,
-					Path:     filepath.Join(category.Name, category.ParentDir),
+		virtualFiles := db.QueryVirtualFiles(storageId, parent)
+		for _, virtualFile := range virtualFiles {
+			results = append(results, &model.ObjVirtualDir{
+				ObjThumb: model.ObjThumb{
+					Object: model.Object{
+						Name:     virtualFile.Name,
+						IsFolder: true,
+						ID:       fmt.Sprintf("%d", virtualFile.ID),
+						Size:     622857143,
+						Modified: virtualFile.Modified,
+						Path: func() string {
+							if virtualFile.DirType == 1 {
+								return filepath.Join(dir.GetPath(), fmt.Sprintf("%d", virtualFile.ID))
+							} else {
+								return filepath.Join(dir.GetPath(), fmt.Sprintf("%d", virtualFile.ID), virtualFile.ParentDir)
+							}
+						}(),
+					},
 				},
+				VirtualFile: virtualFile,
 			})
 		}
+
 		return results, nil
 	}
 
-	// top dir
-	paths := strings.Split(dir.GetPath(), "/")
-	if len(paths) == 0 {
-		return results, nil
-	}
+	virtualFile := GetVirtualFile(storageId, dir.GetPath())
 
-	virtualFile, exist := virtualFileMap[paths[0]]
-
-	if exist {
+	if virtualFile.ShareID != "" {
 
 		// list files
 		queriedFiles, err := recursiveListFile(dir, fileFunc, virtualFile)
@@ -157,7 +162,7 @@ func recursiveListFile(dir model.Obj, fileFunc func(virtualFile model.VirtualFil
 	return tempResults, nil
 }
 
-func MakeDir(storageId uint, param string) error {
+func MakeDir(storageId uint, parentDir model.Obj, param string) error {
 
 	var req model.VirtualFile
 	err := utils.Json.Unmarshal([]byte(param), &req)
@@ -165,9 +170,19 @@ func MakeDir(storageId uint, param string) error {
 		return err
 	}
 
-	virtualFiles := db.QueryVirtualFilm(storageId, req.Name)
-	if virtualFiles.ShareID != "" {
-		return errors.New("文件夹已存在")
+	if parentDir.GetName() == "root" {
+		req.Parent = ""
+	} else if virDir, ok := parentDir.(*model.ObjVirtualDir); ok && virDir.DirType == 1 {
+		req.Parent = fmt.Sprintf("%d", virDir.ID)
+	} else {
+		return errors.New("不允许在此目录下新增文件夹")
+	}
+
+	virtualFiles := db.QueryVirtualFiles(storageId, req.Parent)
+	for _, file := range virtualFiles {
+		if file.Name == req.Name {
+			return errors.New("文件夹已存在")
+		}
 	}
 
 	req.StorageId = storageId
@@ -177,10 +192,73 @@ func MakeDir(storageId uint, param string) error {
 
 }
 
+func GetVirtualFile(storageId uint, path string) model.VirtualFile {
+
+	virtualMapFunc := func(parent string) map[string]model.VirtualFile {
+
+		virtualFiles := db.QueryVirtualFiles(storageId, parent)
+		virtualFileMap := make(map[string]model.VirtualFile)
+		for _, film := range virtualFiles {
+			virtualFileMap[fmt.Sprintf("%d", film.ID)] = film
+		}
+
+		return virtualFileMap
+	}
+
+	split := strings.Split(path, "/")
+	virtualMap := virtualMapFunc("")
+	for _, subPath := range split {
+		if virtualFile, exist := virtualMap[subPath]; exist && virtualFile.DirType == 0 {
+			return virtualFile
+		} else if subPath != "" {
+			virtualMap = virtualMapFunc(subPath)
+		}
+	}
+
+	return model.VirtualFile{}
+
+}
+
+func DeleteVirtualFile(storageId uint, obj model.Obj) error {
+
+	if virDir, ok := obj.(*model.ObjVirtualDir); ok {
+		if virDir.VirtualFile.DirType == 0 {
+			return db.DeleteVirtualFile(virDir.VirtualFile)
+		} else {
+			// remove all sub dir
+			queue := generic.NewQueue[model.VirtualFile]()
+			queue.Push(virDir.VirtualFile)
+			for !queue.IsEmpty() {
+				pop := queue.Pop()
+				files := db.QueryVirtualFiles(storageId, fmt.Sprintf("%d", pop.ID))
+				for _, file := range files {
+					queue.Push(file)
+				}
+				err := db.DeleteVirtualFile(pop)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	} else {
+		virtualFile := GetVirtualFile(storageId, obj.GetPath())
+		// delete file
+		replacement := model.Replacement{
+			StorageId: storageId,
+			DirName:   virtualFile.ShareID,
+			Type:      1,
+			OldName:   obj.GetID(),
+		}
+		return db.CreateReplacement(replacement)
+	}
+
+	return nil
+
+}
+
 func Rename(storageId uint, dir, oldName, newName string) error {
 
-	split := strings.Split(dir, "/")
-	virtualFile := db.QueryVirtualFilm(storageId, split[0])
+	virtualFile := GetVirtualFile(storageId, dir)
 
 	return db.Rename(storageId, virtualFile.ShareID, oldName, newName)
 }

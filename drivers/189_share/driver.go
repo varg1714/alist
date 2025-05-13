@@ -6,7 +6,6 @@ import (
 	_189pc "github.com/alist-org/alist/v3/drivers/189pc"
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
-	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -14,7 +13,6 @@ import (
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -84,8 +82,7 @@ func (d *Cloud189Share) Link(ctx context.Context, file model.Obj, args model.Lin
 		}, nil
 	}
 
-	split := strings.Split(file.GetPath(), "/")
-	virtualFile := db.QueryVirtualFilm(d.ID, split[0])
+	virtualFile := virtual_file.GetVirtualFile(d.ID, file.GetPath())
 	shareInfo, err := d.getShareInfo(virtualFile.ShareID, virtualFile.SharePwd)
 	if err != nil {
 		return nil, err
@@ -102,7 +99,7 @@ func (d *Cloud189Share) Link(ctx context.Context, file model.Obj, args model.Lin
 }
 
 func (d *Cloud189Share) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
-	return virtual_file.MakeDir(d.ID, dirName)
+	return virtual_file.MakeDir(d.ID, parentDir, dirName)
 }
 
 func (d *Cloud189Share) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
@@ -120,7 +117,7 @@ func (d *Cloud189Share) Copy(ctx context.Context, srcObj, dstDir model.Obj) erro
 }
 
 func (d *Cloud189Share) Remove(ctx context.Context, obj model.Obj) error {
-	return db.DeleteVirtualFile(d.ID, obj)
+	return virtual_file.DeleteVirtualFile(d.ID, obj)
 }
 
 func (d *Cloud189Share) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {

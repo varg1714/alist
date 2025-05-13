@@ -8,7 +8,6 @@ import (
 	"github.com/Xhofe/go-cache"
 	"github.com/alist-org/alist/v3/drivers/baidu_netdisk"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
-	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"net/http"
@@ -193,8 +192,7 @@ func (d *BaiduShare) List(ctx context.Context, dir model.Obj, args model.ListArg
 func (d *BaiduShare) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 
 	start := time.Now().UnixMilli()
-	split := strings.Split(file.GetPath(), "/")
-	virtualFile := db.QueryVirtualFilm(d.ID, split[0])
+	virtualFile := virtual_file.GetVirtualFile(d.ID, file.GetPath())
 
 	_, secKey, shareId, uk, _ := d.getShareInfo(virtualFile.ShareID, virtualFile.SharePwd)
 
@@ -266,7 +264,7 @@ func (d *BaiduShare) Link(ctx context.Context, file model.Obj, args model.LinkAr
 }
 
 func (d *BaiduShare) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
-	return virtual_file.MakeDir(d.ID, dirName)
+	return virtual_file.MakeDir(d.ID, parentDir, dirName)
 }
 
 func (d *BaiduShare) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
@@ -284,7 +282,7 @@ func (d *BaiduShare) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *BaiduShare) Remove(ctx context.Context, obj model.Obj) error {
-	return db.DeleteVirtualFile(d.ID, obj)
+	return virtual_file.DeleteVirtualFile(d.ID, obj)
 }
 
 func (d *BaiduShare) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {

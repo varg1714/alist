@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"github.com/alist-org/alist/v3/drivers/aliyundrive_open"
 	"github.com/alist-org/alist/v3/drivers/virtual_file"
-	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/op"
 	"io"
 	"math"
@@ -17,7 +16,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/alist-org/alist/v3/drivers/base"
@@ -126,10 +124,9 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 	// 转存
 	start := time.Now().UnixMilli()
 
-	utils.Log.Infof("开始转存文件:[%s]\n", file.GetName())
+	utils.Log.Infof("开始转存文件:[%s]", file.GetName())
 
-	split := strings.Split(file.GetPath(), "/")
-	virtualFile := db.QueryVirtualFilm(d.ID, split[0])
+	virtualFile := virtual_file.GetVirtualFile(d.ID, file.GetPath())
 
 	shareFileId, err := d.SaveShare(virtualFile.ShareID, file.GetID(), d.TempFolderPath)
 	if err != nil {
@@ -164,7 +161,7 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 
 func (d *AliDrive) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
 
-	return virtual_file.MakeDir(d.ID, dirName)
+	return virtual_file.MakeDir(d.ID, parentDir, dirName)
 
 }
 
@@ -185,7 +182,7 @@ func (d *AliDrive) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *AliDrive) Remove(ctx context.Context, obj model.Obj) error {
-	return db.DeleteVirtualFile(d.ID, obj)
+	return virtual_file.DeleteVirtualFile(d.ID, obj)
 }
 
 func (d *AliDrive) Put(ctx context.Context, dstDir model.Obj, streamer model.FileStreamer, up driver.UpdateProgress) error {

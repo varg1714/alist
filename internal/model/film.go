@@ -50,6 +50,8 @@ type Actor struct {
 
 type VirtualFile struct {
 	ID              uint          `gorm:"primarykey"`
+	DirType         uint          `json:"dirType"`
+	Parent          string        `json:"parent"`
 	StorageId       uint          `json:"storage_id"`
 	Name            string        `json:"name"`
 	ShareID         string        `json:"shareId"`

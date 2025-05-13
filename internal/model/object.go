@@ -113,3 +113,8 @@ type EmbyFileObj struct {
 	Translated  bool
 	Tags        []string
 }
+
+type ObjVirtualDir struct {
+	ObjThumb
+	VirtualFile
+}

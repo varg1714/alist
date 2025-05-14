@@ -86,12 +86,12 @@ type Replacement struct {
 }
 
 type MovedItem struct {
-	ID        uint     `gorm:"primarykey"`
-	StorageId uint     `json:"storage_id"`
-	Parent    string   `json:"parent"`
-	ShareId   string   `json:"share_id"`
-	Source    ObjThumb `json:"source" gorm:"type:json;serializer:json"`
-	FileId    string   `json:"file_id"`
+	ID        uint   `gorm:"primarykey"`
+	StorageId uint   `json:"storage_id"`
+	Parent    string `json:"parent"`
+	ShareId   string `json:"share_id"`
+	Source    string `json:"source" `
+	FileId    string `json:"file_id"`
 }
 
 type StringArray []string

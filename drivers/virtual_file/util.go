@@ -295,12 +295,8 @@ func Move(storageId uint, srcObj model.Obj, targetDir model.Obj) error {
 				Parent:    targetDir.GetID(),
 				StorageId: storageId,
 				ShareId:   sourceVirtualFile.ShareID,
-				Source: model.ObjThumb{
-					Object: model.Object{
-						Path: filepath.Dir(srcObj.GetPath()),
-					},
-				},
-				FileId: srcObj.GetID(),
+				Source:    filepath.Dir(srcObj.GetPath()),
+				FileId:    srcObj.GetID(),
 			})
 		}
 
@@ -420,11 +416,13 @@ func getMovedFiles(storageId uint, dir model.Obj, fileFunc func(virtualFile mode
 		return result, err
 	}
 
+	if len(movedItems) == 0 {
+		return result, nil
+	}
+
 	movedPath := make(map[string][]string)
-	movedSource := make(map[string]model.Obj)
 	for _, item := range movedItems {
-		movedPath[item.Source.GetPath()] = append(movedPath[item.Source.GetPath()], item.FileId)
-		movedSource[item.Source.GetPath()] = &item.Source
+		movedPath[item.Source] = append(movedPath[item.Source], item.FileId)
 	}
 
 	for path, parentObjs := range movedPath {
@@ -439,7 +437,9 @@ func getMovedFiles(storageId uint, dir model.Obj, fileFunc func(virtualFile mode
 		} else {
 
 			// query files
-			subFiles, err1 := recursiveListFile(movedSource[path], fileFunc, virtualFile)
+			subFiles, err1 := recursiveListFile(&model.ObjThumb{Object: model.Object{
+				Path: path,
+			}}, fileFunc, virtualFile)
 			if err1 != nil {
 				return result, err1
 			}

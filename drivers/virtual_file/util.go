@@ -33,26 +33,16 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 	if dbQuery {
 		// 1. 顶级目录
 		virtualFiles := db.QueryVirtualFiles(storageId, parent)
-		for _, virtualFile := range virtualFiles {
-			results = append(results, &model.ObjVirtualDir{
-				ObjThumb: model.ObjThumb{
-					Object: model.Object{
-						Name:     virtualFile.Name,
-						IsFolder: true,
-						ID:       fmt.Sprintf("%d", virtualFile.ID),
-						Size:     622857143,
-						Modified: virtualFile.Modified,
-						Path: func() string {
-							if virtualFile.DirType == 1 {
-								return filepath.Join(dir.GetPath(), fmt.Sprintf("%d", virtualFile.ID))
-							} else {
-								return filepath.Join(dir.GetPath(), fmt.Sprintf("%d", virtualFile.ID), virtualFile.ParentDir)
-							}
-						}(),
-					},
-				},
-				VirtualFile: virtualFile,
-			})
+
+		results = append(results, buildVirtualFiles(virtualFiles, dir)...)
+
+		if dirName != "root" {
+			movedFiles, err := getMovedFiles(storageId, dir, fileFunc)
+			if err != nil {
+				utils.Log.Warnf("failed to get moved files, error message: %s", err.Error())
+			} else if len(movedFiles) > 0 {
+				results = append(results, movedFiles...)
+			}
 		}
 
 		return results, nil
@@ -68,7 +58,16 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 			return queriedFiles, err
 		}
 
-		return prettyFiles(storageId, virtualFile, queriedFiles), nil
+		movedItems, err := db.QueryMovedItemByShareId(storageId, virtualFile.ShareID, filepath.Dir(dir.GetPath()))
+		if err != nil {
+			utils.Log.Warnf("failed to list moved items by shareId, error message: %s", err.Error())
+		}
+		var movedItemIds []string
+		for _, item := range movedItems {
+			movedItemIds = append(movedItemIds, item.FileId)
+		}
+
+		return prettyFiles(storageId, virtualFile, queriedFiles, movedItemIds), nil
 
 	} else {
 		return results, nil
@@ -76,7 +75,7 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 
 }
 
-func prettyFiles(storageId uint, virtualFile model.VirtualFile, queriedFiles []model.Obj) []model.Obj {
+func prettyFiles(storageId uint, virtualFile model.VirtualFile, queriedFiles []model.Obj, excludeIds []string) []model.Obj {
 
 	results := make([]model.Obj, 0)
 
@@ -87,12 +86,21 @@ func prettyFiles(storageId uint, virtualFile model.VirtualFile, queriedFiles []m
 		replaceMap[temp.OldName] = temp
 	}
 
+	excludeIdMap := make(map[string]bool)
+	for _, id := range excludeIds {
+		excludeIdMap[id] = true
+	}
+
 	for fileIndex, obj := range queriedFiles {
 
 		excludeFile := virtualFile.ExcludeUnMatch
 		objNameSetter, canRename := obj.(model.SetName)
 		if !canRename && !excludeFile {
 			results = append(results, obj)
+			continue
+		}
+
+		if excludeIdMap[obj.GetID()] {
 			continue
 		}
 
@@ -256,6 +264,50 @@ func DeleteVirtualFile(storageId uint, obj model.Obj) error {
 
 }
 
+func Move(storageId uint, srcObj model.Obj, targetDir model.Obj) error {
+
+	targetVirtualFile := GetVirtualFile(storageId, targetDir.GetPath())
+	if targetVirtualFile.ShareID != "" {
+		return errors.New("仅能移动到虚拟文件夹下")
+	}
+
+	if virDir, ok := srcObj.(*model.ObjVirtualDir); ok {
+		// update parent
+		virtualFile := virDir.VirtualFile
+		virtualFile.Parent = targetDir.GetID()
+		return db.UpdateVirtualFile(virtualFile)
+	} else {
+		// add moved item
+		sourceVirtualFile := GetVirtualFile(storageId, srcObj.GetPath())
+
+		existMovedItem, err := db.QueryMovedItemByFileId(srcObj.GetID(), filepath.Dir(srcObj.GetPath()))
+		if err != nil {
+			return err
+		}
+
+		if existMovedItem.FileId != "" {
+			// has been moved, only update the parent info
+			existMovedItem.Parent = targetDir.GetID()
+			return db.UpdateMovedItem(existMovedItem)
+		} else {
+			// add new moved info
+			return db.CreateMovedItem(model.MovedItem{
+				Parent:    targetDir.GetID(),
+				StorageId: storageId,
+				ShareId:   sourceVirtualFile.ShareID,
+				Source: model.ObjThumb{
+					Object: model.Object{
+						Path: filepath.Dir(srcObj.GetPath()),
+					},
+				},
+				FileId: srcObj.GetID(),
+			})
+		}
+
+	}
+
+}
+
 func Rename(storageId uint, dir, oldName, newName string) error {
 
 	virtualFile := GetVirtualFile(storageId, dir)
@@ -325,4 +377,91 @@ func mediaToXML(m *Media) ([]byte, error) {
 	x = []byte(xml.Header + string(x))
 
 	return x, nil
+}
+
+func buildVirtualFiles(virtualFiles []model.VirtualFile, dir model.Obj) []model.Obj {
+
+	var result []model.Obj
+
+	for _, virtualFile := range virtualFiles {
+		result = append(result, &model.ObjVirtualDir{
+			ObjThumb: model.ObjThumb{
+				Object: model.Object{
+					Name:     virtualFile.Name,
+					IsFolder: true,
+					ID:       fmt.Sprintf("%d", virtualFile.ID),
+					Size:     622857143,
+					Modified: virtualFile.Modified,
+					Path: func() string {
+						if virtualFile.DirType == 1 {
+							return filepath.Join(dir.GetPath(), fmt.Sprintf("%d", virtualFile.ID))
+						} else {
+							return filepath.Join(dir.GetPath(), fmt.Sprintf("%d", virtualFile.ID), virtualFile.ParentDir)
+						}
+					}(),
+				},
+			},
+			VirtualFile: virtualFile,
+		})
+	}
+
+	return result
+
+}
+
+func getMovedFiles(storageId uint, dir model.Obj, fileFunc func(virtualFile model.VirtualFile, dir model.Obj) ([]model.Obj, error)) ([]model.Obj, error) {
+
+	var result []model.Obj
+
+	// query moved films
+	movedItems, err := db.QueryMovedItemByParent(dir.GetID())
+	if err != nil {
+		utils.Log.Warnf("failed to query moved itms, error message: %s", err.Error())
+		return result, err
+	}
+
+	movedPath := make(map[string][]string)
+	movedSource := make(map[string]model.Obj)
+	for _, item := range movedItems {
+		movedPath[item.Source.GetPath()] = append(movedPath[item.Source.GetPath()], item.FileId)
+		movedSource[item.Source.GetPath()] = &item.Source
+	}
+
+	for path, parentObjs := range movedPath {
+		virtualFile := GetVirtualFile(storageId, path)
+		if virtualFile.ShareID == "" {
+			// virtual dir, only need to query subdirectories
+			subFiles, err1 := db.QueryVirtualFilesById(storageId, parentObjs)
+			if err1 != nil {
+				return result, err1
+			}
+			result = append(result, buildVirtualFiles(subFiles, dir)...)
+		} else {
+
+			// query files
+			subFiles, err1 := recursiveListFile(movedSource[path], fileFunc, virtualFile)
+			if err1 != nil {
+				return result, err1
+			}
+
+			movedIdSet := make(map[string]bool)
+			for _, obj := range parentObjs {
+				movedIdSet[obj] = true
+			}
+
+			var tempFiles []model.Obj
+			for _, file := range subFiles {
+				if movedIdSet[file.GetID()] {
+					tempFiles = append(tempFiles, file)
+				}
+			}
+
+			result = append(result, prettyFiles(storageId, virtualFile, tempFiles, []string{})...)
+
+		}
+
+	}
+
+	return result, nil
+
 }

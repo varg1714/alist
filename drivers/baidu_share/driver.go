@@ -268,8 +268,7 @@ func (d *BaiduShare) MakeDir(ctx context.Context, parentDir model.Obj, dirName s
 }
 
 func (d *BaiduShare) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
-	// TODO move obj, optional
-	return errs.NotSupport
+	return virtual_file.Move(d.ID, srcObj, dstDir)
 }
 
 func (d *BaiduShare) Rename(ctx context.Context, srcObj model.Obj, newName string) error {

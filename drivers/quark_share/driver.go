@@ -120,8 +120,7 @@ func (d *QuarkShare) MakeDir(ctx context.Context, parentDir model.Obj, dirName s
 }
 
 func (d *QuarkShare) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
-	// TODO move obj, optional
-	return errs.NotSupport
+	return virtual_file.Move(d.ID, srcObj, dstDir)
 }
 
 func (d *QuarkShare) Rename(ctx context.Context, srcObj model.Obj, newName string) error {

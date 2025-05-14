@@ -85,6 +85,15 @@ type Replacement struct {
 	Type int `json:"type"`
 }
 
+type MovedItem struct {
+	ID        uint     `gorm:"primarykey"`
+	StorageId uint     `json:"storage_id"`
+	Parent    string   `json:"parent"`
+	ShareId   string   `json:"share_id"`
+	Source    ObjThumb `json:"source" gorm:"type:json;serializer:json"`
+	FileId    string   `json:"file_id"`
+}
+
 type StringArray []string
 
 func (o *StringArray) Scan(src any) error {

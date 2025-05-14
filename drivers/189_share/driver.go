@@ -103,8 +103,7 @@ func (d *Cloud189Share) MakeDir(ctx context.Context, parentDir model.Obj, dirNam
 }
 
 func (d *Cloud189Share) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
-	// TODO move obj, optional
-	return errs.NotSupport
+	return virtual_file.Move(d.ID, srcObj, dstDir)
 }
 
 func (d *Cloud189Share) Rename(ctx context.Context, srcObj model.Obj, newName string) error {

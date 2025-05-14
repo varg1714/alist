@@ -22,6 +22,12 @@ func QueryVirtualFiles(storageId uint, parent string) []model.VirtualFile {
 
 }
 
+func QueryVirtualFilesById(storageId uint, ids []string) ([]model.VirtualFile, error) {
+	var files []model.VirtualFile
+	tx := db.Where("id in ?", ids).Find(&files)
+	return files, errors.WithStack(tx.Error)
+}
+
 func QueryVirtualFilm(storageId uint, name string) model.VirtualFile {
 
 	file := model.VirtualFile{
@@ -45,4 +51,8 @@ func DeleteVirtualFile(virtualFile model.VirtualFile) error {
 
 	return errors.WithStack(db.Delete(&virtualFile).Error)
 
+}
+
+func UpdateVirtualFile(virtualFile model.VirtualFile) error {
+	return errors.WithStack(db.Updates(&virtualFile).Error)
 }

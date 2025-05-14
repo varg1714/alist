@@ -160,14 +160,11 @@ func (d *AliDrive) Link(ctx context.Context, file model.Obj, args model.LinkArgs
 }
 
 func (d *AliDrive) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
-
 	return virtual_file.MakeDir(d.ID, parentDir, dirName)
-
 }
 
 func (d *AliDrive) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
-	err := d.batch(srcObj.GetID(), dstDir.GetID(), "/file/move")
-	return err
+	return virtual_file.Move(d.ID, srcObj, dstDir)
 }
 
 func (d *AliDrive) Rename(ctx context.Context, srcObj model.Obj, newName string) error {

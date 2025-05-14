@@ -154,4 +154,8 @@ func (d *PikPakShare) Remove(ctx context.Context, obj model.Obj) error {
 	return virtual_file.DeleteVirtualFile(d.ID, obj)
 }
 
+func (d *PikPakShare) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
+	return virtual_file.Move(d.ID, srcObj, dstDir)
+}
+
 var _ driver.Driver = (*PikPakShare)(nil)

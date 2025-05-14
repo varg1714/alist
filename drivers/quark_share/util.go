@@ -3,6 +3,7 @@ package quark_share
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Xhofe/go-cache"
 	"github.com/alist-org/alist/v3/drivers/base"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -21,6 +22,7 @@ import (
 // do others that not defined in Driver interface
 
 var shareTokenCache = cache.NewMemCache(cache.WithShards[ShareTokenResp](128))
+var fileListRespCache = cache.NewMemCache(cache.WithShards[FileListResp](128))
 var limiter = rate.NewLimiter(rate.Every(1000*time.Millisecond), 1)
 
 func (d *QuarkShare) request(pathname string, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
@@ -103,9 +105,19 @@ func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.Virtua
 	page := 1
 	pageSize := 50
 
-	var fileResp FileListResp
+	buildCacheKeyFunc := func() string {
+		return fmt.Sprintf("%s-%s-%s-%d-%d", virtualFile.ShareID, stToken, filepath.Base(dir.GetPath()), page, pageSize)
+	}
 
-	getFiles := func() {
+	getFilesFunc := func() FileListResp {
+
+		var fileResp FileListResp
+
+		cacheKey := buildCacheKeyFunc()
+		if cacheResp, exist := fileListRespCache.Get(cacheKey); exist {
+			return cacheResp
+		}
+
 		_, err = d.request("/1/clouddrive/share/sharepage/detail", http.MethodGet, func(req *resty.Request) {
 			req.SetQueryParams(
 				map[string]string{
@@ -119,16 +131,21 @@ func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.Virtua
 					"_sort":    "file_type:asc,file_name:asc,updated_at:desc",
 				})
 		}, &fileResp)
+
+		fileListRespCache.Set(cacheKey, fileResp, cache.WithEx[FileListResp](time.Minute*time.Duration(d.CacheExpiration)))
+
+		return fileResp
 	}
 
 	for nextPage {
 
-		getFiles()
+		fileResp := getFilesFunc()
 		if err != nil && strings.Contains(err.Error(), "分享的stoken过期") {
 			utils.Log.Infof("获取夸克分享:%s文件列表失败:%v", dir.GetName(), err)
 			err = nil
 
 			shareTokenCache.Del(virtualFile.ShareID)
+			fileListRespCache.Del(buildCacheKeyFunc())
 			topDir := strings.Split(dir.GetPath(), "/")[0]
 			op.ClearCache(d, topDir)
 			utils.Log.Infof("由于文件token失效,因此清除:%s目录的文件缓存", topDir)
@@ -139,7 +156,7 @@ func (d *QuarkShare) getShareFiles(ctx context.Context, virtualFile model.Virtua
 				return nil, err
 			}
 
-			getFiles()
+			fileResp = getFilesFunc()
 
 		}
 

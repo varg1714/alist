@@ -189,13 +189,17 @@ func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualF
 		return []File{}, nil
 	}
 
-	res := make([]File, 0)
+	buildCacheKeyFunc := func(marker string) string {
+		return fmt.Sprintf("%s-%s-%s", virtualFile.ShareID, filepath.Base(parentDir.GetPath()), marker)
+	}
 
-	marker := "first"
-	for marker != "" {
-		if marker == "first" {
-			marker = ""
+	getFilesFunc := func(marker string) (Files, error) {
+
+		cacheKey := buildCacheKeyFunc(marker)
+		if resp, exist := fileListRespCache.Get(cacheKey); exist {
+			return resp, nil
 		}
+
 		var resp Files
 		data := base.Json{
 			"share_id":                virtualFile.ShareID,
@@ -213,9 +217,26 @@ func (d *AliDrive) getShareFiles(ctx context.Context, virtualFile model.VirtualF
 			req.SetHeader("x-share-token", token)
 		}, &resp)
 
-		if err != nil {
-			return nil, err
+		if err == nil {
+			fileListRespCache.Set(cacheKey, resp, cache.WithEx[Files](time.Minute*time.Duration(d.CacheExpiration)))
 		}
+		return resp, err
+
+	}
+
+	res := make([]File, 0)
+
+	marker := "first"
+	for marker != "" {
+		if marker == "first" {
+			marker = ""
+		}
+
+		resp, err1 := getFilesFunc(marker)
+		if err1 != nil {
+			return res, err1
+		}
+
 		marker = resp.NextMarker
 
 		for _, item := range resp.Items {

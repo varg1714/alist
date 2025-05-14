@@ -3,6 +3,7 @@ package quark_share
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Xhofe/go-cache"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/utils"
@@ -15,6 +16,7 @@ import (
 // do others that not defined in Driver interface
 
 var shareTokenCache = cache.NewMemCache(cache.WithShards[ShareInfo](128))
+var fileListRespCache = cache.NewMemCache(cache.WithShards[Cloud189FilesResp](128))
 var limiter = rate.NewLimiter(rate.Every(3000*time.Millisecond), 1)
 
 func (d *Cloud189Share) getShareInfo(shareId, pwd string) (ShareInfo, error) {
@@ -67,11 +69,19 @@ func (d *Cloud189Share) getShareFiles(ctx context.Context, virtualFile model.Vir
 		fileId = shareInfo.FileId
 	}
 
-	var res []FileObj
-	for pageNum := 1; ; pageNum++ {
+	buildCacheKeyFunc := func(pageNum int) string {
+		return fmt.Sprintf("%d-%s-%d", shareInfo.ShareId, fileId, pageNum)
+	}
+
+	getFilesFunc := func(pageNum int) (Cloud189FilesResp, error) {
+
+		cacheKey := buildCacheKeyFunc(pageNum)
+		if resp, exist := fileListRespCache.Get(cacheKey); exist {
+			return resp, nil
+		}
 
 		var resp Cloud189FilesResp
-		_, err := d.client.R().SetQueryParams(map[string]string{
+		_, err1 := d.client.R().SetQueryParams(map[string]string{
 			"pageNum":        strconv.Itoa(pageNum),
 			"pageSize":       "60",
 			"fileId":         fileId,
@@ -85,9 +95,20 @@ func (d *Cloud189Share) getShareFiles(ctx context.Context, virtualFile model.Vir
 			"accessCode":     virtualFile.SharePwd,
 		}).SetResult(&resp).Get("https://cloud.189.cn/api/open/share/listShareDir.action")
 
-		if err != nil {
+		if err1 == nil {
+			fileListRespCache.Set(cacheKey, resp, cache.WithEx[Cloud189FilesResp](time.Minute*time.Duration(d.CacheExpiration)))
+		}
+
+		return resp, nil
+	}
+
+	var res []FileObj
+	for pageNum := 1; ; pageNum++ {
+
+		resp, err1 := getFilesFunc(pageNum)
+		if err1 != nil {
 			utils.Log.Infof("获取天翼云分享文件:%s失败: %v", dir.GetName(), err)
-			return nil, err
+			return res, err1
 		}
 
 		for _, item := range resp.FileListAO.FileList {

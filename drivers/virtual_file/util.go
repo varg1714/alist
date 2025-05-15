@@ -25,7 +25,7 @@ func List(storageId uint, dir model.Obj, fileFunc func(virtualFile model.Virtual
 	dbQuery := false
 	if dirName == "root" {
 		dbQuery = true
-	} else if virDir, ok := dir.(*model.ObjVirtualDir); ok && virDir.VirtualFile.DirType == 1 {
+	} else if virDir, ok := dir.(*model.ObjVirtualDir); ok && virDir.VirtualFile.DirType == model.VirtualDirection {
 		parent = fmt.Sprintf("%d", virDir.VirtualFile.ID)
 		dbQuery = true
 	}
@@ -173,14 +173,19 @@ func recursiveListFile(dir model.Obj, fileFunc func(virtualFile model.VirtualFil
 func MakeDir(storageId uint, parentDir model.Obj, param string) error {
 
 	var req model.VirtualFile
-	err := utils.Json.Unmarshal([]byte(param), &req)
-	if err != nil {
-		return err
+	if strings.HasPrefix(param, "{") {
+		err := utils.Json.Unmarshal([]byte(param), &req)
+		if err != nil {
+			return err
+		}
+	} else {
+		req.Name = param
+		req.DirType = model.VirtualDirection
 	}
 
 	if parentDir.GetName() == "root" {
 		req.Parent = ""
-	} else if virDir, ok := parentDir.(*model.ObjVirtualDir); ok && virDir.DirType == 1 {
+	} else if virDir, ok := parentDir.(*model.ObjVirtualDir); ok && virDir.DirType == model.VirtualDirection {
 		req.Parent = fmt.Sprintf("%d", virDir.ID)
 	} else {
 		return errors.New("不允许在此目录下新增文件夹")
@@ -216,7 +221,7 @@ func GetVirtualFile(storageId uint, path string) model.VirtualFile {
 	split := strings.Split(path, "/")
 	virtualMap := virtualMapFunc("")
 	for _, subPath := range split {
-		if virtualFile, exist := virtualMap[subPath]; exist && virtualFile.DirType == 0 {
+		if virtualFile, exist := virtualMap[subPath]; exist && virtualFile.DirType == model.Subscription {
 			return virtualFile
 		} else if subPath != "" {
 			virtualMap = virtualMapFunc(subPath)
@@ -230,7 +235,7 @@ func GetVirtualFile(storageId uint, path string) model.VirtualFile {
 func DeleteVirtualFile(storageId uint, obj model.Obj) error {
 
 	if virDir, ok := obj.(*model.ObjVirtualDir); ok {
-		if virDir.VirtualFile.DirType == 0 {
+		if virDir.VirtualFile.DirType == model.Subscription {
 			return db.DeleteVirtualFile(virDir.VirtualFile)
 		} else {
 			// remove all sub dir
@@ -389,7 +394,7 @@ func buildVirtualFiles(virtualFiles []model.VirtualFile, dir model.Obj) []model.
 					Size:     622857143,
 					Modified: virtualFile.Modified,
 					Path: func() string {
-						if virtualFile.DirType == 1 {
+						if virtualFile.DirType == model.VirtualDirection {
 							return filepath.Join(dir.GetPath(), fmt.Sprintf("%d", virtualFile.ID))
 						} else {
 							return filepath.Join(dir.GetPath(), fmt.Sprintf("%d", virtualFile.ID), virtualFile.ParentDir)

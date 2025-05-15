@@ -48,6 +48,11 @@ type Actor struct {
 	Url  string `json:"url"`
 }
 
+const (
+	Subscription = iota
+	VirtualDirection
+)
+
 type VirtualFile struct {
 	ID              uint          `gorm:"primarykey"`
 	DirType         uint          `json:"dirType"`

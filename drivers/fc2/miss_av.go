@@ -81,7 +81,7 @@ func (d *FC2) getMissAvFilms(dirName string, urlFunc func(index int) string) ([]
 	}
 
 	// 3. save film
-	unCachedFilms := db.QueryUnCachedFilms(fc2Ids)
+	unCachedFilms := db.QueryNoMagnetFilms(fc2Ids)
 	unCachedFilmMap := make(map[string]bool)
 	for _, filmId := range unCachedFilms {
 		unCachedFilmMap[filmId] = true

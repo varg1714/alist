@@ -57,6 +57,7 @@ require (
 	github.com/pkg/sftp v1.13.6
 	github.com/pquerna/otp v1.4.0
 	github.com/rclone/rclone v1.67.0
+	github.com/robertkrimen/otto v0.5.1
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/afero v1.11.0
@@ -88,6 +89,7 @@ require (
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
+	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 )
 
 require (

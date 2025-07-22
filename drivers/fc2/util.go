@@ -56,7 +56,7 @@ func (d *FC2) getFilms(urlFunc func(index int) string) ([]model.EmbyFileObj, err
 
 	}
 
-	unCachedFilms := db.QueryUnCachedFilms(filmIds)
+	unCachedFilms := db.QueryNoMagnetFilms(filmIds)
 	if len(unCachedFilms) == 0 {
 		return result, nil
 	}

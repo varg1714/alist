@@ -143,7 +143,7 @@ func (d *FC2) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*m
 		URL: d.MockedLink,
 	}
 
-	if d.MockedByMatchUa != "" && args.Header.Get("User-Agent") != d.MockedByMatchUa && d.MockedLink != "" {
+	if d.MockedByMatchUa != "" && !virtual_file.AllowUA(args.Header.Get("User-Agent"), d.MockedByMatchUa) && d.MockedLink != "" {
 		return mockedLink, nil
 	}
 

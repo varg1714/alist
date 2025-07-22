@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/av"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
@@ -140,7 +141,7 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 	mockedLink := &model.Link{
 		URL: d.MockedLink,
 	}
-	if d.MockedByMatchUa != "" && args.Header.Get("User-Agent") != d.MockedByMatchUa && d.MockedLink != "" {
+	if d.MockedByMatchUa != "" && !virtual_file.AllowUA(args.Header.Get("User-Agent"), d.MockedByMatchUa) && d.MockedLink != "" {
 		return mockedLink, nil
 	}
 

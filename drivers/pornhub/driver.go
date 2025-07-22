@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alist-org/alist/v3/drivers/virtual_file"
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
 	"github.com/alist-org/alist/v3/internal/model"
@@ -85,7 +86,7 @@ func (d *Pornhub) Link(ctx context.Context, file model.Obj, args model.LinkArgs)
 		URL: d.MockedLink,
 	}
 
-	if d.MockedByMatchUa != "" && args.Header.Get("User-Agent") != d.MockedByMatchUa && d.MockedLink != "" {
+	if d.MockedByMatchUa != "" && !virtual_file.AllowUA(args.Header.Get("User-Agent"), d.MockedByMatchUa) && d.MockedLink != "" {
 		return videoLink, nil
 	}
 

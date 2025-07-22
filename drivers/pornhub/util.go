@@ -35,7 +35,7 @@ func (d *Pornhub) getFilms(dirName, pageKey string) ([]model.EmbyFileObj, error)
 		films = playListFilms
 	} else {
 		key = strings.ReplaceAll(pageKey, "/model/", "")
-		actorFilms, err := d.getActorFilms(key)
+		actorFilms, err := d.getActorFilms(dirName, key)
 		if err != nil {
 			return nil, err
 		}
@@ -50,7 +50,7 @@ func (d *Pornhub) getFilms(dirName, pageKey string) ([]model.EmbyFileObj, error)
 		filmIds = append(filmIds, film.Url)
 	}
 
-	unSaveFilmIds := db.QueryUnSaveFilms(filmIds)
+	unSaveFilmIds := db.QueryUnSaveFilms(filmIds, dirName)
 	if len(unSaveFilmIds) == 0 {
 		return virtual_file.GetStorageFilms("pornhub", dirName, false), nil
 	}
@@ -222,7 +222,7 @@ func (d *Pornhub) getPlayListFilms(playlistId, dirName string) ([]model.EmbyFile
 
 }
 
-func (d *Pornhub) getActorFilms(actor string) ([]model.EmbyFileObj, error) {
+func (d *Pornhub) getActorFilms(dirName, actor string) ([]model.EmbyFileObj, error) {
 
 	var films []PornFilm
 	page := 1
@@ -257,7 +257,7 @@ func (d *Pornhub) getActorFilms(actor string) ([]model.EmbyFileObj, error) {
 			return nextPage
 		}
 
-		for nextPageFunc() && len(db.QueryUnSaveFilms(newFilmIds)) > 0 {
+		for nextPageFunc() && len(db.QueryUnSaveFilms(newFilmIds, dirName)) > 0 {
 
 			pageUrl = fmt.Sprintf("%s/model/%s/videos?page=%d", d.ServerUrl, actor, page)
 
@@ -295,14 +295,15 @@ func resolveFilms(wd selenium.WebDriver, actorType int) []PornFilm {
 
 	var films []PornFilm
 
-	parentContainerCss := ""
+	var parentEle selenium.WebElement
+	var err error
+
 	if actorType == PlayList {
-		parentContainerCss = ".viewPlaylist"
+		parentEle, err = wd.FindElement(selenium.ByTagName, "body")
 	} else {
-		parentContainerCss = ".videoUList"
+		parentEle, err = wd.FindElement(selenium.ByCSSSelector, ".videoUList")
 	}
 
-	parentEle, err := wd.FindElement(selenium.ByCSSSelector, parentContainerCss)
 	if err != nil {
 		utils.Log.Warnf("failed to find parent element, %s", err.Error())
 		return films

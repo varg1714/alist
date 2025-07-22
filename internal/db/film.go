@@ -137,9 +137,9 @@ func DeleteFilmsByCode(source, actor, code string) error {
 
 }
 
-func QueryUnSaveFilms(fileIds []string) []string {
+func QueryUnSaveFilms(fileIds []string, dir string) []string {
 
-	return queryNotExistData(fileIds, "x_films", "url")
+	return queryNotExistDataWithCondition(fileIds, fmt.Sprintf("select url from x_films where actor = '%s'", dir))
 
 }
 
@@ -167,6 +167,10 @@ func CreateMissedFilms(fileIds []string) error {
 }
 
 func queryNotExistData(fileIds []string, dbName, columnName string) []string {
+	return queryNotExistDataWithCondition(fileIds, fmt.Sprintf("select %s from %s", columnName, dbName))
+}
+
+func queryNotExistDataWithCondition(fileIds []string, sql string) []string {
 
 	if len(fileIds) == 0 {
 		return []string{}
@@ -184,7 +188,7 @@ func queryNotExistData(fileIds []string, dbName, columnName string) []string {
 	query := fmt.Sprintf(`with temp(id) as (values %s)
 select temp.id
 from temp
-where temp.id not in (select %s from %s);`, strings.Join(placeHolders, ","), columnName, dbName)
+where temp.id not in (%s);`, strings.Join(placeHolders, ","), sql)
 
 	err := db.Raw(query, tempIds...).Scan(&result).Error
 	if err != nil {

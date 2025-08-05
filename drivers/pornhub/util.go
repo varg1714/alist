@@ -30,14 +30,14 @@ func (d *Pornhub) getFilms(dirName, pageKey string) ([]model.EmbyFileObj, error)
 		key = strings.ReplaceAll(pageKey, "/playlist/", "")
 		playListFilms, err := d.getPlayListFilms(key, dirName)
 		if err != nil {
-			return nil, err
+			return virtual_file.GetStorageFilms("pornhub", dirName, false), nil
 		}
 		films = playListFilms
 	} else {
 		key = strings.ReplaceAll(pageKey, "/model/", "")
 		actorFilms, err := d.getActorFilms(dirName, key)
 		if err != nil {
-			return nil, err
+			return virtual_file.GetStorageFilms("pornhub", dirName, false), nil
 		}
 		films = actorFilms
 	}

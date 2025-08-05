@@ -58,11 +58,30 @@ func GetMetaFromJavdb(filmUrl string) (Meta, error) {
 	})
 
 	var meta Meta
+	var filmTags []string
+
+	collector.OnHTML(".panel.movie-panel-info", func(element *colly.HTMLElement) {
+		element.ForEach("a", func(i int, element *colly.HTMLElement) {
+
+			href := element.Attr("href")
+			if strings.Contains(href, "/actors/") {
+				actorUrl := strings.ReplaceAll(href, "/actors/", "")
+				meta.Actors = append(meta.Actors, Actor{
+					Id:   actorUrl,
+					Name: element.Text,
+				})
+			} else if strings.Contains(href, "/tags") {
+				filmTags = append(filmTags, element.Text)
+			}
+
+		})
+	})
 
 	collector.OnHTML(".magnet-links", func(element *colly.HTMLElement) {
 		element.ForEach(".item", func(i int, magnetEle *colly.HTMLElement) {
 
 			var tags []string
+			tags = append(tags, filmTags...)
 
 			magnetEle.ForEach(".tag", func(i int, tag *colly.HTMLElement) {
 				tags = append(tags, tag.Text)
@@ -98,21 +117,6 @@ func GetMetaFromJavdb(filmUrl string) (Meta, error) {
 				}(),
 				releaseDate: releaseTime,
 			})
-
-		})
-	})
-
-	collector.OnHTML(".panel.movie-panel-info", func(element *colly.HTMLElement) {
-		element.ForEach("a", func(i int, element *colly.HTMLElement) {
-
-			href := element.Attr("href")
-			if strings.Contains(href, "/actors/") {
-				actorUrl := strings.ReplaceAll(href, "/actors/", "")
-				meta.Actors = append(meta.Actors, Actor{
-					Id:   actorUrl,
-					Name: element.Text,
-				})
-			}
 
 		})
 	})

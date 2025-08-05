@@ -213,48 +213,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 		return "", err
 	}
 
-	actorMapping := make(map[string]string)
-	for _, actor := range javdbMeta.Actors {
-		actorMapping[actor.Id] = actor.Name
-	}
-
-	if len(embyObj.Actors) == 0 {
-
-		actors := db.QueryActor(strconv.Itoa(int(d.ID)))
-		for _, actor := range actors {
-			if actorMapping[actor.Url] != "" {
-				actorMapping[actor.Url] = actor.Name
-			}
-		}
-
-		var actorNames []string
-		for _, name := range actorMapping {
-			actorNames = append(actorNames, name)
-		}
-
-		virtual_file.UpdateNfo(virtual_file.MediaInfo{
-			Source:   "javdb",
-			Dir:      embyObj.Path,
-			FileName: virtual_file.AppendImageName(embyObj.Name),
-			Title:    embyObj.Title,
-			Actors:   actorNames,
-			Release:  embyObj.ReleaseTime,
-		})
-
-		tempId, err1 := strconv.ParseInt(embyObj.ID, 10, 64)
-		if err1 == nil {
-			err1 = db.UpdateFilm(model.Film{
-				ID:     uint(tempId),
-				Actors: actorNames,
-			})
-			if err1 != nil {
-				utils.Log.Warnf("failed to save film: %s, error message: %s", embyObj.GetName(), err1.Error())
-			}
-		} else {
-			utils.Log.Warnf("failed to parse films: %s id to int, error message: %s", embyObj.GetName(), err1.Error())
-		}
-
-	}
+	d.updateFilmMeta(javdbMeta, embyObj)
 
 	magnet := ""
 	subtitle := false
@@ -287,6 +246,56 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 		Code:       av.GetFilmCode(embyObj.GetName()),
 	})
 	return magnet, err
+
+}
+
+func (d *Javdb) updateFilmMeta(javdbMeta av.Meta, embyObj *model.EmbyFileObj) {
+
+	actorMapping := make(map[string]string)
+	for _, actor := range javdbMeta.Actors {
+		actorMapping[actor.Id] = actor.Name
+	}
+
+	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
+	for _, actor := range actors {
+		if actorMapping[actor.Url] != "" {
+			actorMapping[actor.Url] = actor.Name
+		}
+	}
+
+	var actorNames []string
+	for _, name := range actorMapping {
+		actorNames = append(actorNames, name)
+	}
+
+	var tags []string
+	if len(javdbMeta.Magnets) > 0 {
+		tags = append(tags, javdbMeta.Magnets[0].GetTags()...)
+	}
+
+	virtual_file.UpdateNfo(virtual_file.MediaInfo{
+		Source:   "javdb",
+		Dir:      embyObj.Path,
+		FileName: virtual_file.AppendImageName(embyObj.Name),
+		Title:    embyObj.Title,
+		Actors:   actorNames,
+		Release:  embyObj.ReleaseTime,
+		Tags:     tags,
+	})
+
+	tempId, err1 := strconv.ParseInt(embyObj.ID, 10, 64)
+	if err1 == nil {
+		err1 = db.UpdateFilm(model.Film{
+			ID:     uint(tempId),
+			Actors: actorNames,
+			Tags:   tags,
+		})
+		if err1 != nil {
+			utils.Log.Warnf("failed to save film: %s, error message: %s", embyObj.GetName(), err1.Error())
+		}
+	} else {
+		utils.Log.Warnf("failed to parse films: %s id to int, error message: %s", embyObj.GetName(), err1.Error())
+	}
 
 }
 

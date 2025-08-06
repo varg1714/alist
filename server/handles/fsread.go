@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/fs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/setting"
-	"github.com/alist-org/alist/v3/internal/sign"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/alist/v3/server/common"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/fs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/setting"
+	"github.com/OpenListTeam/OpenList/v4/internal/sign"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
@@ -63,7 +63,7 @@ func FsList(c *gin.Context) {
 		return
 	}
 	req.Validate()
-	user := c.MustGet("user").(*model.User)
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
 	reqPath, err := user.JoinPath(req.Path)
 	if err != nil {
 		common.ErrorResp(c, err, 403)
@@ -76,7 +76,7 @@ func FsList(c *gin.Context) {
 			return
 		}
 	}
-	c.Set("meta", meta)
+	common.GinWithValue(c, conf.MetaKey, meta)
 	if !common.CanAccess(user, meta, reqPath, req.Password) {
 		common.ErrorStrResp(c, "password is incorrect or you have no permission", 403)
 		return
@@ -85,7 +85,7 @@ func FsList(c *gin.Context) {
 		common.ErrorStrResp(c, "Refresh without permission", 403)
 		return
 	}
-	objs, err := fs.List(c, reqPath, &fs.ListArgs{Refresh: req.Refresh})
+	objs, err := fs.List(c.Request.Context(), reqPath, &fs.ListArgs{Refresh: req.Refresh})
 	if err != nil {
 		common.ErrorResp(c, err, 500)
 		return
@@ -112,7 +112,7 @@ func FsDirs(c *gin.Context) {
 		common.ErrorResp(c, err, 400)
 		return
 	}
-	user := c.MustGet("user").(*model.User)
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
 	reqPath := req.Path
 	if req.ForceRoot {
 		if !user.IsAdmin() {
@@ -134,12 +134,12 @@ func FsDirs(c *gin.Context) {
 			return
 		}
 	}
-	c.Set("meta", meta)
+	common.GinWithValue(c, conf.MetaKey, meta)
 	if !common.CanAccess(user, meta, reqPath, req.Password) {
 		common.ErrorStrResp(c, "password is incorrect or you have no permission", 403)
 		return
 	}
-	objs, err := fs.List(c, reqPath, &fs.ListArgs{})
+	objs, err := fs.List(c.Request.Context(), reqPath, &fs.ListArgs{})
 	if err != nil {
 		common.ErrorResp(c, err, 500)
 		return
@@ -249,7 +249,7 @@ func FsGet(c *gin.Context) {
 		common.ErrorResp(c, err, 400)
 		return
 	}
-	user := c.MustGet("user").(*model.User)
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
 	reqPath, err := user.JoinPath(req.Path)
 	if err != nil {
 		common.ErrorResp(c, err, 403)
@@ -262,12 +262,12 @@ func FsGet(c *gin.Context) {
 			return
 		}
 	}
-	c.Set("meta", meta)
+	common.GinWithValue(c, conf.MetaKey, meta)
 	if !common.CanAccess(user, meta, reqPath, req.Password) {
 		common.ErrorStrResp(c, "password is incorrect or you have no permission", 403)
 		return
 	}
-	obj, err := fs.Get(c, reqPath, &fs.GetArgs{})
+	obj, err := fs.Get(c.Request.Context(), reqPath, &fs.GetArgs{})
 	if err != nil {
 		common.ErrorResp(c, err, 500)
 		return
@@ -285,18 +285,14 @@ func FsGet(c *gin.Context) {
 			return
 		}
 		if storage.Config().MustProxy() || storage.GetStorage().WebProxy {
-			query := ""
-			if isEncrypt(meta, reqPath) || setting.GetBool(conf.SignAll) {
-				query = "?sign=" + sign.Sign(reqPath)
-			}
-			if storage.GetStorage().DownProxyUrl != "" {
-				rawURL = fmt.Sprintf("%s%s?sign=%s",
-					strings.Split(storage.GetStorage().DownProxyUrl, "\n")[0],
-					utils.EncodePath(reqPath, true),
-					sign.Sign(reqPath))
-			} else {
+			rawURL = common.GenerateDownProxyURL(storage.GetStorage(), reqPath)
+			if rawURL == "" {
+				query := ""
+				if isEncrypt(meta, reqPath) || setting.GetBool(conf.SignAll) {
+					query = "?sign=" + sign.Sign(reqPath)
+				}
 				rawURL = fmt.Sprintf("%s/p%s%s",
-					common.GetApiUrl(c.Request),
+					common.GetApiUrl(c),
 					utils.EncodePath(reqPath, true),
 					query)
 			}
@@ -306,23 +302,23 @@ func FsGet(c *gin.Context) {
 				rawURL = url
 			} else {
 				// if storage is not proxy, use raw url by fs.Link
-				link, _, err := fs.Link(c, reqPath, model.LinkArgs{
+				link, _, err := fs.Link(c.Request.Context(), reqPath, model.LinkArgs{
 					IP:       c.ClientIP(),
 					Header:   c.Request.Header,
-					HttpReq:  c.Request,
 					Redirect: true,
 				})
 				if err != nil {
 					common.ErrorResp(c, err, 500)
 					return
 				}
+				defer link.Close()
 				rawURL = link.URL
 			}
 		}
 	}
 	var related []model.Obj
 	parentPath := stdpath.Dir(reqPath)
-	sameLevelFiles, err := fs.List(c, parentPath, &fs.ListArgs{})
+	sameLevelFiles, err := fs.List(c.Request.Context(), parentPath, &fs.ListArgs{})
 	if err == nil {
 		related = filterRelated(sameLevelFiles, obj)
 	}
@@ -376,7 +372,7 @@ func FsOther(c *gin.Context) {
 		common.ErrorResp(c, err, 400)
 		return
 	}
-	user := c.MustGet("user").(*model.User)
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
 	var err error
 	req.Path, err = user.JoinPath(req.Path)
 	if err != nil {
@@ -390,12 +386,12 @@ func FsOther(c *gin.Context) {
 			return
 		}
 	}
-	c.Set("meta", meta)
+	common.GinWithValue(c, conf.MetaKey, meta)
 	if !common.CanAccess(user, meta, req.Path, req.Password) {
 		common.ErrorStrResp(c, "password is incorrect or you have no permission", 403)
 		return
 	}
-	res, err := fs.Other(c, req.FsOtherArgs)
+	res, err := fs.Other(c.Request.Context(), req.FsOtherArgs)
 	if err != nil {
 		common.ErrorResp(c, err, 500)
 		return

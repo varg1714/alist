@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/alist-org/alist/v3/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -167,7 +167,7 @@ func (d *ChaoXing) Login() (string, error) {
 		return "", err
 	}
 	// Create the request
-	req, err := http.NewRequest("POST", "https://passport2.chaoxing.com/fanyalogin", body)
+	req, err := http.NewRequest(http.MethodPost, "https://passport2.chaoxing.com/fanyalogin", body)
 	if err != nil {
 		return "", err
 	}

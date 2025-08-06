@@ -1,11 +1,12 @@
 package op
 
 import (
-	"github.com/alist-org/alist/v3/internal/db"
-	"github.com/alist-org/alist/v3/internal/model"
+	"time"
+
+	"github.com/OpenListTeam/OpenList/v4/internal/db"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
-	"time"
 )
 
 func CreateSSHPublicKey(k *model.SSHPublicKey) (error, bool) {

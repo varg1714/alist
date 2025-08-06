@@ -2,23 +2,22 @@ package _123
 
 import (
 	"context"
-	"crypto/md5"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -65,14 +64,6 @@ func (d *Pan123) List(ctx context.Context, dir model.Obj, args model.ListArgs) (
 
 func (d *Pan123) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 	if f, ok := file.(File); ok {
-		//var resp DownResp
-		var headers map[string]string
-		if !utils.IsLocalIPAddr(args.IP) {
-			headers = map[string]string{
-				//"X-Real-IP":       "1.1.1.1",
-				"X-Forwarded-For": args.IP,
-			}
-		}
 		data := base.Json{
 			"driveId":   0,
 			"etag":      f.Etag,
@@ -84,25 +75,27 @@ func (d *Pan123) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 		}
 		resp, err := d.Request(DownloadInfo, http.MethodPost, func(req *resty.Request) {
 
-			req.SetBody(data).SetHeaders(headers)
+			req.SetBody(data)
 		}, nil)
 		if err != nil {
 			return nil, err
 		}
 		downloadUrl := utils.Json.Get(resp, "data", "DownloadUrl").ToString()
-		u, err := url.Parse(downloadUrl)
+		ou, err := url.Parse(downloadUrl)
 		if err != nil {
 			return nil, err
 		}
-		nu := u.Query().Get("params")
+		u_ := ou.String()
+		nu := ou.Query().Get("params")
 		if nu != "" {
 			du, _ := base64.StdEncoding.DecodeString(nu)
-			u, err = url.Parse(string(du))
+			u, err := url.Parse(string(du))
 			if err != nil {
 				return nil, err
 			}
+			u_ = u.String()
 		}
-		u_ := u.String()
+
 		log.Debug("download url: ", u_)
 		res, err := base.NoRedirectClient.R().SetHeader("Referer", "https://www.123pan.com/").Get(u_)
 		if err != nil {
@@ -119,7 +112,7 @@ func (d *Pan123) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 			link.URL = utils.Json.Get(res.Body(), "data", "redirect_url").ToString()
 		}
 		link.Header = http.Header{
-			"Referer": []string{"https://www.123pan.com/"},
+			"Referer": []string{fmt.Sprintf("%s://%s/", ou.Scheme, ou.Host)},
 		}
 		return &link, nil
 	} else {
@@ -187,30 +180,19 @@ func (d *Pan123) Remove(ctx context.Context, obj model.Obj) error {
 
 func (d *Pan123) Put(ctx context.Context, dstDir model.Obj, file model.FileStreamer, up driver.UpdateProgress) error {
 	etag := file.GetHash().GetHash(utils.MD5)
+	var err error
 	if len(etag) < utils.MD5.Width {
-		// const DEFAULT int64 = 10485760
-		h := md5.New()
-		// need to calculate md5 of the full content
-		tempFile, err := file.CacheFullInTempFile()
+		cacheFileProgress := model.UpdateProgressWithRange(up, 0, 50)
+		up = model.UpdateProgressWithRange(up, 50, 100)
+		_, etag, err = stream.CacheFullInTempFileAndHash(file, cacheFileProgress, utils.MD5)
 		if err != nil {
 			return err
 		}
-		defer func() {
-			_ = tempFile.Close()
-		}()
-		if _, err = utils.CopyWithBuffer(h, tempFile); err != nil {
-			return err
-		}
-		_, err = tempFile.Seek(0, io.SeekStart)
-		if err != nil {
-			return err
-		}
-		etag = hex.EncodeToString(h.Sum(nil))
 	}
 	data := base.Json{
 		"driveId":      0,
 		"duplicate":    2, // 2->覆盖 1->重命名 0->默认
-		"etag":         etag,
+		"etag":         strings.ToLower(etag),
 		"fileName":     file.GetName(),
 		"parentFileId": dstDir.GetID(),
 		"size":         file.GetSize(),

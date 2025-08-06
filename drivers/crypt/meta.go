@@ -1,8 +1,8 @@
 package crypt
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -26,17 +26,12 @@ type Addition struct {
 }
 
 var config = driver.Config{
-	Name:              "Crypt",
-	LocalSort:         true,
-	OnlyLocal:         false,
-	OnlyProxy:         true,
-	NoCache:           true,
-	NoUpload:          false,
-	NeedMs:            false,
-	DefaultRoot:       "/",
-	CheckStatus:       false,
-	Alert:             "",
-	NoOverwriteUpload: false,
+	Name:        "Crypt",
+	LocalSort:   true,
+	OnlyProxy:   true,
+	NoCache:     true,
+	DefaultRoot: "/",
+	NoLinkURL:   true,
 }
 
 func init() {

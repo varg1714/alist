@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 )
 
 func (d *NeteaseMusic) request(url, method string, opt ReqOption) ([]byte, error) {
@@ -227,7 +227,6 @@ func (d *NeteaseMusic) putSongStream(ctx context.Context, stream model.FileStrea
 	if err != nil {
 		return err
 	}
-	defer tmp.Close()
 
 	u := uploader{driver: d, file: tmp}
 

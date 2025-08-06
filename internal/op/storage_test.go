@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/db"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/db"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	mapset "github.com/deckarep/golang-set/v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -19,7 +19,7 @@ func init() {
 	if err != nil {
 		panic("failed to connect database")
 	}
-	conf.Conf = conf.DefaultConfig()
+	conf.Conf = conf.DefaultConfig("data")
 	db.Init(dB)
 }
 

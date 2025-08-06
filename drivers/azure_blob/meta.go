@@ -1,8 +1,8 @@
 package azure_blob
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -10,6 +10,11 @@ type Addition struct {
 	AccessKey     string `json:"access_key" required:"true" help:"The access key for Azure Storage, used for authentication. https://learn.microsoft.com/azure/storage/common/storage-account-keys-manage"`
 	ContainerName string `json:"container_name" required:"true" help:"The name of the container in Azure Storage (created in the Azure portal). https://learn.microsoft.com/azure/storage/blobs/blob-containers-portal"`
 	SignURLExpire int    `json:"sign_url_expire" type:"number" default:"4" help:"The expiration time for SAS URLs, in hours."`
+}
+
+// implement GetRootId interface
+func (r Addition) GetRootId() string {
+	return r.ContainerName
 }
 
 var config = driver.Config{

@@ -1,7 +1,7 @@
 package av
 
 import (
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/dustin/go-humanize"
 	"github.com/gocolly/colly/v2"
 	"strings"

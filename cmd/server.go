@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	ftpserver "github.com/KirCute/ftpserverlib-pasvportmap"
-	"github.com/KirCute/sftpd-alist"
-	"github.com/alist-org/alist/v3/internal/fs"
 	"net"
 	"net/http"
 	"os"
@@ -16,14 +13,20 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alist-org/alist/v3/cmd/flags"
-	"github.com/alist-org/alist/v3/internal/bootstrap"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/alist/v3/server"
+	"github.com/OpenListTeam/OpenList/v4/cmd/flags"
+	"github.com/OpenListTeam/OpenList/v4/internal/bootstrap"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/fs"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/server"
+	"github.com/OpenListTeam/OpenList/v4/server/middlewares"
+	"github.com/OpenListTeam/sftpd-openlist"
+	ftpserver "github.com/fclairamb/ftpserverlib"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 // ServerCmd represents the server command
@@ -45,13 +48,26 @@ the address is defined in config file`,
 			gin.SetMode(gin.ReleaseMode)
 		}
 		r := gin.New()
-		r.Use(gin.LoggerWithWriter(log.StandardLogger().Out), gin.RecoveryWithWriter(log.StandardLogger().Out))
+
+		// gin log
+		if conf.Conf.Log.Filter.Enable {
+			r.Use(middlewares.FilteredLogger())
+		} else {
+			r.Use(gin.LoggerWithWriter(log.StandardLogger().Out))
+		}
+		r.Use(gin.RecoveryWithWriter(log.StandardLogger().Out))
+
 		server.Init(r)
+		var httpHandler http.Handler = r
+		if conf.Conf.Scheme.EnableH2c {
+			httpHandler = h2c.NewHandler(r, &http2.Server{})
+		}
 		var httpSrv, httpsSrv, unixSrv *http.Server
 		if conf.Conf.Scheme.HttpPort != -1 {
 			httpBase := fmt.Sprintf("%s:%d", conf.Conf.Scheme.Address, conf.Conf.Scheme.HttpPort)
+			fmt.Printf("start HTTP server @ %s\n", httpBase)
 			utils.Log.Infof("start HTTP server @ %s", httpBase)
-			httpSrv = &http.Server{Addr: httpBase, Handler: r}
+			httpSrv = &http.Server{Addr: httpBase, Handler: httpHandler}
 			go func() {
 				err := httpSrv.ListenAndServe()
 				if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -61,6 +77,7 @@ the address is defined in config file`,
 		}
 		if conf.Conf.Scheme.HttpsPort != -1 {
 			httpsBase := fmt.Sprintf("%s:%d", conf.Conf.Scheme.Address, conf.Conf.Scheme.HttpsPort)
+			fmt.Printf("start HTTPS server @ %s\n", httpsBase)
 			utils.Log.Infof("start HTTPS server @ %s", httpsBase)
 			httpsSrv = &http.Server{Addr: httpsBase, Handler: r}
 			go func() {
@@ -71,8 +88,9 @@ the address is defined in config file`,
 			}()
 		}
 		if conf.Conf.Scheme.UnixFile != "" {
+			fmt.Printf("start unix server @ %s\n", conf.Conf.Scheme.UnixFile)
 			utils.Log.Infof("start unix server @ %s", conf.Conf.Scheme.UnixFile)
-			unixSrv = &http.Server{Handler: r}
+			unixSrv = &http.Server{Handler: httpHandler}
 			go func() {
 				listener, err := net.Listen("unix", conf.Conf.Scheme.UnixFile)
 				if err != nil {
@@ -99,6 +117,7 @@ the address is defined in config file`,
 			s3r.Use(gin.LoggerWithWriter(log.StandardLogger().Out), gin.RecoveryWithWriter(log.StandardLogger().Out))
 			server.InitS3(s3r)
 			s3Base := fmt.Sprintf("%s:%d", conf.Conf.Scheme.Address, conf.Conf.S3.Port)
+			fmt.Printf("start S3 server @ %s\n", s3Base)
 			utils.Log.Infof("start S3 server @ %s", s3Base)
 			go func() {
 				var err error
@@ -123,6 +142,7 @@ the address is defined in config file`,
 			if err != nil {
 				utils.Log.Fatalf("failed to start ftp driver: %s", err.Error())
 			} else {
+				fmt.Printf("start ftp server on %s\n", conf.Conf.FTP.Listen)
 				utils.Log.Infof("start ftp server on %s", conf.Conf.FTP.Listen)
 				go func() {
 					ftpServer = ftpserver.NewFtpServer(ftpDriver)
@@ -141,6 +161,7 @@ the address is defined in config file`,
 			if err != nil {
 				utils.Log.Fatalf("failed to start sftp driver: %s", err.Error())
 			} else {
+				fmt.Printf("start sftp server on %s", conf.Conf.SFTP.Listen)
 				utils.Log.Infof("start sftp server on %s", conf.Conf.SFTP.Listen)
 				go func() {
 					sftpServer = sftpd.NewSftpServer(sftpDriver)
@@ -230,8 +251,8 @@ func init() {
 	// serverCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-// OutAlistInit 暴露用于外部启动server的函数
-func OutAlistInit() {
+// OutOpenListInit 暴露用于外部启动server的函数
+func OutOpenListInit() {
 	var (
 		cmd  *cobra.Command
 		args []string

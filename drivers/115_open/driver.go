@@ -3,25 +3,28 @@ package _115_open
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/cmd/flags"
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	sdk "github.com/xhofe/115-sdk-go"
+	sdk "github.com/OpenListTeam/115-sdk-go"
+	"github.com/OpenListTeam/OpenList/v4/cmd/flags"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/http_range"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"golang.org/x/time/rate"
 )
 
 type Open115 struct {
 	model.Storage
 	Addition
-	client *sdk.Client
+	client  *sdk.Client
+	limiter *rate.Limiter
 }
 
 func (d *Open115) Config() driver.Config {
@@ -47,6 +50,16 @@ func (d *Open115) Init(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if d.Addition.LimitRate > 0 {
+		d.limiter = rate.NewLimiter(rate.Limit(d.Addition.LimitRate), 1)
+	}
+	return nil
+}
+
+func (d *Open115) WaitLimit(ctx context.Context) error {
+	if d.limiter != nil {
+		return d.limiter.Wait(ctx)
+	}
 	return nil
 }
 
@@ -59,6 +72,9 @@ func (d *Open115) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 	pageSize := int64(200)
 	offset := int64(0)
 	for {
+		if err := d.WaitLimit(ctx); err != nil {
+			return nil, err
+		}
 		resp, err := d.client.GetFiles(ctx, &sdk.GetFilesReq{
 			CID:    dir.GetID(),
 			Limit:  pageSize,
@@ -84,6 +100,9 @@ func (d *Open115) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 }
 
 func (d *Open115) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
+	if err := d.WaitLimit(ctx); err != nil {
+		return nil, err
+	}
 	var ua string
 	if args.Header != nil {
 		ua = args.Header.Get("User-Agent")
@@ -112,7 +131,27 @@ func (d *Open115) Link(ctx context.Context, file model.Obj, args model.LinkArgs)
 	}, nil
 }
 
+func (d *Open115) GetObjInfo(ctx context.Context, path string) (model.Obj, error) {
+	if err := d.WaitLimit(ctx); err != nil {
+		return nil, err
+	}
+	resp, err := d.client.GetFolderInfoByPath(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return &Obj{
+		Fid:  resp.FileID,
+		Fn:   resp.FileName,
+		Fc:   resp.FileCategory,
+		Sha1: resp.Sha1,
+		Pc:   resp.PickCode,
+	}, nil
+}
+
 func (d *Open115) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) (model.Obj, error) {
+	if err := d.WaitLimit(ctx); err != nil {
+		return nil, err
+	}
 	resp, err := d.client.Mkdir(ctx, parentDir.GetID(), dirName)
 	if err != nil {
 		return nil, err
@@ -129,6 +168,9 @@ func (d *Open115) MakeDir(ctx context.Context, parentDir model.Obj, dirName stri
 }
 
 func (d *Open115) Move(ctx context.Context, srcObj, dstDir model.Obj) (model.Obj, error) {
+	if err := d.WaitLimit(ctx); err != nil {
+		return nil, err
+	}
 	_, err := d.client.Move(ctx, &sdk.MoveReq{
 		FileIDs: srcObj.GetID(),
 		ToCid:   dstDir.GetID(),
@@ -140,6 +182,9 @@ func (d *Open115) Move(ctx context.Context, srcObj, dstDir model.Obj) (model.Obj
 }
 
 func (d *Open115) Rename(ctx context.Context, srcObj model.Obj, newName string) (model.Obj, error) {
+	if err := d.WaitLimit(ctx); err != nil {
+		return nil, err
+	}
 	_, err := d.client.UpdateFile(ctx, &sdk.UpdateFileReq{
 		FileID:  srcObj.GetID(),
 		FileNma: newName,
@@ -155,6 +200,9 @@ func (d *Open115) Rename(ctx context.Context, srcObj model.Obj, newName string) 
 }
 
 func (d *Open115) Copy(ctx context.Context, srcObj, dstDir model.Obj) (model.Obj, error) {
+	if err := d.WaitLimit(ctx); err != nil {
+		return nil, err
+	}
 	_, err := d.client.Copy(ctx, &sdk.CopyReq{
 		PID:     dstDir.GetID(),
 		FileID:  srcObj.GetID(),
@@ -167,6 +215,9 @@ func (d *Open115) Copy(ctx context.Context, srcObj, dstDir model.Obj) (model.Obj
 }
 
 func (d *Open115) Remove(ctx context.Context, obj model.Obj) error {
+	if err := d.WaitLimit(ctx); err != nil {
+		return err
+	}
 	_obj, ok := obj.(*Obj)
 	if !ok {
 		return fmt.Errorf("can't convert obj")
@@ -182,25 +233,29 @@ func (d *Open115) Remove(ctx context.Context, obj model.Obj) error {
 }
 
 func (d *Open115) Put(ctx context.Context, dstDir model.Obj, file model.FileStreamer, up driver.UpdateProgress) error {
-	tempF, err := file.CacheFullInTempFile()
+	err := d.WaitLimit(ctx)
 	if err != nil {
 		return err
 	}
-	// cal full sha1
-	sha1, err := utils.HashReader(utils.SHA1, tempF)
+	sha1 := file.GetHash().GetHash(utils.SHA1)
+	if len(sha1) != utils.SHA1.Width {
+		cacheFileProgress := model.UpdateProgressWithRange(up, 0, 50)
+		up = model.UpdateProgressWithRange(up, 50, 100)
+		_, sha1, err = stream.CacheFullInTempFileAndHash(file, cacheFileProgress, utils.SHA1)
+		if err != nil {
+			return err
+		}
+	}
+	const PreHashSize int64 = 128 * utils.KB
+	hashSize := PreHashSize
+	if file.GetSize() < PreHashSize {
+		hashSize = file.GetSize()
+	}
+	reader, err := file.RangeRead(http_range.Range{Start: 0, Length: hashSize})
 	if err != nil {
 		return err
 	}
-	_, err = tempF.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
-	}
-	// pre 128k sha1
-	sha1128k, err := utils.HashReader(utils.SHA1, io.LimitReader(tempF, 128*1024))
-	if err != nil {
-		return err
-	}
-	_, err = tempF.Seek(0, io.SeekStart)
+	sha1128k, err := utils.HashReader(utils.SHA1, reader)
 	if err != nil {
 		return err
 	}
@@ -216,6 +271,7 @@ func (d *Open115) Put(ctx context.Context, dstDir model.Obj, file model.FileStre
 		return err
 	}
 	if resp.Status == 2 {
+		up(100)
 		return nil
 	}
 	// 2. two way verify
@@ -229,15 +285,11 @@ func (d *Open115) Put(ctx context.Context, dstDir model.Obj, file model.FileStre
 		if err != nil {
 			return err
 		}
-		_, err = tempF.Seek(start, io.SeekStart)
+		reader, err = file.RangeRead(http_range.Range{Start: start, Length: end - start + 1})
 		if err != nil {
 			return err
 		}
-		signVal, err := utils.HashReader(utils.SHA1, io.LimitReader(tempF, end-start+1))
-		if err != nil {
-			return err
-		}
-		_, err = tempF.Seek(0, io.SeekStart)
+		signVal, err := utils.HashReader(utils.SHA1, reader)
 		if err != nil {
 			return err
 		}
@@ -254,6 +306,7 @@ func (d *Open115) Put(ctx context.Context, dstDir model.Obj, file model.FileStre
 			return err
 		}
 		if resp.Status == 2 {
+			up(100)
 			return nil
 		}
 	}
@@ -263,11 +316,27 @@ func (d *Open115) Put(ctx context.Context, dstDir model.Obj, file model.FileStre
 		return err
 	}
 	// 4. upload
-	err = d.multpartUpload(ctx, tempF, file, up, tokenResp, resp)
+	err = d.multpartUpload(ctx, file, up, tokenResp, resp)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (d *Open115) OfflineDownload(ctx context.Context, uris []string, dstDir model.Obj) ([]string, error) {
+	return d.client.AddOfflineTaskURIs(ctx, uris, dstDir.GetID())
+}
+
+func (d *Open115) DeleteOfflineTask(ctx context.Context, infoHash string, deleteFiles bool) error {
+	return d.client.DeleteOfflineTask(ctx, infoHash, deleteFiles)
+}
+
+func (d *Open115) OfflineList(ctx context.Context) (*sdk.OfflineTaskListResp, error) {
+	resp, err := d.client.OfflineTaskList(ctx, 1)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // func (d *Open115) GetArchiveMeta(ctx context.Context, obj model.Obj, args model.ArchiveArgs) (model.ArchiveMeta, error) {

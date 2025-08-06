@@ -3,14 +3,19 @@ package alias
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	stdpath "path"
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/fs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/fs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/sign"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
 )
 
 type Alias struct {
@@ -73,10 +78,18 @@ func (d *Alias) Get(ctx context.Context, path string) (model.Obj, error) {
 		return nil, errs.ObjectNotFound
 	}
 	for _, dst := range dsts {
-		obj, err := d.get(ctx, path, dst, sub)
-		if err == nil {
-			return obj, nil
+		obj, err := fs.Get(ctx, stdpath.Join(dst, sub), &fs.GetArgs{NoLog: true})
+		if err != nil {
+			continue
 		}
+		return &model.Object{
+			Path:     path,
+			Name:     obj.GetName(),
+			Size:     obj.GetSize(),
+			Modified: obj.ModTime(),
+			IsFolder: obj.IsDir(),
+			HashInfo: obj.GetHash(),
+		}, nil
 	}
 	return nil, errs.ObjectNotFound
 }
@@ -94,7 +107,27 @@ func (d *Alias) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 	var objs []model.Obj
 	fsArgs := &fs.ListArgs{NoLog: true, Refresh: args.Refresh}
 	for _, dst := range dsts {
-		tmp, err := d.list(ctx, dst, sub, fsArgs)
+		tmp, err := fs.List(ctx, stdpath.Join(dst, sub), fsArgs)
+		if err == nil {
+			tmp, err = utils.SliceConvert(tmp, func(obj model.Obj) (model.Obj, error) {
+				thumb, ok := model.GetThumb(obj)
+				objRes := model.Object{
+					Name:     obj.GetName(),
+					Size:     obj.GetSize(),
+					Modified: obj.ModTime(),
+					IsFolder: obj.IsDir(),
+				}
+				if !ok {
+					return &objRes, nil
+				}
+				return &model.ObjThumb{
+					Object: objRes,
+					Thumbnail: model.Thumbnail{
+						Thumbnail: thumb,
+					},
+				}, nil
+			})
+		}
 		if err == nil {
 			objs = append(objs, tmp...)
 		}
@@ -108,21 +141,52 @@ func (d *Alias) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 	if !ok {
 		return nil, errs.ObjectNotFound
 	}
+	// proxy || ftp,s3
+	if common.GetApiUrl(ctx) == "" {
+		args.Redirect = false
+	}
 	for _, dst := range dsts {
-		link, err := d.link(ctx, dst, sub, args)
-		if err == nil {
-			if !args.Redirect && len(link.URL) > 0 {
-				// 正常情况下 多并发 仅支持返回URL的驱动
-				// alias套娃alias 可以让crypt、mega等驱动(不返回URL的) 支持并发
-				if d.DownloadConcurrency > 0 {
-					link.Concurrency = d.DownloadConcurrency
-				}
-				if d.DownloadPartSize > 0 {
-					link.PartSize = d.DownloadPartSize * utils.KB
-				}
-			}
+		reqPath := stdpath.Join(dst, sub)
+		link, fi, err := d.link(ctx, reqPath, args)
+		if err != nil {
+			continue
+		}
+		if link == nil {
+			// 重定向且需要通过代理
+			return &model.Link{
+				URL: fmt.Sprintf("%s/p%s?sign=%s",
+					common.GetApiUrl(ctx),
+					utils.EncodePath(reqPath, true),
+					sign.Sign(reqPath)),
+			}, nil
+		}
+		if args.Redirect {
 			return link, nil
 		}
+
+		resultLink := &model.Link{
+			URL:           link.URL,
+			Header:        link.Header,
+			RangeReader:   link.RangeReader,
+			MFile:         link.MFile,
+			Concurrency:   link.Concurrency,
+			PartSize:      link.PartSize,
+			ContentLength: link.ContentLength,
+			SyncClosers:   utils.NewSyncClosers(link),
+		}
+		if resultLink.ContentLength == 0 {
+			resultLink.ContentLength = fi.GetSize()
+		}
+		if resultLink.MFile != nil {
+			return resultLink, nil
+		}
+		if d.DownloadConcurrency > 0 {
+			resultLink.Concurrency = d.DownloadConcurrency
+		}
+		if d.DownloadPartSize > 0 {
+			resultLink.PartSize = d.DownloadPartSize * utils.KB
+		}
+		return resultLink, nil
 	}
 	return nil, errs.ObjectNotFound
 }
@@ -133,7 +197,10 @@ func (d *Alias) MakeDir(ctx context.Context, parentDir model.Obj, dirName string
 	}
 	reqPath, err := d.getReqPath(ctx, parentDir, true)
 	if err == nil {
-		return fs.MakeDir(ctx, stdpath.Join(*reqPath, dirName))
+		for _, path := range reqPath {
+			err = errors.Join(err, fs.MakeDir(ctx, stdpath.Join(*path, dirName)))
+		}
+		return err
 	}
 	if errs.IsNotImplement(err) {
 		return errors.New("same-name dirs cannot make sub-dir")
@@ -159,7 +226,15 @@ func (d *Alias) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
 	if err != nil {
 		return err
 	}
-	return fs.Move(ctx, *srcPath, *dstPath)
+	if len(srcPath) == len(dstPath) {
+		for i := range srcPath {
+			_, e := fs.Move(ctx, *srcPath[i], *dstPath[i])
+			err = errors.Join(err, e)
+		}
+		return err
+	} else {
+		return errors.New("parallel paths mismatch")
+	}
 }
 
 func (d *Alias) Rename(ctx context.Context, srcObj model.Obj, newName string) error {
@@ -168,7 +243,10 @@ func (d *Alias) Rename(ctx context.Context, srcObj model.Obj, newName string) er
 	}
 	reqPath, err := d.getReqPath(ctx, srcObj, false)
 	if err == nil {
-		return fs.Rename(ctx, *reqPath, newName)
+		for _, path := range reqPath {
+			err = errors.Join(err, fs.Rename(ctx, *path, newName))
+		}
+		return err
 	}
 	if errs.IsNotImplement(err) {
 		return errors.New("same-name files cannot be Rename")
@@ -194,8 +272,21 @@ func (d *Alias) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {
 	if err != nil {
 		return err
 	}
-	_, err = fs.Copy(ctx, *srcPath, *dstPath)
-	return err
+	if len(srcPath) == len(dstPath) {
+		for i := range srcPath {
+			_, e := fs.Copy(ctx, *srcPath[i], *dstPath[i])
+			err = errors.Join(err, e)
+		}
+		return err
+	} else if len(srcPath) == 1 || !d.ProtectSameName {
+		for _, path := range dstPath {
+			_, e := fs.Copy(ctx, *srcPath[0], *path)
+			err = errors.Join(err, e)
+		}
+		return err
+	} else {
+		return errors.New("parallel paths mismatch")
+	}
 }
 
 func (d *Alias) Remove(ctx context.Context, obj model.Obj) error {
@@ -204,7 +295,10 @@ func (d *Alias) Remove(ctx context.Context, obj model.Obj) error {
 	}
 	reqPath, err := d.getReqPath(ctx, obj, false)
 	if err == nil {
-		return fs.Remove(ctx, *reqPath)
+		for _, path := range reqPath {
+			err = errors.Join(err, fs.Remove(ctx, *path))
+		}
+		return err
 	}
 	if errs.IsNotImplement(err) {
 		return errors.New("same-name files cannot be Delete")
@@ -218,7 +312,32 @@ func (d *Alias) Put(ctx context.Context, dstDir model.Obj, s model.FileStreamer,
 	}
 	reqPath, err := d.getReqPath(ctx, dstDir, true)
 	if err == nil {
-		return fs.PutDirectly(ctx, *reqPath, s)
+		if len(reqPath) == 1 {
+			return fs.PutDirectly(ctx, *reqPath[0], &stream.FileStream{
+				Obj:          s,
+				Mimetype:     s.GetMimetype(),
+				WebPutAsTask: s.NeedStore(),
+				Reader:       s,
+			})
+		} else {
+			file, err := s.CacheFullInTempFile()
+			if err != nil {
+				return err
+			}
+			for _, path := range reqPath {
+				err = errors.Join(err, fs.PutDirectly(ctx, *path, &stream.FileStream{
+					Obj:          s,
+					Mimetype:     s.GetMimetype(),
+					WebPutAsTask: s.NeedStore(),
+					Reader:       file,
+				}))
+				_, e := file.Seek(0, io.SeekStart)
+				if e != nil {
+					return errors.Join(err, e)
+				}
+			}
+			return err
+		}
 	}
 	if errs.IsNotImplement(err) {
 		return errors.New("same-name dirs cannot be Put")
@@ -232,7 +351,10 @@ func (d *Alias) PutURL(ctx context.Context, dstDir model.Obj, name, url string) 
 	}
 	reqPath, err := d.getReqPath(ctx, dstDir, true)
 	if err == nil {
-		return fs.PutURL(ctx, *reqPath, name, url)
+		for _, path := range reqPath {
+			err = errors.Join(err, fs.PutURL(ctx, *path, name, url))
+		}
+		return err
 	}
 	if errs.IsNotImplement(err) {
 		return errors.New("same-name files cannot offline download")
@@ -282,14 +404,6 @@ func (d *Alias) Extract(ctx context.Context, obj model.Obj, args model.ArchiveIn
 	for _, dst := range dsts {
 		link, err := d.extract(ctx, dst, sub, args)
 		if err == nil {
-			if !args.Redirect && len(link.URL) > 0 {
-				if d.DownloadConcurrency > 0 {
-					link.Concurrency = d.DownloadConcurrency
-				}
-				if d.DownloadPartSize > 0 {
-					link.PartSize = d.DownloadPartSize * utils.KB
-				}
-			}
 			return link, nil
 		}
 	}
@@ -314,8 +428,21 @@ func (d *Alias) ArchiveDecompress(ctx context.Context, srcObj, dstDir model.Obj,
 	if err != nil {
 		return err
 	}
-	_, err = fs.ArchiveDecompress(ctx, *srcPath, *dstPath, args)
-	return err
+	if len(srcPath) == len(dstPath) {
+		for i := range srcPath {
+			_, e := fs.ArchiveDecompress(ctx, *srcPath[i], *dstPath[i], args)
+			err = errors.Join(err, e)
+		}
+		return err
+	} else if len(srcPath) == 1 || !d.ProtectSameName {
+		for _, path := range dstPath {
+			_, e := fs.ArchiveDecompress(ctx, *srcPath[0], *path, args)
+			err = errors.Join(err, e)
+		}
+		return err
+	} else {
+		return errors.New("parallel paths mismatch")
+	}
 }
 
 var _ driver.Driver = (*Alias)(nil)

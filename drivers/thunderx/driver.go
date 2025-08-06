@@ -2,21 +2,26 @@ package thunderx
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	hash_extend "github.com/alist-org/alist/v3/pkg/utils/hash"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	hash_extend "github.com/OpenListTeam/OpenList/v4/pkg/utils/hash"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/go-resty/resty/v2"
-	"net/http"
-	"strings"
 )
 
 type ThunderX struct {
@@ -364,22 +369,19 @@ func (xc *XunLeiXCommon) Remove(ctx context.Context, obj model.Obj) error {
 }
 
 func (xc *XunLeiXCommon) Put(ctx context.Context, dstDir model.Obj, file model.FileStreamer, up driver.UpdateProgress) error {
-	hi := file.GetHash()
-	gcid := hi.GetHash(hash_extend.GCID)
+	gcid := file.GetHash().GetHash(hash_extend.GCID)
+	var err error
 	if len(gcid) < hash_extend.GCID.Width {
-		tFile, err := file.CacheFullInTempFile()
-		if err != nil {
-			return err
-		}
-
-		gcid, err = utils.HashFile(hash_extend.GCID, tFile, file.GetSize())
+		cacheFileProgress := model.UpdateProgressWithRange(up, 0, 50)
+		up = model.UpdateProgressWithRange(up, 50, 100)
+		_, gcid, err = stream.CacheFullInTempFileAndHash(file, cacheFileProgress, hash_extend.GCID, file.GetSize())
 		if err != nil {
 			return err
 		}
 	}
 
 	var resp UploadTaskResponse
-	_, err := xc.Request(FILE_API_URL, http.MethodPost, func(r *resty.Request) {
+	_, err = xc.Request(FILE_API_URL, http.MethodPost, func(r *resty.Request) {
 		r.SetContext(ctx)
 		r.SetBody(&base.Json{
 			"kind":        FILE,
@@ -480,7 +482,8 @@ func (xc *XunLeiXCommon) Request(url string, method string, callback base.ReqCal
 		}
 	}, resp)
 
-	errResp, ok := err.(*ErrResp)
+	var errResp *ErrResp
+	ok := errors.As(err, &errResp)
 	if !ok {
 		return nil, err
 	}
@@ -558,4 +561,85 @@ func (xc *XunLeiXCommon) IsLogin() bool {
 	}
 	_, err := xc.Request(XLUSER_API_URL+"/user/me", http.MethodGet, nil, nil)
 	return err == nil
+}
+
+// 离线下载文件，都和Pikpak接口一致
+func (xc *XunLeiXCommon) OfflineDownload(ctx context.Context, fileUrl string, parentDir model.Obj, fileName string) (*OfflineTask, error) {
+	requestBody := base.Json{
+		"kind":        "drive#file",
+		"name":        fileName,
+		"upload_type": "UPLOAD_TYPE_URL",
+		"url": base.Json{
+			"url": fileUrl,
+		},
+		"params":    base.Json{},
+		"parent_id": parentDir.GetID(),
+	}
+	var resp OfflineDownloadResp // 一样的
+	_, err := xc.Request(FILE_API_URL, http.MethodPost, func(req *resty.Request) {
+		req.SetContext(ctx).
+			SetBody(requestBody)
+	}, &resp)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp.Task, err
+}
+
+// 获取离线下载任务列表
+func (xc *XunLeiXCommon) OfflineList(ctx context.Context, nextPageToken string, phase []string) ([]OfflineTask, error) {
+	res := make([]OfflineTask, 0)
+	if len(phase) == 0 {
+		phase = []string{"PHASE_TYPE_RUNNING", "PHASE_TYPE_ERROR", "PHASE_TYPE_COMPLETE", "PHASE_TYPE_PENDING"}
+	}
+	params := map[string]string{
+		"type":           "offline",
+		"thumbnail_size": "SIZE_SMALL",
+		"limit":          "10000",
+		"page_token":     nextPageToken,
+		"with":           "reference_resource",
+	}
+
+	// 处理 phase 参数
+	if len(phase) > 0 {
+		filters := base.Json{
+			"phase": map[string]string{
+				"in": strings.Join(phase, ","),
+			},
+		}
+		filtersJSON, err := json.Marshal(filters)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal filters: %w", err)
+		}
+		params["filters"] = string(filtersJSON)
+	}
+
+	var resp OfflineListResp
+	_, err := xc.Request(TASKS_API_URL, http.MethodGet, func(req *resty.Request) {
+		req.SetContext(ctx).
+			SetQueryParams(params)
+	}, &resp)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get offline list: %w", err)
+	}
+	res = append(res, resp.Tasks...)
+	return res, nil
+}
+
+func (xc *XunLeiXCommon) DeleteOfflineTasks(ctx context.Context, taskIDs []string, deleteFiles bool) error {
+	params := map[string]string{
+		"task_ids":     strings.Join(taskIDs, ","),
+		"delete_files": strconv.FormatBool(deleteFiles),
+	}
+	_, err := xc.Request(TASKS_API_URL, http.MethodDelete, func(req *resty.Request) {
+		req.SetContext(ctx).
+			SetQueryParams(params)
+	}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to delete tasks %v: %w", taskIDs, err)
+	}
+	return nil
 }

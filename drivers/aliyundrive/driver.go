@@ -7,9 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"github.com/alist-org/alist/v3/drivers/aliyundrive_open"
-	"github.com/alist-org/alist/v3/drivers/virtual_file"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/drivers/aliyundrive_open"
+	"github.com/OpenListTeam/OpenList/v4/drivers/virtual_file"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 	"io"
 	"math"
 	"math/big"
@@ -18,13 +18,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/stream"
-	"github.com/alist-org/alist/v3/pkg/cron"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/cron"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	log "github.com/sirupsen/logrus"
 )
@@ -183,7 +183,7 @@ func (d *AliDrive) Remove(ctx context.Context, obj model.Obj) error {
 }
 
 func (d *AliDrive) Put(ctx context.Context, dstDir model.Obj, streamer model.FileStreamer, up driver.UpdateProgress) error {
-	file := stream.FileStream{
+	file := &stream.FileStream{
 		Obj:      streamer,
 		Reader:   streamer,
 		Mimetype: streamer.GetMimetype(),
@@ -227,7 +227,7 @@ func (d *AliDrive) Put(ctx context.Context, dstDir model.Obj, streamer model.Fil
 				io.Closer
 			}{
 				Reader: io.MultiReader(buf, file),
-				Closer: &file,
+				Closer: file,
 			}
 		}
 	} else {
@@ -315,11 +315,10 @@ func (d *AliDrive) Put(ctx context.Context, dstDir model.Obj, streamer model.Fil
 		if d.InternalUpload {
 			url = partInfo.InternalUploadUrl
 		}
-		req, err := http.NewRequest("PUT", url, io.LimitReader(rateLimited, DEFAULT))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, io.LimitReader(rateLimited, DEFAULT))
 		if err != nil {
 			return err
 		}
-		req = req.WithContext(ctx)
 		res, err := base.HttpClient.Do(req)
 		if err != nil {
 			return err

@@ -3,20 +3,21 @@ package ftp
 import (
 	"bytes"
 	"context"
-	ftpserver "github.com/KirCute/ftpserverlib-pasvportmap"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/fs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/stream"
-	"github.com/alist-org/alist/v3/server/common"
-	"github.com/pkg/errors"
 	"io"
 	"net/http"
 	"os"
 	stdpath "path"
 	"time"
+
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/fs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
+	ftpserver "github.com/fclairamb/ftpserverlib"
+	"github.com/pkg/errors"
 )
 
 type FileUploadProxy struct {
@@ -28,14 +29,14 @@ type FileUploadProxy struct {
 }
 
 func uploadAuth(ctx context.Context, path string) error {
-	user := ctx.Value("user").(*model.User)
+	user := ctx.Value(conf.UserKey).(*model.User)
 	meta, err := op.GetNearestMeta(stdpath.Dir(path))
 	if err != nil {
 		if !errors.Is(errors.Cause(err), errs.MetaNotFound) {
 			return err
 		}
 	}
-	if !(common.CanAccess(user, meta, path, ctx.Value("meta_pass").(string)) &&
+	if !(common.CanAccess(user, meta, path, ctx.Value(conf.MetaPassKey).(string)) &&
 		((user.CanFTPManage() && user.CanWrite()) || common.CanWrite(meta, stdpath.Dir(path)))) {
 		return errs.PermissionDenied
 	}

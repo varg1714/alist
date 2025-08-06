@@ -2,8 +2,8 @@ package aliyundrive
 
 import (
 	"crypto/ecdsa"
+	"github.com/OpenListTeam/OpenList/v4/pkg/generic_sync"
 	"github.com/Xhofe/go-cache"
-	"github.com/alist-org/alist/v3/pkg/generic_sync"
 	"golang.org/x/time/rate"
 	"time"
 )

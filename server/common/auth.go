@@ -3,9 +3,9 @@ package common
 import (
 	"time"
 
-	"github.com/Xhofe/go-cache"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/go-cache"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/pkg/errors"
 )

@@ -1,12 +1,13 @@
 package halalcloud
 
 import (
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"time"
+
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/city404/v6-public-rpc-proto/go/v6/common"
 	pubUserFile "github.com/city404/v6-public-rpc-proto/go/v6/userfile"
 	"google.golang.org/grpc"
-	"time"
 )
 
 type AuthService struct {
@@ -94,8 +95,4 @@ type SteamFile struct {
 
 func (s *SteamFile) Read(p []byte) (n int, err error) {
 	return s.file.Read(p)
-}
-
-func (s *SteamFile) Close() error {
-	return s.file.Close()
 }

@@ -3,17 +3,19 @@ package ftp
 import (
 	"context"
 	"fmt"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/fs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/server/common"
-	"github.com/pkg/errors"
 	stdpath "path"
+
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/fs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
+	"github.com/pkg/errors"
 )
 
 func Mkdir(ctx context.Context, path string) error {
-	user := ctx.Value("user").(*model.User)
+	user := ctx.Value(conf.UserKey).(*model.User)
 	reqPath, err := user.JoinPath(path)
 	if err != nil {
 		return err
@@ -33,7 +35,7 @@ func Mkdir(ctx context.Context, path string) error {
 }
 
 func Remove(ctx context.Context, path string) error {
-	user := ctx.Value("user").(*model.User)
+	user := ctx.Value(conf.UserKey).(*model.User)
 	if !user.CanRemove() || !user.CanFTPManage() {
 		return errs.PermissionDenied
 	}
@@ -45,7 +47,7 @@ func Remove(ctx context.Context, path string) error {
 }
 
 func Rename(ctx context.Context, oldPath, newPath string) error {
-	user := ctx.Value("user").(*model.User)
+	user := ctx.Value(conf.UserKey).(*model.User)
 	srcPath, err := user.JoinPath(oldPath)
 	if err != nil {
 		return err
@@ -65,7 +67,7 @@ func Rename(ctx context.Context, oldPath, newPath string) error {
 		if !user.CanFTPManage() || !user.CanMove() || (srcBase != dstBase && !user.CanRename()) {
 			return errs.PermissionDenied
 		}
-		if err = fs.Move(ctx, srcPath, dstDir); err != nil {
+		if _, err = fs.Move(ctx, srcPath, dstDir); err != nil {
 			if srcBase != dstBase {
 				return err
 			}

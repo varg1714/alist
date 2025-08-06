@@ -1,8 +1,8 @@
 package chaoxing
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 // 此程序挂载的是超星小组网盘，需要代理才能使用；
@@ -32,7 +32,6 @@ func init() {
 			config: driver.Config{
 				Name:              "ChaoXingGroupDrive",
 				OnlyProxy:         true,
-				OnlyLocal:         false,
 				DefaultRoot:       "-1",
 				NoOverwriteUpload: true,
 			},

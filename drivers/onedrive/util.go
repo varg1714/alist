@@ -1,23 +1,24 @@
 package onedrive
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	stdpath "path"
+	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	streamPkg "github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/avast/retry-go"
 	"github.com/go-resty/resty/v2"
 	jsoniter "github.com/json-iterator/go"
-	log "github.com/sirupsen/logrus"
 )
 
 var onedriveHostMap = map[string]Host{
@@ -72,6 +73,42 @@ func (d *Onedrive) refreshToken() error {
 }
 
 func (d *Onedrive) _refreshToken() error {
+	// 使用在线API刷新Token，无需ClientID和ClientSecret
+	if d.UseOnlineAPI && len(d.APIAddress) > 0 {
+		u := d.APIAddress
+		var resp struct {
+			RefreshToken string `json:"refresh_token"`
+			AccessToken  string `json:"access_token"`
+			ErrorMessage string `json:"text"`
+		}
+		_, err := base.RestyClient.R().
+			SetHeader("User-Agent", "Mozilla/5.0 (Macintosh; Apple macOS 15_5) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/138.0.0.0 Openlist/425.6.30").
+			SetResult(&resp).
+			SetQueryParams(map[string]string{
+				"refresh_ui": d.RefreshToken,
+				"server_use": "true",
+				"driver_txt": "onedrive_pr",
+			}).
+			Get(u)
+		if err != nil {
+			return err
+		}
+		if resp.RefreshToken == "" || resp.AccessToken == "" {
+			if resp.ErrorMessage != "" {
+				return fmt.Errorf("failed to refresh token: %s", resp.ErrorMessage)
+			}
+			return fmt.Errorf("empty token returned from official API, a wrong refresh token may have been used")
+		}
+		d.AccessToken = resp.AccessToken
+		d.RefreshToken = resp.RefreshToken
+		op.MustSaveDriverStorage(d)
+		return nil
+	}
+	// 使用本地客户端的情况下检查是否为空
+	if d.ClientID == "" || d.ClientSecret == "" {
+		return fmt.Errorf("empty ClientID or ClientSecret")
+	}
+	// 走原有的刷新逻辑
 	url := d.GetMetaUrl(true, "") + "/common/oauth2/v2.0/token"
 	var resp base.TokenResp
 	var e TokenErr
@@ -194,7 +231,7 @@ func toAPIMetadata(stream model.FileStreamer) Metadata {
 
 func (d *Onedrive) upBig(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {
 	url := d.GetMetaUrl(false, stdpath.Join(dstDir.GetPath(), stream.GetName())) + "/createUploadSession"
-	metadata := map[string]interface{}{"item": toAPIMetadata(stream)}
+	metadata := map[string]any{"item": toAPIMetadata(stream)}
 	res, err := d.Request(url, http.MethodPost, func(req *resty.Request) {
 		req.SetBody(metadata).SetContext(ctx)
 	}, nil)
@@ -204,42 +241,55 @@ func (d *Onedrive) upBig(ctx context.Context, dstDir model.Obj, stream model.Fil
 	uploadUrl := jsoniter.Get(res, "uploadUrl").ToString()
 	var finish int64 = 0
 	DEFAULT := d.ChunkSize * 1024 * 1024
+	ss, err := streamPkg.NewStreamSectionReader(stream, int(DEFAULT))
+	if err != nil {
+		return err
+	}
 	for finish < stream.GetSize() {
 		if utils.IsCanceled(ctx) {
 			return ctx.Err()
 		}
-		log.Debugf("upload: %d", finish)
-		var byteSize int64 = DEFAULT
 		left := stream.GetSize() - finish
-		if left < DEFAULT {
-			byteSize = left
-		}
-		byteData := make([]byte, byteSize)
-		n, err := io.ReadFull(stream, byteData)
-		log.Debug(err, n)
+		byteSize := min(left, DEFAULT)
+		utils.Log.Debugf("[Onedrive] upload range: %d-%d/%d", finish, finish+byteSize-1, stream.GetSize())
+		rd, err := ss.GetSectionReader(finish, byteSize)
 		if err != nil {
 			return err
 		}
-		req, err := http.NewRequest("PUT", uploadUrl, driver.NewLimitedUploadStream(ctx, bytes.NewBuffer(byteData)))
+		err = retry.Do(
+			func() error {
+				rd.Seek(0, io.SeekStart)
+				req, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadUrl, driver.NewLimitedUploadStream(ctx, rd))
+				if err != nil {
+					return err
+				}
+				req.ContentLength = byteSize
+				req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", finish, finish+byteSize-1, stream.GetSize()))
+				res, err := base.HttpClient.Do(req)
+				if err != nil {
+					return err
+				}
+				defer res.Body.Close()
+				// https://learn.microsoft.com/zh-cn/onedrive/developer/rest-api/api/driveitem_createuploadsession
+				switch {
+				case res.StatusCode >= 500 && res.StatusCode <= 504:
+					return fmt.Errorf("server error: %d", res.StatusCode)
+				case res.StatusCode != 201 && res.StatusCode != 202 && res.StatusCode != 200:
+					data, _ := io.ReadAll(res.Body)
+					return errors.New(string(data))
+				default:
+					return nil
+				}
+			},
+			retry.Attempts(3),
+			retry.DelayType(retry.BackOffDelay),
+			retry.Delay(time.Second),
+		)
+		ss.RecycleSectionReader(rd)
 		if err != nil {
 			return err
 		}
-		req = req.WithContext(ctx)
-		req.ContentLength = byteSize
-		// req.Header.Set("Content-Length", strconv.Itoa(int(byteSize)))
-		req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", finish, finish+byteSize-1, stream.GetSize()))
 		finish += byteSize
-		res, err := base.HttpClient.Do(req)
-		if err != nil {
-			return err
-		}
-		// https://learn.microsoft.com/zh-cn/onedrive/developer/rest-api/api/driveitem_createuploadsession
-		if res.StatusCode != 201 && res.StatusCode != 202 && res.StatusCode != 200 {
-			data, _ := io.ReadAll(res.Body)
-			res.Body.Close()
-			return errors.New(string(data))
-		}
-		res.Body.Close()
 		up(float64(finish) * 100 / float64(stream.GetSize()))
 	}
 	return nil

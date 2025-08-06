@@ -1,8 +1,8 @@
 package mopan
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -27,8 +27,7 @@ func (a *Addition) GetRootId() string {
 }
 
 var config = driver.Config{
-	Name: "MoPan",
-	// DefaultRoot: "root, / or other",
+	Name:        "MoPan",
 	CheckStatus: true,
 	Alert:       "warning|This network disk may store your password in clear text. Please set your password carefully",
 }

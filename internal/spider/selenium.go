@@ -1,7 +1,7 @@
 package spider
 
 import (
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/tebeka/selenium"
 	"github.com/tebeka/selenium/chrome"
 	"time"

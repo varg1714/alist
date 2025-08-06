@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/alist-org/alist/v3/internal/authn"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/db"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/setting"
-	"github.com/alist-org/alist/v3/server/common"
+	"github.com/OpenListTeam/OpenList/v4/internal/authn"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/db"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/setting"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
 	"github.com/gin-gonic/gin"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -24,7 +24,7 @@ func BeginAuthnLogin(c *gin.Context) {
 		common.ErrorStrResp(c, "WebAuthn is not enabled", 403)
 		return
 	}
-	authnInstance, err := authn.NewAuthnInstance(c.Request)
+	authnInstance, err := authn.NewAuthnInstance(c)
 	if err != nil {
 		common.ErrorResp(c, err, 400)
 		return
@@ -65,7 +65,7 @@ func FinishAuthnLogin(c *gin.Context) {
 		common.ErrorStrResp(c, "WebAuthn is not enabled", 403)
 		return
 	}
-	authnInstance, err := authn.NewAuthnInstance(c.Request)
+	authnInstance, err := authn.NewAuthnInstance(c)
 	if err != nil {
 		common.ErrorResp(c, err, 400)
 		return
@@ -125,9 +125,9 @@ func BeginAuthnRegistration(c *gin.Context) {
 		common.ErrorStrResp(c, "WebAuthn is not enabled", 403)
 		return
 	}
-	user := c.MustGet("user").(*model.User)
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
 
-	authnInstance, err := authn.NewAuthnInstance(c.Request)
+	authnInstance, err := authn.NewAuthnInstance(c)
 	if err != nil {
 		common.ErrorResp(c, err, 400)
 	}
@@ -155,10 +155,10 @@ func FinishAuthnRegistration(c *gin.Context) {
 		common.ErrorStrResp(c, "WebAuthn is not enabled", 403)
 		return
 	}
-	user := c.MustGet("user").(*model.User)
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
 	sessionDataString := c.GetHeader("Session")
 
-	authnInstance, err := authn.NewAuthnInstance(c.Request)
+	authnInstance, err := authn.NewAuthnInstance(c)
 	if err != nil {
 		common.ErrorResp(c, err, 400)
 		return
@@ -196,7 +196,7 @@ func FinishAuthnRegistration(c *gin.Context) {
 }
 
 func DeleteAuthnLogin(c *gin.Context) {
-	user := c.MustGet("user").(*model.User)
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
 	type DeleteAuthnReq struct {
 		ID string `json:"id"`
 	}
@@ -224,7 +224,7 @@ func GetAuthnCredentials(c *gin.Context) {
 		ID          []byte `json:"id"`
 		FingerPrint string `json:"fingerprint"`
 	}
-	user := c.MustGet("user").(*model.User)
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
 	credentials := user.WebAuthnCredentials()
 	res := make([]WebAuthnCredentials, 0, len(credentials))
 	for _, v := range credentials {

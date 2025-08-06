@@ -1,8 +1,8 @@
 package smb
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -14,11 +14,12 @@ type Addition struct {
 }
 
 var config = driver.Config{
-	Name:        "SMB",
-	LocalSort:   true,
-	OnlyLocal:   true,
-	DefaultRoot: ".",
-	NoCache:     true,
+	Name:          "SMB",
+	LocalSort:     true,
+	OnlyLinkMFile: false,
+	DefaultRoot:   ".",
+	NoCache:       true,
+	NoLinkURL:     true,
 }
 
 func init() {

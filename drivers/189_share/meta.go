@@ -1,8 +1,8 @@
 package quark_share
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -13,7 +13,6 @@ type Addition struct {
 var config = driver.Config{
 	Name:              "Cloud189Share",
 	LocalSort:         true,
-	OnlyLocal:         false,
 	OnlyProxy:         false,
 	NoCache:           false,
 	NoUpload:          true,

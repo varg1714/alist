@@ -1,8 +1,8 @@
 package ftp
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 	"github.com/axgle/mahonia"
 )
 
@@ -31,10 +31,11 @@ type Addition struct {
 }
 
 var config = driver.Config{
-	Name:        "FTP",
-	LocalSort:   true,
-	OnlyLocal:   true,
-	DefaultRoot: "/",
+	Name:          "FTP",
+	LocalSort:     true,
+	OnlyLinkMFile: false,
+	DefaultRoot:   "/",
+	NoLinkURL:     true,
 }
 
 func init() {

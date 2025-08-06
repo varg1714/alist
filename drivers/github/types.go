@@ -1,8 +1,9 @@
 package github
 
 import (
-	"github.com/alist-org/alist/v3/internal/model"
 	"time"
+
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
 )
 
 type Links struct {

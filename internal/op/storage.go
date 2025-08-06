@@ -3,17 +3,18 @@ package op
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/internal/db"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/generic_sync"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/internal/db"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/generic_sync"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -135,13 +136,35 @@ func initStorage(ctx context.Context, storage model.Storage, storageDriver drive
 	}
 	storagesMap.Store(driverStorage.MountPath, storageDriver)
 	if err != nil {
-		driverStorage.SetStatus(err.Error())
+		if IsUseOnlineAPI(storageDriver) {
+			driverStorage.SetStatus(utils.SanitizeHTML(err.Error()))
+		} else {
+			driverStorage.SetStatus(err.Error())
+		}
 		err = errors.Wrap(err, "failed init storage")
 	} else {
 		driverStorage.SetStatus(WORK)
 	}
 	MustSaveDriverStorage(storageDriver)
 	return err
+}
+
+func IsUseOnlineAPI(storageDriver driver.Driver) bool {
+	v := reflect.ValueOf(storageDriver.GetAddition())
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if !v.IsValid() || v.Kind() != reflect.Struct {
+		return false
+	}
+	field_v := v.FieldByName("UseOnlineAPI")
+	if !field_v.IsValid() {
+		return false
+	}
+	if field_v.Kind() != reflect.Bool {
+		return false
+	}
+	return field_v.Bool()
 }
 
 func EnableStorage(ctx context.Context, id uint) error {

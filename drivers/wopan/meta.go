@@ -1,8 +1,8 @@
 package template
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -18,15 +18,7 @@ type Addition struct {
 
 var config = driver.Config{
 	Name:              "WoPan",
-	LocalSort:         false,
-	OnlyLocal:         false,
-	OnlyProxy:         false,
-	NoCache:           false,
-	NoUpload:          false,
-	NeedMs:            false,
 	DefaultRoot:       "0",
-	CheckStatus:       false,
-	Alert:             "",
 	NoOverwriteUpload: true,
 }
 

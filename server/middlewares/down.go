@@ -3,14 +3,14 @@ package middlewares
 import (
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/setting"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/setting"
 
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/alist/v3/server/common"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
@@ -18,7 +18,7 @@ import (
 func Down(verifyFunc func(string, string) error) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		rawPath := parsePath(c.Param("path"))
-		c.Set("path", rawPath)
+		common.GinWithValue(c, conf.PathKey, rawPath)
 		meta, err := op.GetNearestMeta(rawPath)
 		if err != nil {
 			if !errors.Is(errors.Cause(err), errs.MetaNotFound) {
@@ -26,7 +26,7 @@ func Down(verifyFunc func(string, string) error) func(c *gin.Context) {
 				return
 			}
 		}
-		c.Set("meta", meta)
+		common.GinWithValue(c, conf.MetaKey, meta)
 		// verify sign
 		if needSign(meta, rawPath) {
 			s := c.Query("sign")

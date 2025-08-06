@@ -1,8 +1,8 @@
 package doubao
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -10,21 +10,15 @@ type Addition struct {
 	// driver.RootPath
 	driver.RootID
 	// define other
-	Cookie string `json:"cookie" type:"text"`
+	Cookie       string `json:"cookie" type:"text"`
+	UploadThread string `json:"upload_thread" default:"3"`
+	DownloadApi  string `json:"download_api" type:"select" options:"get_file_url,get_download_info" default:"get_file_url"`
 }
 
 var config = driver.Config{
-	Name:              "Doubao",
-	LocalSort:         true,
-	OnlyLocal:         false,
-	OnlyProxy:         false,
-	NoCache:           false,
-	NoUpload:          true,
-	NeedMs:            false,
-	DefaultRoot:       "0",
-	CheckStatus:       false,
-	Alert:             "",
-	NoOverwriteUpload: false,
+	Name:        "Doubao",
+	LocalSort:   true,
+	DefaultRoot: "0",
 }
 
 func init() {

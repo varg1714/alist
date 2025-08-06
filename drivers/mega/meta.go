@@ -1,8 +1,8 @@
 package mega
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -18,7 +18,8 @@ type Addition struct {
 var config = driver.Config{
 	Name:      "Mega_nz",
 	LocalSort: true,
-	OnlyLocal: true,
+	OnlyProxy: true,
+	NoLinkURL: true,
 }
 
 func init() {

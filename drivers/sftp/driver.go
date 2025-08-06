@@ -5,10 +5,11 @@ import (
 	"os"
 	"path"
 
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/pkg/sftp"
 	log "github.com/sirupsen/logrus"
 )
@@ -29,7 +30,7 @@ func (d *SFTP) GetAddition() driver.Additional {
 }
 
 func (d *SFTP) Init(ctx context.Context) error {
-	return d.initClient()
+	return d._initClient()
 }
 
 func (d *SFTP) Drop(ctx context.Context) error {
@@ -62,10 +63,21 @@ func (d *SFTP) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*
 	if err != nil {
 		return nil, err
 	}
-	link := &model.Link{
-		MFile: remoteFile,
+	mFile := &stream.RateLimitFile{
+		File:    remoteFile,
+		Limiter: stream.ServerDownloadLimit,
+		Ctx:     ctx,
 	}
-	return link, nil
+	if !d.Config().OnlyLinkMFile {
+		return &model.Link{
+			RangeReader: stream.GetRangeReaderFromMFile(file.GetSize(), mFile),
+			SyncClosers: utils.NewSyncClosers(remoteFile),
+		}, nil
+	}
+	return &model.Link{
+		MFile:       mFile,
+		SyncClosers: utils.NewSyncClosers(remoteFile),
+	}, nil
 }
 
 func (d *SFTP) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {

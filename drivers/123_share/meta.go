@@ -1,8 +1,8 @@
 package _123Share
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -15,17 +15,10 @@ type Addition struct {
 }
 
 var config = driver.Config{
-	Name:              "123PanShare",
-	LocalSort:         true,
-	OnlyLocal:         false,
-	OnlyProxy:         false,
-	NoCache:           false,
-	NoUpload:          true,
-	NeedMs:            false,
-	DefaultRoot:       "0",
-	CheckStatus:       false,
-	Alert:             "",
-	NoOverwriteUpload: false,
+	Name:        "123PanShare",
+	LocalSort:   true,
+	NoUpload:    true,
+	DefaultRoot: "0",
 }
 
 func init() {

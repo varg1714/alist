@@ -1,13 +1,16 @@
 package smb
 
 import (
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"fmt"
 	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
 	"sync/atomic"
 	"time"
+
+	"github.com/OpenListTeam/OpenList/v4/pkg/singleflight"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 
 	"github.com/hirochachacha/go-smb2"
 )
@@ -25,6 +28,12 @@ func (d *SMB) getLastConnTime() time.Time {
 }
 
 func (d *SMB) initFS() error {
+	_, err, _ := singleflight.AnyGroup.Do(fmt.Sprintf("SMB.initFS:%p", d), func() (any, error) {
+		return nil, d._initFS()
+	})
+	return err
+}
+func (d *SMB) _initFS() error {
 	conn, err := net.Dial("tcp", d.Address)
 	if err != nil {
 		return err

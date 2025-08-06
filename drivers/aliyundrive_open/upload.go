@@ -1,7 +1,6 @@
 package aliyundrive_open
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -12,11 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/http_range"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	streamPkg "github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/http_range"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/avast/retry-go"
 	"github.com/go-resty/resty/v2"
 	log "github.com/sirupsen/logrus"
@@ -69,7 +69,7 @@ func (d *AliyundriveOpen) uploadPart(ctx context.Context, r io.Reader, partInfo 
 	if d.InternalUpload {
 		uploadUrl = strings.ReplaceAll(uploadUrl, "https://cn-beijing-data.aliyundrive.net/", "http://ccp-bj29-bj-1592982087.oss-cn-beijing-internal.aliyuncs.com/")
 	}
-	req, err := http.NewRequestWithContext(ctx, "PUT", uploadUrl, r)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadUrl, r)
 	if err != nil {
 		return err
 	}
@@ -131,16 +131,16 @@ func (d *AliyundriveOpen) calProofCode(stream model.FileStreamer) (string, error
 		return "", err
 	}
 	length := proofRange.End - proofRange.Start
-	buf := bytes.NewBuffer(make([]byte, 0, length))
 	reader, err := stream.RangeRead(http_range.Range{Start: proofRange.Start, Length: length})
 	if err != nil {
 		return "", err
 	}
-	_, err = utils.CopyWithBufferN(buf, reader, length)
-	if err != nil {
-		return "", err
+	buf := make([]byte, length)
+	n, err := io.ReadFull(reader, buf)
+	if n != int(length) {
+		return "", fmt.Errorf("failed to read all data: (expect =%d, actual =%d) %w", length, n, err)
 	}
-	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
+	return base64.StdEncoding.EncodeToString(buf), nil
 }
 
 func (d *AliyundriveOpen) upload(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) (model.Obj, error) {
@@ -183,25 +183,20 @@ func (d *AliyundriveOpen) upload(ctx context.Context, dstDir model.Obj, stream m
 	_, err, e := d.requestReturnErrResp("/adrive/v1.0/openFile/create", http.MethodPost, func(req *resty.Request) {
 		req.SetBody(createData).SetResult(&createResp)
 	})
-	var tmpF model.File
 	if err != nil {
 		if e.Code != "PreHashMatched" || !rapidUpload {
 			return nil, err
 		}
 		log.Debugf("[aliyundrive_open] pre_hash matched, start rapid upload")
 
-		hi := stream.GetHash()
-		hash := hi.GetHash(utils.SHA1)
-		if len(hash) <= 0 {
-			tmpF, err = stream.CacheFullInTempFile()
+		hash := stream.GetHash().GetHash(utils.SHA1)
+		if len(hash) != utils.SHA1.Width {
+			cacheFileProgress := model.UpdateProgressWithRange(up, 0, 50)
+			up = model.UpdateProgressWithRange(up, 50, 100)
+			_, hash, err = streamPkg.CacheFullInTempFileAndHash(stream, cacheFileProgress, utils.SHA1)
 			if err != nil {
 				return nil, err
 			}
-			hash, err = utils.HashFile(utils.SHA1, tmpF)
-			if err != nil {
-				return nil, err
-			}
-
 		}
 
 		delete(createData, "pre_hash")
@@ -227,6 +222,10 @@ func (d *AliyundriveOpen) upload(ctx context.Context, dstDir model.Obj, stream m
 		preTime := time.Now()
 		var offset, length int64 = 0, partSize
 		//var length
+		ss, err := streamPkg.NewStreamSectionReader(stream, int(partSize))
+		if err != nil {
+			return nil, err
+		}
 		for i := 0; i < len(createResp.PartInfoList); i++ {
 			if utils.IsCanceled(ctx) {
 				return nil, ctx.Err()
@@ -242,22 +241,19 @@ func (d *AliyundriveOpen) upload(ctx context.Context, dstDir model.Obj, stream m
 			if remain := stream.GetSize() - offset; length > remain {
 				length = remain
 			}
-			rd := utils.NewMultiReadable(io.LimitReader(stream, partSize))
-			if rapidUpload {
-				srd, err := stream.RangeRead(http_range.Range{Start: offset, Length: length})
-				if err != nil {
-					return nil, err
-				}
-				rd = utils.NewMultiReadable(srd)
+			rd, err := ss.GetSectionReader(offset, length)
+			if err != nil {
+				return nil, err
 			}
+			rateLimitedRd := driver.NewLimitedUploadStream(ctx, rd)
 			err = retry.Do(func() error {
-				_ = rd.Reset()
-				rateLimitedRd := driver.NewLimitedUploadStream(ctx, rd)
+				rd.Seek(0, io.SeekStart)
 				return d.uploadPart(ctx, rateLimitedRd, createResp.PartInfoList[i])
 			},
 				retry.Attempts(3),
 				retry.DelayType(retry.BackOffDelay),
 				retry.Delay(time.Second))
+			ss.RecycleSectionReader(rd)
 			if err != nil {
 				return nil, err
 			}

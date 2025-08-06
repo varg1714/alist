@@ -7,14 +7,15 @@ import (
 	"io"
 	"time"
 
-	"github.com/alist-org/alist/v3/pkg/http_range"
+	"github.com/OpenListTeam/OpenList/v4/pkg/http_range"
 	"github.com/pquerna/otp/totp"
 	"github.com/rclone/rclone/lib/readers"
 
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	log "github.com/sirupsen/logrus"
 	"github.com/t3rm1n4l/go-mega"
 )
@@ -56,12 +57,21 @@ func (d *Mega) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]
 		if err != nil {
 			return nil, err
 		}
-		res := make([]model.Obj, 0)
+		fn := make(map[string]model.Obj)
 		for i := range nodes {
 			n := nodes[i]
-			if n.GetType() == mega.FILE || n.GetType() == mega.FOLDER {
-				res = append(res, &MegaNode{n})
+			if n.GetType() != mega.FILE && n.GetType() != mega.FOLDER {
+				continue
 			}
+			if _, ok := fn[n.GetName()]; !ok {
+				fn[n.GetName()] = &MegaNode{n}
+			} else if sameNameObj := fn[n.GetName()]; (&MegaNode{n}).ModTime().After(sameNameObj.ModTime()) {
+				fn[n.GetName()] = &MegaNode{n}
+			}
+		}
+		res := make([]model.Obj, 0)
+		for _, v := range fn {
+			res = append(res, v)
 		}
 		return res, nil
 	}
@@ -86,8 +96,8 @@ func (d *Mega) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*
 		size := file.GetSize()
 		resultRangeReader := func(ctx context.Context, httpRange http_range.Range) (io.ReadCloser, error) {
 			length := httpRange.Length
-			if httpRange.Length >= 0 && httpRange.Start+httpRange.Length >= size {
-				length = -1
+			if httpRange.Length < 0 || httpRange.Start+httpRange.Length >= size {
+				length = size - httpRange.Start
 			}
 			var down *mega.Download
 			err := utils.Retry(3, time.Second, func() (err error) {
@@ -105,11 +115,9 @@ func (d *Mega) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*
 
 			return readers.NewLimitedReadCloser(oo, length), nil
 		}
-		resultRangeReadCloser := &model.RangeReadCloser{RangeReader: resultRangeReader}
-		resultLink := &model.Link{
-			RangeReadCloser: resultRangeReadCloser,
-		}
-		return resultLink, nil
+		return &model.Link{
+			RangeReader: stream.RateLimitRangeReaderFunc(resultRangeReader),
+		}, nil
 	}
 	return nil, fmt.Errorf("unable to convert dir to mega n")
 }

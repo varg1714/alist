@@ -1,21 +1,22 @@
 package server
 
 import (
-	"github.com/alist-org/alist/v3/cmd/flags"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/message"
-	"github.com/alist-org/alist/v3/internal/sign"
-	"github.com/alist-org/alist/v3/internal/stream"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/alist/v3/server/common"
-	"github.com/alist-org/alist/v3/server/handles"
-	"github.com/alist-org/alist/v3/server/middlewares"
-	"github.com/alist-org/alist/v3/server/static"
+	"github.com/OpenListTeam/OpenList/v4/cmd/flags"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/message"
+	"github.com/OpenListTeam/OpenList/v4/internal/sign"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
+	"github.com/OpenListTeam/OpenList/v4/server/handles"
+	"github.com/OpenListTeam/OpenList/v4/server/middlewares"
+	"github.com/OpenListTeam/OpenList/v4/server/static"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 func Init(e *gin.Engine) {
+	e.ContextWithFallback = true
 	if !utils.SliceContains([]string{"", "/"}, conf.URL.Path) {
 		e.GET("/", func(c *gin.Context) {
 			c.Redirect(302, conf.URL.Path)
@@ -77,10 +78,10 @@ func Init(e *gin.Engine) {
 	api.GET("/auth/sso_get_token", handles.SSOLoginCallback)
 
 	// webauthn
+	api.GET("/authn/webauthn_begin_login", handles.BeginAuthnLogin)
+	api.POST("/authn/webauthn_finish_login", handles.FinishAuthnLogin)
 	webauthn.GET("/webauthn_begin_registration", handles.BeginAuthnRegistration)
 	webauthn.POST("/webauthn_finish_registration", handles.FinishAuthnRegistration)
-	webauthn.GET("/webauthn_begin_login", handles.BeginAuthnLogin)
-	webauthn.POST("/webauthn_finish_login", handles.FinishAuthnLogin)
 	webauthn.POST("/delete_authn", handles.DeleteAuthnLogin)
 	webauthn.GET("/getcredentials", handles.GetAuthnCredentials)
 
@@ -140,14 +141,18 @@ func admin(g *gin.RouterGroup) {
 	setting.GET("/list", handles.ListSettings)
 	setting.POST("/save", handles.SaveSettings)
 	setting.POST("/delete", handles.DeleteSetting)
+	setting.POST("/default", handles.DefaultSettings)
 	setting.POST("/reset_token", handles.ResetToken)
 	setting.POST("/set_aria2", handles.SetAria2)
 	setting.POST("/set_qbit", handles.SetQbittorrent)
 	setting.POST("/set_transmission", handles.SetTransmission)
 	setting.POST("/set_115", handles.Set115)
+	setting.POST("/set_115_open", handles.Set115Open)
 	setting.POST("/set_pikpak", handles.SetPikPak)
 	setting.POST("/set_thunder", handles.SetThunder)
 	setting.POST("/set_openai", handles.SetOpenAi)
+	setting.POST("/set_thunderx", handles.SetThunderX)
+	setting.POST("/set_thunder_browser", handles.SetThunderBrowser)
 
 	// retain /admin/task API to ensure compatibility with legacy automation scripts
 	_task(g.Group("/task"))

@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
 	_ "golang.org/x/image/webp"
 )
 
@@ -73,10 +73,10 @@ func (d *NeteaseMusic) List(ctx context.Context, dir model.Obj, args model.ListA
 
 func (d *NeteaseMusic) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 	if lrc, ok := file.(*LyricObj); ok {
-		if args.Type == "parsed" {
+		if args.Type == "parsed" && !args.Redirect {
 			return lrc.getLyricLink(), nil
 		} else {
-			return lrc.getProxyLink(args), nil
+			return lrc.getProxyLink(ctx), nil
 		}
 	}
 

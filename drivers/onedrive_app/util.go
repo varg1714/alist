@@ -1,23 +1,24 @@
 package onedrive_app
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	stdpath "path"
+	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	streamPkg "github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/avast/retry-go"
 	"github.com/go-resty/resty/v2"
 	jsoniter "github.com/json-iterator/go"
-	log "github.com/sirupsen/logrus"
 )
 
 var onedriveHostMap = map[string]Host{
@@ -40,7 +41,7 @@ var onedriveHostMap = map[string]Host{
 }
 
 func (d *OnedriveAPP) GetMetaUrl(auth bool, path string) string {
-	host, _ := onedriveHostMap[d.Region]
+	host := onedriveHostMap[d.Region]
 	path = utils.EncodePath(path, true)
 	if auth {
 		return host.Oauth
@@ -154,42 +155,55 @@ func (d *OnedriveAPP) upBig(ctx context.Context, dstDir model.Obj, stream model.
 	uploadUrl := jsoniter.Get(res, "uploadUrl").ToString()
 	var finish int64 = 0
 	DEFAULT := d.ChunkSize * 1024 * 1024
+	ss, err := streamPkg.NewStreamSectionReader(stream, int(DEFAULT))
+	if err != nil {
+		return err
+	}
 	for finish < stream.GetSize() {
 		if utils.IsCanceled(ctx) {
 			return ctx.Err()
 		}
-		log.Debugf("upload: %d", finish)
-		var byteSize int64 = DEFAULT
 		left := stream.GetSize() - finish
-		if left < DEFAULT {
-			byteSize = left
-		}
-		byteData := make([]byte, byteSize)
-		n, err := io.ReadFull(stream, byteData)
-		log.Debug(err, n)
+		byteSize := min(left, DEFAULT)
+		utils.Log.Debugf("[OnedriveAPP] upload range: %d-%d/%d", finish, finish+byteSize-1, stream.GetSize())
+		rd, err := ss.GetSectionReader(finish, byteSize)
 		if err != nil {
 			return err
 		}
-		req, err := http.NewRequest("PUT", uploadUrl, driver.NewLimitedUploadStream(ctx, bytes.NewBuffer(byteData)))
+		err = retry.Do(
+			func() error {
+				rd.Seek(0, io.SeekStart)
+				req, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadUrl, driver.NewLimitedUploadStream(ctx, rd))
+				if err != nil {
+					return err
+				}
+				req.ContentLength = byteSize
+				req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", finish, finish+byteSize-1, stream.GetSize()))
+				res, err := base.HttpClient.Do(req)
+				if err != nil {
+					return err
+				}
+				defer res.Body.Close()
+				// https://learn.microsoft.com/zh-cn/onedrive/developer/rest-api/api/driveitem_createuploadsession
+				switch {
+				case res.StatusCode >= 500 && res.StatusCode <= 504:
+					return fmt.Errorf("server error: %d", res.StatusCode)
+				case res.StatusCode != 201 && res.StatusCode != 202 && res.StatusCode != 200:
+					data, _ := io.ReadAll(res.Body)
+					return errors.New(string(data))
+				default:
+					return nil
+				}
+			},
+			retry.Attempts(3),
+			retry.DelayType(retry.BackOffDelay),
+			retry.Delay(time.Second),
+		)
+		ss.RecycleSectionReader(rd)
 		if err != nil {
 			return err
 		}
-		req = req.WithContext(ctx)
-		req.ContentLength = byteSize
-		// req.Header.Set("Content-Length", strconv.Itoa(int(byteSize)))
-		req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", finish, finish+byteSize-1, stream.GetSize()))
 		finish += byteSize
-		res, err := base.HttpClient.Do(req)
-		if err != nil {
-			return err
-		}
-		// https://learn.microsoft.com/zh-cn/onedrive/developer/rest-api/api/driveitem_createuploadsession
-		if res.StatusCode != 201 && res.StatusCode != 202 && res.StatusCode != 200 {
-			data, _ := io.ReadAll(res.Body)
-			res.Body.Close()
-			return errors.New(string(data))
-		}
-		res.Body.Close()
 		up(float64(finish) * 100 / float64(stream.GetSize()))
 	}
 	return nil

@@ -1,15 +1,16 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	stdpath "path"
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
 )
 
-func GetApiUrl(r *http.Request) string {
+func GetApiUrlFromRequest(r *http.Request) string {
 	api := conf.Conf.SiteURL
 	if strings.HasPrefix(api, "http") {
 		return strings.TrimSuffix(api, "/")
@@ -26,5 +27,10 @@ func GetApiUrl(r *http.Request) string {
 		api = fmt.Sprintf("%s://%s", protocol, stdpath.Join(host, api))
 	}
 	api = strings.TrimSuffix(api, "/")
+	return api
+}
+
+func GetApiUrl(ctx context.Context) string {
+	api, _ := ctx.Value(conf.ApiUrlKey).(string)
 	return api
 }

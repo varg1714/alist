@@ -1,16 +1,17 @@
 package op
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/Xhofe/go-cache"
-	"github.com/alist-org/alist/v3/internal/db"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/singleflight"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/internal/db"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/singleflight"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/OpenListTeam/go-cache"
 	"github.com/pkg/errors"
 )
 
@@ -153,42 +154,36 @@ func GetSettingItemsInGroups(groups []int) ([]model.SettingItem, error) {
 }
 
 func SaveSettingItems(items []model.SettingItem) error {
-	noHookItems := make([]model.SettingItem, 0)
-	errs := make([]error, 0)
 	for i := range items {
-		if ok, err := HandleSettingItemHook(&items[i]); ok {
-			if err != nil {
-				errs = append(errs, err)
-			} else {
-				err = db.SaveSettingItem(&items[i])
-				if err != nil {
-					errs = append(errs, err)
-				}
-			}
-		} else {
-			noHookItems = append(noHookItems, items[i])
+		item := &items[i]
+		if it, ok := MigrationSettingItems[item.Key]; ok &&
+			item.Value == it.MigrationValue {
+			item.Value = it.Value
+		}
+		if ok, err := HandleSettingItemHook(item); ok && err != nil {
+			return fmt.Errorf("failed to execute hook on %s: %+v", item.Key, err)
 		}
 	}
-	if len(noHookItems) > 0 {
-		err := db.SaveSettingItems(noHookItems)
-		if err != nil {
-			errs = append(errs, err)
-		}
+	err := db.SaveSettingItems(items)
+	if err != nil {
+		return fmt.Errorf("failed save setting: %+v", err)
 	}
-	if len(errs) < len(items)-len(noHookItems)+1 {
-		SettingCacheUpdate()
-	}
-	return utils.MergeErrors(errs...)
+	SettingCacheUpdate()
+	return nil
 }
 
 func SaveSettingItem(item *model.SettingItem) (err error) {
+	if it, ok := MigrationSettingItems[item.Key]; ok &&
+		item.Value == it.MigrationValue {
+		item.Value = it.Value
+	}
 	// hook
 	if _, err := HandleSettingItemHook(item); err != nil {
-		return err
+		return fmt.Errorf("failed to execute hook on %s: %+v", item.Key, err)
 	}
 	// update
 	if err = db.SaveSettingItem(item); err != nil {
-		return err
+		return fmt.Errorf("failed save setting on %s: %+v", item.Key, err)
 	}
 	SettingCacheUpdate()
 	return nil
@@ -205,3 +200,9 @@ func DeleteSettingItemByKey(key string) error {
 	SettingCacheUpdate()
 	return db.DeleteSettingItemByKey(key)
 }
+
+type MigrationValueItem struct {
+	MigrationValue, Value string
+}
+
+var MigrationSettingItems map[string]MigrationValueItem

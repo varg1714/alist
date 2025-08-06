@@ -1,5 +1,5 @@
 // Credits: https://pkg.go.dev/github.com/rclone/rclone@v1.65.2/cmd/serve/s3
-// Package s3 implements a fake s3 server for alist
+// Package s3 implements a fake s3 server for openlist
 package s3
 
 import (
@@ -7,19 +7,21 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/fs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/setting"
-	"github.com/alist-org/gofakes3"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/fs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/setting"
+	"github.com/itsHenry35/gofakes3"
 )
 
 type Bucket struct {
 	Name string `json:"name"`
 	Path string `json:"path"`
 }
+
+const emptyObjectName = "ThisIsAnEmptyFolderInTheS3Bucket"
 
 func getAndParseBuckets() ([]Bucket, error) {
 	var res []Bucket
@@ -43,7 +45,7 @@ func getBucketByName(name string) (Bucket, error) {
 func getDirEntries(path string) ([]model.Obj, error) {
 	ctx := context.Background()
 	meta, _ := op.GetNearestMeta(path)
-	fi, err := fs.Get(context.WithValue(ctx, "meta", meta), path, &fs.GetArgs{})
+	fi, err := fs.Get(context.WithValue(ctx, conf.MetaKey, meta), path, &fs.GetArgs{})
 	if errs.IsNotFoundError(err) {
 		return nil, gofakes3.ErrNoSuchKey
 	} else if err != nil {
@@ -54,7 +56,7 @@ func getDirEntries(path string) ([]model.Obj, error) {
 		return nil, gofakes3.ErrNoSuchKey
 	}
 
-	dirEntries, err := fs.List(context.WithValue(ctx, "meta", meta), path, &fs.ListArgs{})
+	dirEntries, err := fs.List(context.WithValue(ctx, conf.MetaKey, meta), path, &fs.ListArgs{})
 	if err != nil {
 		return nil, err
 	}

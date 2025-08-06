@@ -11,14 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/go-resty/resty/v2"
 )
 
 const (
 	API_URL        = "https://api-pan.xunleix.com/drive/v1"
 	FILE_API_URL   = API_URL + "/files"
+	TASKS_API_URL  = API_URL + "/tasks"
 	XLUSER_API_URL = "https://xluser-ssl.xunleix.com/v1"
 )
 

@@ -5,15 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"text/template"
 	"time"
 
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -97,7 +97,7 @@ func getPathCommonAncestor(a, b string) (ancestor, aChildName, bChildName, aRest
 }
 
 func getUsername(ctx context.Context) string {
-	user, ok := ctx.Value("user").(*model.User)
+	user, ok := ctx.Value(conf.UserKey).(*model.User)
 	if !ok {
 		return "<system>"
 	}
@@ -159,7 +159,7 @@ func signCommit(m *map[string]interface{}, entity *openpgp.Entity) (string, erro
 	if err != nil {
 		return "", err
 	}
-	if _, err = io.Copy(armorWriter, &sigBuffer); err != nil {
+	if _, err = utils.CopyWithBuffer(armorWriter, &sigBuffer); err != nil {
 		return "", err
 	}
 	_ = armorWriter.Close()

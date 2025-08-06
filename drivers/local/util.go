@@ -7,19 +7,21 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/disintegration/imaging"
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 )
 
 func isSymlinkDir(f fs.FileInfo, path string) bool {
-	if f.Mode()&os.ModeSymlink == os.ModeSymlink {
+	if f.Mode()&os.ModeSymlink == os.ModeSymlink ||
+		(runtime.GOOS == "windows" && f.Mode()&os.ModeIrregular == os.ModeIrregular) { // os.ModeIrregular is Junction bit in Windows
 		dst, err := os.Readlink(filepath.Join(path, f.Name()))
 		if err != nil {
 			return false
@@ -61,22 +63,14 @@ func (d *Local) GetSnapshot(videoPath string) (imgData *bytes.Buffer, err error)
 	}
 
 	var ss string
-	if strings.HasSuffix(d.VideoThumbPos, "%") {
-		percentage, err := strconv.ParseFloat(strings.TrimSuffix(d.VideoThumbPos, "%"), 64)
-		if err != nil {
-			return nil, err
-		}
-		ss = fmt.Sprintf("%f", totalDuration*percentage/100)
+	if d.videoThumbPosIsPercentage {
+		ss = fmt.Sprintf("%f", totalDuration*d.videoThumbPos)
 	} else {
-		val, err := strconv.ParseFloat(d.VideoThumbPos, 64)
-		if err != nil {
-			return nil, err
-		}
 		// If the value is greater than the total duration, use the total duration
-		if val > totalDuration {
+		if d.videoThumbPos > totalDuration {
 			ss = fmt.Sprintf("%f", totalDuration)
 		} else {
-			ss = d.VideoThumbPos
+			ss = fmt.Sprintf("%f", d.videoThumbPos)
 		}
 	}
 
@@ -113,7 +107,7 @@ func readDir(dirname string) ([]fs.FileInfo, error) {
 
 func (d *Local) getThumb(file model.Obj) (*bytes.Buffer, *string, error) {
 	fullPath := file.GetPath()
-	thumbPrefix := "alist_thumb_"
+	thumbPrefix := "openlist_thumb_"
 	thumbName := thumbPrefix + utils.GetMD5EncodeStr(fullPath) + ".png"
 	if d.ThumbCacheFolder != "" {
 		// skip if the file is a thumbnail

@@ -3,9 +3,9 @@ package _115_open
 import (
 	"time"
 
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	sdk "github.com/xhofe/115-sdk-go"
+	sdk "github.com/OpenListTeam/115-sdk-go"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 )
 
 type Obj sdk.GetFilesResp_File

@@ -3,8 +3,8 @@ package onedrive_sharelink
 import (
 	"net/http"
 
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -22,7 +22,6 @@ var config = driver.Config{
 	OnlyProxy:   true,
 	NoUpload:    true,
 	DefaultRoot: "/",
-	CheckStatus: false,
 }
 
 func init() {

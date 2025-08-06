@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/alist/v3/pkg/utils/random"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils/random"
+	"github.com/OpenListTeam/go-cache"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/pkg/errors"
 )
@@ -20,6 +21,13 @@ const (
 )
 
 const StaticHashSalt = "https://github.com/alist-org/alist"
+
+var LoginCache = cache.NewMemCache[int]()
+
+var (
+	DefaultLockDuration   = time.Minute * 5
+	DefaultMaxAuthRetries = 5
+)
 
 type User struct {
 	ID       uint   `json:"id" gorm:"primaryKey"`                      // unique key
@@ -177,5 +185,5 @@ func (u *User) WebAuthnCredentials() []webauthn.Credential {
 }
 
 func (u *User) WebAuthnIcon() string {
-	return "https://alist.nn.ci/logo.svg"
+	return "https://cdn.oplist.org/gh/OpenListTeam/Logo@main/logo.svg"
 }

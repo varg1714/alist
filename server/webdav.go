@@ -1,19 +1,20 @@
 package server
 
 import (
-	"context"
 	"crypto/subtle"
-	"github.com/alist-org/alist/v3/internal/stream"
-	"github.com/alist-org/alist/v3/server/middlewares"
 	"net/http"
 	"path"
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/setting"
-	"github.com/alist-org/alist/v3/server/webdav"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
+	"github.com/OpenListTeam/OpenList/v4/server/middlewares"
+
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/setting"
+	"github.com/OpenListTeam/OpenList/v4/server/webdav"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
@@ -44,13 +45,25 @@ func WebDav(dav *gin.RouterGroup) {
 }
 
 func ServeWebDAV(c *gin.Context) {
-	user := c.MustGet("user").(*model.User)
-	ctx := context.WithValue(c.Request.Context(), "user", user)
-	handler.ServeHTTP(c.Writer, c.Request.WithContext(ctx))
+	handler.ServeHTTP(c.Writer, c.Request)
 }
 
 func WebDAVAuth(c *gin.Context) {
+	// check count of login
+	ip := c.ClientIP()
 	guest, _ := op.GetGuest()
+	count, cok := model.LoginCache.Get(ip)
+	if cok && count >= model.DefaultMaxAuthRetries {
+		if c.Request.Method == "OPTIONS" {
+			common.GinWithValue(c, conf.UserKey, guest)
+			c.Next()
+			return
+		}
+		c.Status(http.StatusTooManyRequests)
+		c.Abort()
+		model.LoginCache.Expire(ip, model.DefaultLockDuration)
+		return
+	}
 	username, password, ok := c.Request.BasicAuth()
 	if !ok {
 		bt := c.GetHeader("Authorization")
@@ -66,17 +79,17 @@ func WebDAVAuth(c *gin.Context) {
 					c.Abort()
 					return
 				}
-				c.Set("user", admin)
+				common.GinWithValue(c, conf.UserKey, admin)
 				c.Next()
 				return
 			}
 		}
 		if c.Request.Method == "OPTIONS" {
-			c.Set("user", guest)
+			common.GinWithValue(c, conf.UserKey, guest)
 			c.Next()
 			return
 		}
-		c.Writer.Header()["WWW-Authenticate"] = []string{`Basic realm="alist"`}
+		c.Writer.Header()["WWW-Authenticate"] = []string{`Basic realm="openlist"`}
 		c.Status(http.StatusUnauthorized)
 		c.Abort()
 		return
@@ -84,17 +97,20 @@ func WebDAVAuth(c *gin.Context) {
 	user, err := op.GetUserByName(username)
 	if err != nil || user.ValidateRawPassword(password) != nil {
 		if c.Request.Method == "OPTIONS" {
-			c.Set("user", guest)
+			common.GinWithValue(c, conf.UserKey, guest)
 			c.Next()
 			return
 		}
+		model.LoginCache.Set(ip, count+1)
 		c.Status(http.StatusUnauthorized)
 		c.Abort()
 		return
 	}
+	// at least auth is successful till here
+	model.LoginCache.Del(ip)
 	if user.Disabled || !user.CanWebdavRead() {
 		if c.Request.Method == "OPTIONS" {
-			c.Set("user", guest)
+			common.GinWithValue(c, conf.UserKey, guest)
 			c.Next()
 			return
 		}
@@ -127,6 +143,6 @@ func WebDAVAuth(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	c.Set("user", user)
+	common.GinWithValue(c, conf.UserKey, user)
 	c.Next()
 }

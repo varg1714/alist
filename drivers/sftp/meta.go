@@ -1,8 +1,8 @@
 package sftp
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -16,11 +16,12 @@ type Addition struct {
 }
 
 var config = driver.Config{
-	Name:        "SFTP",
-	LocalSort:   true,
-	OnlyLocal:   true,
-	DefaultRoot: "/",
-	CheckStatus: true,
+	Name:          "SFTP",
+	LocalSort:     true,
+	OnlyLinkMFile: false,
+	DefaultRoot:   "/",
+	CheckStatus:   true,
+	NoLinkURL:     true,
 }
 
 func init() {

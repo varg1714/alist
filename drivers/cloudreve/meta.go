@@ -1,8 +1,8 @@
 package cloudreve
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -20,6 +20,7 @@ type Addition struct {
 var config = driver.Config{
 	Name:        "Cloudreve",
 	DefaultRoot: "/",
+	LocalSort:   true,
 }
 
 func init() {

@@ -1,8 +1,8 @@
 package pikpak_share
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -15,10 +15,9 @@ type Addition struct {
 }
 
 var config = driver.Config{
-	Name:        "PikPakShare",
-	LocalSort:   true,
-	NoUpload:    true,
-	DefaultRoot: "",
+	Name:      "PikPakShare",
+	LocalSort: true,
+	NoUpload:  true,
 }
 
 func init() {

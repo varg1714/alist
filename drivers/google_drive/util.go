@@ -5,17 +5,21 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
 	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/http_range"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/avast/retry-go"
+
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"github.com/golang-jwt/jwt/v4"
 	log "github.com/sirupsen/logrus"
@@ -37,6 +41,43 @@ type googleDriveServiceAccount struct {
 }
 
 func (d *GoogleDrive) refreshToken() error {
+	// 使用在线API刷新Token，无需ClientID和ClientSecret
+	if d.UseOnlineAPI && len(d.APIAddress) > 0 {
+		u := d.APIAddress
+		var resp struct {
+			RefreshToken string `json:"refresh_token"`
+			AccessToken  string `json:"access_token"`
+			ErrorMessage string `json:"text"`
+		}
+		_, err := base.RestyClient.R().
+			SetHeader("User-Agent", "Mozilla/5.0 (Macintosh; Apple macOS 15_5) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/138.0.0.0 Openlist/425.6.30").
+			SetResult(&resp).
+			SetQueryParams(map[string]string{
+				"refresh_ui": d.RefreshToken,
+				"server_use": "true",
+				"driver_txt": "googleui_go",
+			}).
+			Get(u)
+		if err != nil {
+			return err
+		}
+		if resp.RefreshToken == "" || resp.AccessToken == "" {
+			if resp.ErrorMessage != "" {
+				return fmt.Errorf("failed to refresh token: %s", resp.ErrorMessage)
+			}
+			return fmt.Errorf("empty token returned from official API, a wrong refresh token may have been used")
+		}
+		d.AccessToken = resp.AccessToken
+		d.RefreshToken = resp.RefreshToken
+		op.MustSaveDriverStorage(d)
+		return nil
+	}
+	// 使用本地客户端的情况下检查是否为空
+	if d.ClientID == "" || d.ClientSecret == "" {
+		return fmt.Errorf("empty ClientID or ClientSecret")
+	}
+	// 走原有的刷新逻辑
+
 	// googleDriveServiceAccountFile gdsaFile
 	gdsaFile, gdsaFileErr := os.Stat(d.RefreshToken)
 	if gdsaFileErr == nil {
@@ -213,28 +254,58 @@ func (d *GoogleDrive) getFiles(id string) ([]File, error) {
 	return res, nil
 }
 
-func (d *GoogleDrive) chunkUpload(ctx context.Context, stream model.FileStreamer, url string) error {
+func (d *GoogleDrive) chunkUpload(ctx context.Context, file model.FileStreamer, url string) error {
 	var defaultChunkSize = d.ChunkSize * 1024 * 1024
 	var offset int64 = 0
-	for offset < stream.GetSize() {
+	ss, err := stream.NewStreamSectionReader(file, int(defaultChunkSize))
+	if err != nil {
+		return err
+	}
+	url += "?includeItemsFromAllDrives=true&supportsAllDrives=true"
+	for offset < file.GetSize() {
 		if utils.IsCanceled(ctx) {
 			return ctx.Err()
 		}
-		chunkSize := stream.GetSize() - offset
-		if chunkSize > defaultChunkSize {
-			chunkSize = defaultChunkSize
-		}
-		reader, err := stream.RangeRead(http_range.Range{Start: offset, Length: chunkSize})
+		chunkSize := min(file.GetSize()-offset, defaultChunkSize)
+		reader, err := ss.GetSectionReader(offset, chunkSize)
 		if err != nil {
 			return err
 		}
-		reader = driver.NewLimitedUploadStream(ctx, reader)
-		_, err = d.request(url, http.MethodPut, func(req *resty.Request) {
-			req.SetHeaders(map[string]string{
-				"Content-Length": strconv.FormatInt(chunkSize, 10),
-				"Content-Range":  fmt.Sprintf("bytes %d-%d/%d", offset, offset+chunkSize-1, stream.GetSize()),
-			}).SetBody(reader).SetContext(ctx)
-		}, nil)
+		limitedReader := driver.NewLimitedUploadStream(ctx, reader)
+		err = retry.Do(func() error {
+			reader.Seek(0, io.SeekStart)
+			req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, limitedReader)
+			if err != nil {
+				return err
+			}
+			req.Header = map[string][]string{
+				"Authorization":  {"Bearer " + d.AccessToken},
+				"Content-Length": {strconv.FormatInt(chunkSize, 10)},
+				"Content-Range":  {fmt.Sprintf("bytes %d-%d/%d", offset, offset+chunkSize-1, file.GetSize())},
+			}
+			res, err := base.HttpClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer res.Body.Close()
+			bytes, _ := io.ReadAll(res.Body)
+			var e Error
+			utils.Json.Unmarshal(bytes, &e)
+			if e.Error.Code != 0 {
+				if e.Error.Code == 401 {
+					err = d.refreshToken()
+					if err != nil {
+						return err
+					}
+				}
+				return fmt.Errorf("%s: %v", e.Error.Message, e.Error.Errors)
+			}
+			return nil
+		},
+			retry.Attempts(3),
+			retry.DelayType(retry.BackOffDelay),
+			retry.Delay(time.Second))
+		ss.RecycleSectionReader(reader)
 		if err != nil {
 			return err
 		}

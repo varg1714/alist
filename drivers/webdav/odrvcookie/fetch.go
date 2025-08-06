@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -181,7 +181,7 @@ func (ca *CookieAuth) getSPToken() (*SuccessResponse, error) {
 
 	// Execute the first request which gives us an auth token for the sharepoint service
 	// With this token we can authenticate on the login page and save the returned cookies
-	req, err := http.NewRequest("POST", loginUrl, buf)
+	req, err := http.NewRequest(http.MethodPost, loginUrl, buf)
 	if err != nil {
 		return nil, err
 	}

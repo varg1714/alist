@@ -7,14 +7,14 @@ import (
 	stdpath "path"
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/fs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/sign"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/alist/v3/server/common"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/fs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/sign"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
 )
 
 func (d *Alias) listRoot() []model.Obj {
@@ -54,106 +54,57 @@ func (d *Alias) getRootAndPath(path string) (string, string) {
 	return parts[0], parts[1]
 }
 
-func (d *Alias) get(ctx context.Context, path string, dst, sub string) (model.Obj, error) {
-	obj, err := fs.Get(ctx, stdpath.Join(dst, sub), &fs.GetArgs{NoLog: true})
-	if err != nil {
-		return nil, err
-	}
-	return &model.Object{
-		Path:     path,
-		Name:     obj.GetName(),
-		Size:     obj.GetSize(),
-		Modified: obj.ModTime(),
-		IsFolder: obj.IsDir(),
-		HashInfo: obj.GetHash(),
-	}, nil
-}
-
-func (d *Alias) list(ctx context.Context, dst, sub string, args *fs.ListArgs) ([]model.Obj, error) {
-	objs, err := fs.List(ctx, stdpath.Join(dst, sub), args)
-	// the obj must implement the model.SetPath interface
-	// return objs, err
-	if err != nil {
-		return nil, err
-	}
-	return utils.SliceConvert(objs, func(obj model.Obj) (model.Obj, error) {
-		thumb, ok := model.GetThumb(obj)
-		objRes := model.Object{
-			Name:     obj.GetName(),
-			Size:     obj.GetSize(),
-			Modified: obj.ModTime(),
-			IsFolder: obj.IsDir(),
-		}
-		if !ok {
-			return &objRes, nil
-		}
-		return &model.ObjThumb{
-			Object: objRes,
-			Thumbnail: model.Thumbnail{
-				Thumbnail: thumb,
-			},
-		}, nil
-	})
-}
-
-func (d *Alias) link(ctx context.Context, dst, sub string, args model.LinkArgs) (*model.Link, error) {
-	reqPath := stdpath.Join(dst, sub)
-	// 参考 crypt 驱动
+func (d *Alias) link(ctx context.Context, reqPath string, args model.LinkArgs) (*model.Link, model.Obj, error) {
 	storage, reqActualPath, err := op.GetStorageAndActualPath(reqPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if _, ok := storage.(*Alias); !ok && !args.Redirect {
-		link, _, err := op.Link(ctx, storage, reqActualPath, args)
-		return link, err
+	if !args.Redirect {
+		return op.Link(ctx, storage, reqActualPath, args)
 	}
-	_, err = fs.Get(ctx, reqPath, &fs.GetArgs{NoLog: true})
+	obj, err := fs.Get(ctx, reqPath, &fs.GetArgs{NoLog: true})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if common.ShouldProxy(storage, stdpath.Base(sub)) {
-		link := &model.Link{
-			URL: fmt.Sprintf("%s/p%s?sign=%s",
-				common.GetApiUrl(args.HttpReq),
-				utils.EncodePath(reqPath, true),
-				sign.Sign(reqPath)),
-		}
-		if args.HttpReq != nil && d.ProxyRange {
-			link.RangeReadCloser = common.NoProxyRange
-		}
-		return link, nil
+	if common.ShouldProxy(storage, stdpath.Base(reqPath)) {
+		return nil, obj, nil
 	}
-	link, _, err := op.Link(ctx, storage, reqActualPath, args)
-	return link, err
+	return op.Link(ctx, storage, reqActualPath, args)
 }
 
-func (d *Alias) getReqPath(ctx context.Context, obj model.Obj, isParent bool) (*string, error) {
+func (d *Alias) getReqPath(ctx context.Context, obj model.Obj, isParent bool) ([]*string, error) {
 	root, sub := d.getRootAndPath(obj.GetPath())
 	if sub == "" && !isParent {
 		return nil, errs.NotSupport
 	}
 	dsts, ok := d.pathMap[root]
+	all := true
 	if !ok {
 		return nil, errs.ObjectNotFound
 	}
-	var reqPath *string
+	var reqPath []*string
 	for _, dst := range dsts {
 		path := stdpath.Join(dst, sub)
 		_, err := fs.Get(ctx, path, &fs.GetArgs{NoLog: true})
 		if err != nil {
+			all = false
+			if d.ProtectSameName && d.ParallelWrite && len(reqPath) >= 2 {
+				return nil, errs.NotImplement
+			}
 			continue
 		}
-		if !d.ProtectSameName {
-			return &path, nil
+		if !d.ProtectSameName && !d.ParallelWrite {
+			return []*string{&path}, nil
 		}
-		if ok {
-			ok = false
-		} else {
+		reqPath = append(reqPath, &path)
+		if d.ProtectSameName && !d.ParallelWrite && len(reqPath) >= 2 {
 			return nil, errs.NotImplement
 		}
-		reqPath = &path
+		if d.ProtectSameName && d.ParallelWrite && len(reqPath) >= 2 && !all {
+			return nil, errs.NotImplement
+		}
 	}
-	if reqPath == nil {
+	if len(reqPath) == 0 {
 		return nil, errs.ObjectNotFound
 	}
 	return reqPath, nil
@@ -195,31 +146,24 @@ func (d *Alias) extract(ctx context.Context, dst, sub string, args model.Archive
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := storage.(driver.ArchiveReader); ok {
-		if _, ok := storage.(*Alias); !ok && !args.Redirect {
-			link, _, err := op.DriverExtract(ctx, storage, reqActualPath, args)
-			return link, err
-		}
+	if _, ok := storage.(driver.ArchiveReader); !ok {
+		return nil, errs.NotImplement
+	}
+	if args.Redirect && common.ShouldProxy(storage, stdpath.Base(sub)) {
 		_, err = fs.Get(ctx, reqPath, &fs.GetArgs{NoLog: true})
 		if err != nil {
 			return nil, err
 		}
-		if common.ShouldProxy(storage, stdpath.Base(sub)) {
-			link := &model.Link{
-				URL: fmt.Sprintf("%s/ap%s?inner=%s&pass=%s&sign=%s",
-					common.GetApiUrl(args.HttpReq),
-					utils.EncodePath(reqPath, true),
-					utils.EncodePath(args.InnerPath, true),
-					url.QueryEscape(args.Password),
-					sign.SignArchive(reqPath)),
-			}
-			if args.HttpReq != nil && d.ProxyRange {
-				link.RangeReadCloser = common.NoProxyRange
-			}
-			return link, nil
+		link := &model.Link{
+			URL: fmt.Sprintf("%s/ap%s?inner=%s&pass=%s&sign=%s",
+				common.GetApiUrl(ctx),
+				utils.EncodePath(reqPath, true),
+				utils.EncodePath(args.InnerPath, true),
+				url.QueryEscape(args.Password),
+				sign.SignArchive(reqPath)),
 		}
-		link, _, err := op.DriverExtract(ctx, storage, reqActualPath, args)
-		return link, err
+		return link, nil
 	}
-	return nil, errs.NotImplement
+	link, _, err := op.DriverExtract(ctx, storage, reqActualPath, args)
+	return link, err
 }

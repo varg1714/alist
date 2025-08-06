@@ -2,14 +2,15 @@ package fs
 
 import (
 	"context"
-	log "github.com/sirupsen/logrus"
 	"io"
 
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/task"
+	log "github.com/sirupsen/logrus"
+
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/task"
 	"github.com/pkg/errors"
 )
 
@@ -65,16 +66,16 @@ func MakeDir(ctx context.Context, path string, lazyCache ...bool) error {
 	return err
 }
 
-func Move(ctx context.Context, srcPath, dstDirPath string, lazyCache ...bool) error {
-	err := move(ctx, srcPath, dstDirPath, lazyCache...)
+func Move(ctx context.Context, srcPath, dstDirPath string, lazyCache ...bool) (task.TaskExtensionInfo, error) {
+	req, err := transfer(ctx, move, srcPath, dstDirPath, lazyCache...)
 	if err != nil {
 		log.Errorf("failed move %s to %s: %+v", srcPath, dstDirPath, err)
 	}
-	return err
+	return req, err
 }
 
 func Copy(ctx context.Context, srcObjPath, dstDirPath string, lazyCache ...bool) (task.TaskExtensionInfo, error) {
-	res, err := _copy(ctx, srcObjPath, dstDirPath, lazyCache...)
+	res, err := transfer(ctx, copy, srcObjPath, dstDirPath, lazyCache...)
 	if err != nil {
 		log.Errorf("failed copy %s to %s: %+v", srcObjPath, dstDirPath, err)
 	}

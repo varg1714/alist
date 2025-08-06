@@ -1,15 +1,20 @@
 package handles
 
 import (
-	_115 "github.com/alist-org/alist/v3/drivers/115"
-	"github.com/alist-org/alist/v3/drivers/pikpak"
-	"github.com/alist-org/alist/v3/drivers/thunder"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/offline_download/tool"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/task"
-	"github.com/alist-org/alist/v3/server/common"
+	"strings"
+
+	_115 "github.com/OpenListTeam/OpenList/v4/drivers/115"
+	_115_open "github.com/OpenListTeam/OpenList/v4/drivers/115_open"
+	"github.com/OpenListTeam/OpenList/v4/drivers/pikpak"
+	"github.com/OpenListTeam/OpenList/v4/drivers/thunder"
+	"github.com/OpenListTeam/OpenList/v4/drivers/thunder_browser"
+	"github.com/OpenListTeam/OpenList/v4/drivers/thunderx"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/offline_download/tool"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/task"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
 	"github.com/gin-gonic/gin"
 )
 
@@ -151,6 +156,50 @@ func Set115(c *gin.Context) {
 	common.SuccessResp(c, "ok")
 }
 
+type Set115OpenReq struct {
+	TempDir string `json:"temp_dir" form:"temp_dir"`
+}
+
+func Set115Open(c *gin.Context) {
+	var req Set115OpenReq
+	if err := c.ShouldBind(&req); err != nil {
+		common.ErrorResp(c, err, 400)
+		return
+	}
+	if req.TempDir != "" {
+		storage, _, err := op.GetStorageAndActualPath(req.TempDir)
+		if err != nil {
+			common.ErrorStrResp(c, "storage does not exists", 400)
+			return
+		}
+		if storage.Config().CheckStatus && storage.GetStorage().Status != op.WORK {
+			common.ErrorStrResp(c, "storage not init: "+storage.GetStorage().Status, 400)
+			return
+		}
+		if _, ok := storage.(*_115_open.Open115); !ok {
+			common.ErrorStrResp(c, "unsupported storage driver for offline download, only 115 Open is supported", 400)
+			return
+		}
+	}
+	items := []model.SettingItem{
+		{Key: conf.Pan115OpenTempDir, Value: req.TempDir, Type: conf.TypeString, Group: model.OFFLINE_DOWNLOAD, Flag: model.PRIVATE},
+	}
+	if err := op.SaveSettingItems(items); err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	_tool, err := tool.Tools.Get("115 Open")
+	if err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	if _, err := _tool.Init(); err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	common.SuccessResp(c, "ok")
+}
+
 type SetPikPakReq struct {
 	TempDir string `json:"temp_dir" form:"temp_dir"`
 }
@@ -239,6 +288,95 @@ func SetThunder(c *gin.Context) {
 	common.SuccessResp(c, "ok")
 }
 
+type SetThunderXReq struct {
+	TempDir string `json:"temp_dir" form:"temp_dir"`
+}
+
+func SetThunderX(c *gin.Context) {
+	var req SetThunderXReq
+	if err := c.ShouldBind(&req); err != nil {
+		common.ErrorResp(c, err, 400)
+		return
+	}
+	if req.TempDir != "" {
+		storage, _, err := op.GetStorageAndActualPath(req.TempDir)
+		if err != nil {
+			common.ErrorStrResp(c, "storage does not exists", 400)
+			return
+		}
+		if storage.Config().CheckStatus && storage.GetStorage().Status != op.WORK {
+			common.ErrorStrResp(c, "storage not init: "+storage.GetStorage().Status, 400)
+			return
+		}
+		if _, ok := storage.(*thunderx.ThunderX); !ok {
+			common.ErrorStrResp(c, "unsupported storage driver for offline download, only ThunderX is supported", 400)
+			return
+		}
+	}
+	items := []model.SettingItem{
+		{Key: conf.ThunderXTempDir, Value: req.TempDir, Type: conf.TypeString, Group: model.OFFLINE_DOWNLOAD, Flag: model.PRIVATE},
+	}
+	if err := op.SaveSettingItems(items); err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	_tool, err := tool.Tools.Get("ThunderX")
+	if err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	if _, err := _tool.Init(); err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	common.SuccessResp(c, "ok")
+}
+
+type SetThunderBrowserReq struct {
+	TempDir string `json:"temp_dir" form:"temp_dir"`
+}
+
+func SetThunderBrowser(c *gin.Context) {
+	var req SetThunderBrowserReq
+	if err := c.ShouldBind(&req); err != nil {
+		common.ErrorResp(c, err, 400)
+		return
+	}
+	if req.TempDir != "" {
+		storage, _, err := op.GetStorageAndActualPath(req.TempDir)
+		if err != nil {
+			common.ErrorStrResp(c, "storage does not exists", 400)
+			return
+		}
+		if storage.Config().CheckStatus && storage.GetStorage().Status != op.WORK {
+			common.ErrorStrResp(c, "storage not init: "+storage.GetStorage().Status, 400)
+			return
+		}
+		switch storage.(type) {
+		case *thunder_browser.ThunderBrowser, *thunder_browser.ThunderBrowserExpert:
+		default:
+			common.ErrorStrResp(c, "unsupported storage driver for offline download, only ThunderBrowser is supported", 400)
+		}
+	}
+	items := []model.SettingItem{
+		{Key: conf.ThunderBrowserTempDir, Value: req.TempDir, Type: conf.TypeString, Group: model.OFFLINE_DOWNLOAD, Flag: model.PRIVATE},
+	}
+	if err := op.SaveSettingItems(items); err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	_tool, err := tool.Tools.Get("ThunderBrowser")
+	if err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	if _, err := _tool.Init(); err != nil {
+		common.ErrorResp(c, err, 500)
+		return
+	}
+	common.SuccessResp(c, "ok")
+}
+
 func OfflineDownloadTools(c *gin.Context) {
 	tools := tool.Tools.Names()
 	common.SuccessResp(c, tools)
@@ -252,7 +390,7 @@ type AddOfflineDownloadReq struct {
 }
 
 func AddOfflineDownload(c *gin.Context) {
-	user := c.MustGet("user").(*model.User)
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
 	if !user.CanAddOfflineDownloadTasks() {
 		common.ErrorStrResp(c, "permission denied", 403)
 		return
@@ -270,8 +408,14 @@ func AddOfflineDownload(c *gin.Context) {
 	}
 	var tasks []task.TaskExtensionInfo
 	for _, url := range req.Urls {
+		// Filter out empty lines and whitespace-only strings
+		trimmedUrl := strings.TrimSpace(url)
+		if trimmedUrl == "" {
+			continue
+		}
+
 		t, err := tool.AddURL(c, &tool.AddURLArgs{
-			URL:          url,
+			URL:          trimmedUrl,
 			DstDirPath:   reqPath,
 			Tool:         req.Tool,
 			DeletePolicy: tool.DeletePolicy(req.DeletePolicy),

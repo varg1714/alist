@@ -2,8 +2,8 @@ package _91_md
 
 import (
 	"fmt"
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
 	log "github.com/sirupsen/logrus"
 	"regexp"
 	"strconv"

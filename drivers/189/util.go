@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	myrand "github.com/alist-org/alist/v3/pkg/utils/random"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	myrand "github.com/OpenListTeam/OpenList/v4/pkg/utils/random"
 	"github.com/go-resty/resty/v2"
 	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
@@ -365,11 +365,10 @@ func (d *Cloud189) newUpload(ctx context.Context, dstDir model.Obj, file model.F
 		log.Debugf("uploadData: %+v", uploadData)
 		requestURL := uploadData.RequestURL
 		uploadHeaders := strings.Split(decodeURIComponent(uploadData.RequestHeader), "&")
-		req, err := http.NewRequest(http.MethodPut, requestURL, driver.NewLimitedUploadStream(ctx, bytes.NewReader(byteData)))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPut, requestURL, driver.NewLimitedUploadStream(ctx, bytes.NewReader(byteData)))
 		if err != nil {
 			return err
 		}
-		req = req.WithContext(ctx)
 		for _, v := range uploadHeaders {
 			i := strings.Index(v, "=")
 			req.Header.Set(v[0:i], v[i+1:])

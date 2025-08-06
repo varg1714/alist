@@ -14,14 +14,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/sign"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/alist/v3/server/common"
-	"github.com/alist-org/times"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/sign"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/server/common"
+	"github.com/OpenListTeam/times"
 	cp "github.com/otiai10/copy"
 	log "github.com/sirupsen/logrus"
 	_ "golang.org/x/image/webp"
@@ -35,6 +36,10 @@ type Local struct {
 	// zero means no limit
 	thumbConcurrency int
 	thumbTokenBucket TokenBucket
+
+	// video thumb position
+	videoThumbPos             float64
+	videoThumbPosIsPercentage bool
 }
 
 func (d *Local) Config() driver.Config {
@@ -92,6 +97,8 @@ func (d *Local) Init(ctx context.Context) error {
 		if val < 0 || val > 100 {
 			return fmt.Errorf("invalid video_thumb_pos value: %s, the precentage must be a number between 0 and 100", d.VideoThumbPos)
 		}
+		d.videoThumbPosIsPercentage = true
+		d.videoThumbPos = val / 100
 	} else {
 		val, err := strconv.ParseFloat(d.VideoThumbPos, 64)
 		if err != nil {
@@ -100,6 +107,8 @@ func (d *Local) Init(ctx context.Context) error {
 		if val < 0 {
 			return fmt.Errorf("invalid video_thumb_pos value: %s, the time must be a positive number", d.VideoThumbPos)
 		}
+		d.videoThumbPosIsPercentage = false
+		d.videoThumbPos = val
 	}
 	return nil
 }
@@ -120,11 +129,9 @@ func (d *Local) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 	}
 	var files []model.Obj
 	for _, f := range rawFiles {
-		if !d.ShowHidden && strings.HasPrefix(f.Name(), ".") {
-			continue
+		if d.ShowHidden || !isHidden(f, fullPath) {
+			files = append(files, d.FileInfoToObj(ctx, f, args.ReqPath, fullPath))
 		}
-		file := d.FileInfoToObj(ctx, f, args.ReqPath, fullPath)
-		files = append(files, file)
 	}
 	return files, nil
 }
@@ -133,7 +140,7 @@ func (d *Local) FileInfoToObj(ctx context.Context, f fs.FileInfo, reqPath string
 	if d.Thumbnail {
 		typeName := utils.GetFileType(f.Name())
 		if typeName == conf.IMAGE || typeName == conf.VIDEO {
-			thumb = common.GetApiUrl(common.GetHttpReq(ctx)) + stdpath.Join("/d", reqPath, f.Name())
+			thumb = common.GetApiUrl(ctx) + stdpath.Join("/d", reqPath, f.Name())
 			thumb = utils.EncodePath(thumb, true)
 			thumb += "?type=thumb&sign=" + sign.Sign(stdpath.Join(reqPath, f.Name()))
 		}
@@ -165,19 +172,6 @@ func (d *Local) FileInfoToObj(ctx context.Context, f fs.FileInfo, reqPath string
 		},
 	}
 	return &file
-}
-func (d *Local) GetMeta(ctx context.Context, path string) (model.Obj, error) {
-	f, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	file := d.FileInfoToObj(ctx, f, path, path)
-	//h := "123123"
-	//if s, ok := f.(model.SetHash); ok && file.GetHash() == ("","")  {
-	//	s.SetHash(h,"SHA1")
-	//}
-	return file, nil
-
 }
 
 func (d *Local) Get(ctx context.Context, path string) (model.Obj, error) {
@@ -214,7 +208,7 @@ func (d *Local) Get(ctx context.Context, path string) (model.Obj, error) {
 
 func (d *Local) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
 	fullPath := file.GetPath()
-	var link model.Link
+	link := &model.Link{}
 	if args.Type == "thumb" && utils.Ext(file.GetName()) != "svg" {
 		var buf *bytes.Buffer
 		var thumbPath *string
@@ -234,19 +228,32 @@ func (d *Local) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 			if err != nil {
 				return nil, err
 			}
+			// Get thumbnail file size for Content-Length
+			stat, err := open.Stat()
+			if err != nil {
+				open.Close()
+				return nil, err
+			}
+			link.ContentLength = int64(stat.Size())
 			link.MFile = open
 		} else {
-			link.MFile = model.NewNopMFile(bytes.NewReader(buf.Bytes()))
-			//link.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
+			link.MFile = bytes.NewReader(buf.Bytes())
+			link.ContentLength = int64(buf.Len())
 		}
 	} else {
 		open, err := os.Open(fullPath)
 		if err != nil {
 			return nil, err
 		}
+		link.ContentLength = file.GetSize()
 		link.MFile = open
 	}
-	return &link, nil
+	link.AddIfCloser(link.MFile)
+	if !d.Config().OnlyLinkMFile {
+		link.RangeReader = stream.GetRangeReaderFromMFile(link.ContentLength, link.MFile)
+		link.MFile = nil
+	}
+	return link, nil
 }
 
 func (d *Local) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {

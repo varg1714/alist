@@ -1,6 +1,6 @@
 package quark_share
 
-import "github.com/alist-org/alist/v3/internal/model"
+import "github.com/OpenListTeam/OpenList/v4/internal/model"
 
 type ShareInfo struct {
 	FileId    string `json:"fileId"`

@@ -1,5 +1,5 @@
 // Credits: https://pkg.go.dev/github.com/rclone/rclone@v1.65.2/cmd/serve/s3
-// Package s3 implements a fake s3 server for alist
+// Package s3 implements a fake s3 server for openlist
 package s3
 
 import (
@@ -14,14 +14,15 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/fs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/stream"
-	"github.com/alist-org/alist/v3/pkg/http_range"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/gofakes3"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/fs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/http_range"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/itsHenry35/gofakes3"
 	"github.com/ncw/swift/v2"
 	log "github.com/sirupsen/logrus"
 )
@@ -108,7 +109,7 @@ func (b *s3Backend) HeadObject(ctx context.Context, bucketName, objectName strin
 
 	fp := path.Join(bucketPath, objectName)
 	fmeta, _ := op.GetNearestMeta(fp)
-	node, err := fs.Get(context.WithValue(ctx, "meta", fmeta), fp, &fs.GetArgs{})
+	node, err := fs.Get(context.WithValue(ctx, conf.MetaKey, fmeta), fp, &fs.GetArgs{})
 	if err != nil {
 		return nil, gofakes3.KeyNotFound(objectName)
 	}
@@ -142,7 +143,7 @@ func (b *s3Backend) HeadObject(ctx context.Context, bucketName, objectName strin
 }
 
 // GetObject fetchs the object from the filesystem.
-func (b *s3Backend) GetObject(ctx context.Context, bucketName, objectName string, rangeRequest *gofakes3.ObjectRangeRequest) (obj *gofakes3.Object, err error) {
+func (b *s3Backend) GetObject(ctx context.Context, bucketName, objectName string, rangeRequest *gofakes3.ObjectRangeRequest) (s3Obj *gofakes3.Object, err error) {
 	bucket, err := getBucketByName(bucketName)
 	if err != nil {
 		return nil, err
@@ -151,7 +152,7 @@ func (b *s3Backend) GetObject(ctx context.Context, bucketName, objectName string
 
 	fp := path.Join(bucketPath, objectName)
 	fmeta, _ := op.GetNearestMeta(fp)
-	node, err := fs.Get(context.WithValue(ctx, "meta", fmeta), fp, &fs.GetArgs{})
+	node, err := fs.Get(context.WithValue(ctx, conf.MetaKey, fmeta), fp, &fs.GetArgs{})
 	if err != nil {
 		return nil, gofakes3.KeyNotFound(objectName)
 	}
@@ -164,57 +165,40 @@ func (b *s3Backend) GetObject(ctx context.Context, bucketName, objectName string
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if s3Obj == nil {
+			_ = link.Close()
+		}
+	}()
 
-	size := file.GetSize()
+	size := link.ContentLength
+	if size <= 0 {
+		size = file.GetSize()
+	}
 	rnge, err := rangeRequest.Range(size)
 	if err != nil {
 		return nil, err
 	}
 
-	if link.RangeReadCloser == nil && link.MFile == nil && len(link.URL) == 0 {
+	rrf, err := stream.GetRangeReaderFromLink(size, link)
+	if err != nil {
 		return nil, fmt.Errorf("the remote storage driver need to be enhanced to support s3")
 	}
 
-	var rdr io.ReadCloser
-	length := int64(-1)
-	start := int64(0)
+	var rd io.Reader
 	if rnge != nil {
-		start, length = rnge.Start, rnge.Length
-	}
-	// 参考 server/common/proxy.go
-	if link.MFile != nil {
-		_, err := link.MFile.Seek(start, io.SeekStart)
-		if err != nil {
-			return nil, err
-		}
-		rdr = link.MFile
+		rd, err = rrf.RangeRead(ctx, http_range.Range(*rnge))
 	} else {
-		remoteFileSize := file.GetSize()
-		if length >= 0 && start+length >= remoteFileSize {
-			length = -1
-		}
-		rrc := link.RangeReadCloser
-		if len(link.URL) > 0 {
-			var converted, err = stream.GetRangeReadCloserFromLink(remoteFileSize, link)
-			if err != nil {
-				return nil, err
-			}
-			rrc = converted
-		}
-		if rrc != nil {
-			remoteReader, err := rrc.RangeRead(ctx, http_range.Range{Start: start, Length: length})
-			if err != nil {
-				return nil, err
-			}
-			rdr = utils.ReadCloser{Reader: remoteReader, Closer: rrc}
-		} else {
-			return nil, errs.NotSupport
-		}
+		rd, err = rrf.RangeRead(ctx, http_range.Range{Length: -1})
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	meta := map[string]string{
-		"Last-Modified": node.ModTime().Format(timeFormat),
-		"Content-Type":  utils.GetMimeType(fp),
+		"Last-Modified":       node.ModTime().Format(timeFormat),
+		"Content-Disposition": utils.GenerateContentDisposition(file.GetName()),
+		"Content-Type":        utils.GetMimeType(fp),
 	}
 
 	if val, ok := b.meta.Load(fp); ok {
@@ -231,7 +215,7 @@ func (b *s3Backend) GetObject(ctx context.Context, bucketName, objectName string
 		Metadata: meta,
 		Size:     size,
 		Range:    rnge,
-		Contents: rdr,
+		Contents: utils.ReadCloser{Reader: rd, Closer: link},
 	}, nil
 }
 
@@ -267,7 +251,7 @@ func (b *s3Backend) PutObject(
 	}
 	log.Debugf("reqPath: %s", reqPath)
 	fmeta, _ := op.GetNearestMeta(fp)
-	ctx = context.WithValue(ctx, "meta", fmeta)
+	ctx = context.WithValue(ctx, conf.MetaKey, fmeta)
 
 	_, err = fs.Get(ctx, reqPath, &fs.GetArgs{})
 	if err != nil {
@@ -313,11 +297,11 @@ func (b *s3Backend) PutObject(
 		return result, err
 	}
 
-	if err := stream.Close(); err != nil {
-		// remove file when close error occurred (FsPutErr)
-		_ = fs.Remove(ctx, fp)
-		return result, err
-	}
+	// if err := stream.Close(); err != nil {
+	// 	// remove file when close error occurred (FsPutErr)
+	// 	_ = fs.Remove(ctx, fp)
+	// 	return result, err
+	// }
 
 	b.meta.Store(fp, meta)
 
@@ -328,7 +312,7 @@ func (b *s3Backend) PutObject(
 func (b *s3Backend) DeleteMulti(ctx context.Context, bucketName string, objects ...string) (result gofakes3.MultiDeleteResult, rerr error) {
 	for _, object := range objects {
 		if err := b.deleteObject(ctx, bucketName, object); err != nil {
-			utils.Log.Errorf("serve s3", "delete object failed: %v", err)
+			log.Errorf("delete object failed: %v", err)
 			result.Error = append(result.Error, gofakes3.ErrorResult{
 				Code:    gofakes3.ErrInternal,
 				Message: gofakes3.ErrInternal.Message(),
@@ -361,7 +345,7 @@ func (b *s3Backend) deleteObject(ctx context.Context, bucketName, objectName str
 	fmeta, _ := op.GetNearestMeta(fp)
 	// S3 does not report an error when attemping to delete a key that does not exist, so
 	// we need to skip IsNotExist errors.
-	if _, err := fs.Get(context.WithValue(ctx, "meta", fmeta), fp, &fs.GetArgs{}); err != nil && !errs.IsObjectNotFound(err) {
+	if _, err := fs.Get(context.WithValue(ctx, conf.MetaKey, fmeta), fp, &fs.GetArgs{}); err != nil && !errs.IsObjectNotFound(err) {
 		return err
 	}
 
@@ -408,7 +392,7 @@ func (b *s3Backend) CopyObject(ctx context.Context, srcBucket, srcKey, dstBucket
 
 	srcFp := path.Join(srcBucketPath, srcKey)
 	fmeta, _ := op.GetNearestMeta(srcFp)
-	srcNode, err := fs.Get(context.WithValue(ctx, "meta", fmeta), srcFp, &fs.GetArgs{})
+	srcNode, err := fs.Get(context.WithValue(ctx, conf.MetaKey, fmeta), srcFp, &fs.GetArgs{})
 
 	c, err := b.GetObject(ctx, srcBucket, srcKey, nil)
 	if err != nil {

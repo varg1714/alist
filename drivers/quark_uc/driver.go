@@ -3,18 +3,18 @@ package quark
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
-	"crypto/sha1"
 	"encoding/hex"
+	"hash"
 	"io"
 	"net/http"
 	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	streamPkg "github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	log "github.com/sirupsen/logrus"
 )
@@ -36,6 +36,15 @@ func (d *QuarkOrUC) GetAddition() driver.Additional {
 
 func (d *QuarkOrUC) Init(ctx context.Context) error {
 	_, err := d.request("/config", http.MethodGet, nil, nil)
+	if err == nil {
+		if d.AdditionVersion != 2 {
+			d.AdditionVersion = 2
+			if !d.UseTransCodingAddress && len(d.DownProxyURL) == 0 {
+				d.WebProxy = true
+				d.WebdavPolicy = "native_proxy"
+			}
+		}
+	}
 	return err
 }
 
@@ -48,37 +57,18 @@ func (d *QuarkOrUC) List(ctx context.Context, dir model.Obj, args model.ListArgs
 	if err != nil {
 		return nil, err
 	}
-	return utils.SliceConvert(files, func(src File) (model.Obj, error) {
-		return fileToObj(src), nil
-	})
+
+	return files, nil
 }
 
 func (d *QuarkOrUC) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
-	data := base.Json{
-		"fids": []string{file.GetID()},
-	}
-	var resp DownResp
-	ua := d.conf.ua
-	_, err := d.request("/file/download", http.MethodPost, func(req *resty.Request) {
-		req.SetHeader("User-Agent", ua).
-			SetBody(data)
-	}, &resp)
-	if err != nil {
-		return nil, err
+	f := file.(*File)
+
+	if d.UseTransCodingAddress && d.config.Name == "Quark" && f.Category == 1 && f.Size > 0 {
+		return d.getTranscodingLink(file)
 	}
 
-	expire := time.Hour
-	return &model.Link{
-		Expiration: &expire,
-		URL:        resp.Data[0].DownloadUrl,
-		Header: http.Header{
-			"Cookie":     []string{d.Cookie},
-			"Referer":    []string{d.conf.referer},
-			"User-Agent": []string{ua},
-		},
-		Concurrency: 3,
-		PartSize:    10 * utils.MB,
-	}, nil
+	return d.getDownloadLink(file)
 }
 
 func (d *QuarkOrUC) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
@@ -138,33 +128,35 @@ func (d *QuarkOrUC) Remove(ctx context.Context, obj model.Obj) error {
 }
 
 func (d *QuarkOrUC) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {
-	tempFile, err := stream.CacheFullInTempFile()
-	if err != nil {
-		return err
+	md5Str, sha1Str := stream.GetHash().GetHash(utils.MD5), stream.GetHash().GetHash(utils.SHA1)
+	var (
+		md5  hash.Hash
+		sha1 hash.Hash
+	)
+	writers := []io.Writer{}
+	if len(md5Str) != utils.MD5.Width {
+		md5 = utils.MD5.NewFunc()
+		writers = append(writers, md5)
 	}
-	defer func() {
-		_ = tempFile.Close()
-	}()
-	m := md5.New()
-	_, err = utils.CopyWithBuffer(m, tempFile)
-	if err != nil {
-		return err
+	if len(sha1Str) != utils.SHA1.Width {
+		sha1 = utils.SHA1.NewFunc()
+		writers = append(writers, sha1)
 	}
-	_, err = tempFile.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
+
+	if len(writers) > 0 {
+		cacheFileProgress := model.UpdateProgressWithRange(up, 0, 50)
+		up = model.UpdateProgressWithRange(up, 50, 100)
+		_, err := streamPkg.CacheFullInTempFileAndWriter(stream, cacheFileProgress, io.MultiWriter(writers...))
+		if err != nil {
+			return err
+		}
+		if md5 != nil {
+			md5Str = hex.EncodeToString(md5.Sum(nil))
+		}
+		if sha1 != nil {
+			sha1Str = hex.EncodeToString(sha1.Sum(nil))
+		}
 	}
-	md5Str := hex.EncodeToString(m.Sum(nil))
-	s := sha1.New()
-	_, err = utils.CopyWithBuffer(s, tempFile)
-	if err != nil {
-		return err
-	}
-	_, err = tempFile.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
-	}
-	sha1Str := hex.EncodeToString(s.Sum(nil))
 	// pre
 	pre, err := d.upPre(stream, dstDir.GetID())
 	if err != nil {
@@ -180,27 +172,28 @@ func (d *QuarkOrUC) Put(ctx context.Context, dstDir model.Obj, stream model.File
 		return nil
 	}
 	// part up
-	partSize := pre.Metadata.PartSize
-	var part []byte
-	md5s := make([]string, 0)
-	defaultBytes := make([]byte, partSize)
 	total := stream.GetSize()
 	left := total
+	partSize := int64(pre.Metadata.PartSize)
+	part := make([]byte, partSize)
+	count := int(total / partSize)
+	if total%partSize > 0 {
+		count++
+	}
+	md5s := make([]string, 0, count)
 	partNumber := 1
 	for left > 0 {
 		if utils.IsCanceled(ctx) {
 			return ctx.Err()
 		}
-		if left > int64(partSize) {
-			part = defaultBytes
-		} else {
-			part = make([]byte, left)
+		if left < partSize {
+			part = part[:left]
 		}
-		_, err := io.ReadFull(tempFile, part)
+		n, err := io.ReadFull(stream, part)
 		if err != nil {
 			return err
 		}
-		left -= int64(len(part))
+		left -= int64(n)
 		log.Debugf("left: %d", left)
 		reader := driver.NewLimitedUploadStream(ctx, bytes.NewReader(part))
 		m, err := d.upPart(ctx, pre, stream.GetMimetype(), partNumber, reader)

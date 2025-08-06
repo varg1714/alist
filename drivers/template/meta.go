@@ -1,8 +1,8 @@
 package template
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
 type Addition struct {
@@ -16,7 +16,7 @@ type Addition struct {
 var config = driver.Config{
 	Name:              "Template",
 	LocalSort:         false,
-	OnlyLocal:         false,
+	OnlyLinkMFile:     false,
 	OnlyProxy:         false,
 	NoCache:           false,
 	NoUpload:          false,
@@ -25,6 +25,7 @@ var config = driver.Config{
 	CheckStatus:       false,
 	Alert:             "",
 	NoOverwriteUpload: false,
+	NoLinkURL:         false,
 }
 
 func init() {

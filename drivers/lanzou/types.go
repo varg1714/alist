@@ -3,9 +3,10 @@ package lanzou
 import (
 	"errors"
 	"fmt"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
 	"time"
+
+	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 )
 
 var ErrFileShareCancel = errors.New("file sharing cancellation")

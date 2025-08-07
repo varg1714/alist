@@ -5,6 +5,8 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
+const DriverName = "javdb"
+
 type Addition struct {
 	SpiderServer string `json:"spider_server"`
 	Cookie       string `json:"cookie" required:"true"`
@@ -23,6 +25,7 @@ type Addition struct {
 	SubtitleScanTime      uint64 `json:"subtitle_scan_time" required:"true" type:"number" `
 	RefreshNfo            bool   `json:"refresh_nfo"`
 	EmbyServers           string `json:"emby_servers" required:"false" type:"text"`
+	MatchFilmTagLimit     int    `json:"match_film_tag_limit" required:"false" type:"number" `
 }
 
 var config = driver.Config{

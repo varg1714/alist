@@ -102,35 +102,7 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 
 	for _, film := range films {
 
-		thumb := model.EmbyFileObj{
-			ObjThumb: model.ObjThumb{
-				Object: model.Object{
-					IsFolder: false,
-					ID:       fmt.Sprintf("%d", film.ID),
-					Size:     1417381701,
-					Modified: film.CreatedAt,
-					Path:     dirName,
-				},
-				Thumbnail: model.Thumbnail{Thumbnail: film.Image},
-			},
-			Title: func() string {
-				if film.Title != "" {
-					return film.Title
-				}
-				return film.Name
-			}(),
-			Actors:      film.Actors,
-			ReleaseTime: film.Date,
-			Translated:  film.Title != "",
-			Url:         film.Url,
-			Tags:        film.Tags,
-		}
-
-		if strings.HasSuffix(film.Name, "mp4") {
-			thumb.Name = AppendFilmName(CutString(ClearFilmName(film.Name)))
-		} else {
-			thumb.Name = AppendFilmName(CutString(film.Name))
-		}
+		thumb := ConvertFilmToEmbyFile(film, dirName)
 
 		if cacheFile {
 			_ = CacheImageAndNfo(MediaInfo{
@@ -148,6 +120,45 @@ func convertFilm(source, dirName string, films []model.Film, results []model.Emb
 		results = append(results, thumb)
 	}
 	return results
+}
+
+func ConvertFilmToEmbyFile(film model.Film, dirName string) model.EmbyFileObj {
+
+	thumb := model.EmbyFileObj{
+		ObjThumb: model.ObjThumb{
+			Object: model.Object{
+				IsFolder: false,
+				ID:       fmt.Sprintf("%d", film.ID),
+				Size:     1417381701,
+				Modified: film.CreatedAt,
+				Path: func() string {
+					if dirName != "" {
+						return dirName
+					}
+					return film.Actor
+				}(),
+			},
+			Thumbnail: model.Thumbnail{Thumbnail: film.Image},
+		},
+		Title: func() string {
+			if film.Title != "" {
+				return film.Title
+			}
+			return film.Name
+		}(),
+		Actors:      film.Actors,
+		ReleaseTime: film.Date,
+		Translated:  film.Title != "",
+		Url:         film.Url,
+		Tags:        film.Tags,
+	}
+
+	if strings.HasSuffix(film.Name, "mp4") {
+		thumb.Name = AppendFilmName(CutString(ClearFilmName(film.Name)))
+	} else {
+		thumb.Name = AppendFilmName(CutString(film.Name))
+	}
+	return thumb
 }
 
 func convertObj(source, dirName string, actor []model.EmbyFileObj, results []model.EmbyFileObj) []model.EmbyFileObj {

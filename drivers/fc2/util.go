@@ -120,6 +120,7 @@ func (d *FC2) getMagnet(file model.Obj) (string, error) {
 			Magnet: magnet,
 			Name:   file.GetName(),
 			Code:   code,
+			ScanAt: time.Now(),
 		})
 	}
 
@@ -266,6 +267,7 @@ func (d *FC2) addStar(code string, tags []string) (model.EmbyFileObj, error) {
 			Magnet:     magnet,
 			Name:       file.Name,
 			Code:       av.GetFilmCode(file.Name),
+			ScanAt:     time.Now(),
 		})
 	}
 	err = db.BatchCreateMagnetCache(magnetCaches)

@@ -211,3 +211,13 @@ func QueryNotMatchTagFilms(url []string, tag string) ([]model.Film, error) {
 	return result, errors.WithStack(find.Error)
 
 }
+
+func QueryNoTagFilms(source string, limit int) ([]model.Film, error) {
+
+	var result []model.Film
+
+	tx := db.Where("source = ?", source).Where("tags is null").Limit(limit).Find(&result)
+
+	return result, errors.WithStack(tx.Error)
+
+}

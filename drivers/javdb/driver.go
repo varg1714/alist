@@ -49,6 +49,7 @@ func (d *Javdb) Init(ctx context.Context) error {
 			d.refreshNfo()
 		}
 		d.filterFilms()
+		d.reMatchTags()
 	})
 
 	return nil
@@ -186,7 +187,7 @@ func (d *Javdb) Remove(ctx context.Context, obj model.Obj) error {
 			return err
 		}
 
-		return db.DeleteFilmsByActor("javdb", obj.GetName())
+		return db.DeleteFilmsByActor(DriverName, obj.GetName())
 	} else {
 
 		err2 := d.deleteFilm(obj.GetPath(), obj.GetName(), obj.GetID())

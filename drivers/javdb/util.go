@@ -22,7 +22,7 @@ import (
 func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]model.EmbyFileObj, error) {
 
 	// 1. 获取所有影片
-	javFilms, err := virtual_file.GetFilmsWithStorage("javdb", dirName, dirName, urlFunc,
+	javFilms, err := virtual_file.GetFilmsWithStorage(DriverName, dirName, dirName, urlFunc,
 		func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
 			return d.getJavPageInfo(urlFunc, index, data)
 		}, virtual_file.Option{CacheFile: false, MaxPageNum: 20})
@@ -77,11 +77,11 @@ func (d *Javdb) mappingNames(dirName string, javFilms []model.EmbyFileObj) ([]mo
 		}
 	}
 	if len(savingFilms) > 0 {
-		err1 := db.DeleteFilmsByUrl("javdb", dirName, deletingFilms)
+		err1 := db.DeleteFilmsByUrl(DriverName, dirName, deletingFilms)
 		if err1 != nil {
 			utils.Log.Warnf("failed to delete films:[%s], error message: %s", deletingFilms, err1.Error())
 		} else {
-			err2 := db.CreateFilms("javdb", dirName, dirName, savingFilms)
+			err2 := db.CreateFilms(DriverName, dirName, dirName, savingFilms)
 			if err2 != nil {
 				utils.Log.Infof("failed to save films:[%s], error message: %s", deletingFilms, err2.Error())
 			}
@@ -90,7 +90,7 @@ func (d *Javdb) mappingNames(dirName string, javFilms []model.EmbyFileObj) ([]mo
 
 	for _, film := range javFilms {
 		created := virtual_file.CacheImageAndNfo(virtual_file.MediaInfo{
-			Source:   "javdb",
+			Source:   DriverName,
 			Dir:      dirName,
 			FileName: virtual_file.AppendImageName(film.Name),
 			Title:    film.Title,
@@ -112,14 +112,14 @@ func (d *Javdb) mappingNames(dirName string, javFilms []model.EmbyFileObj) ([]mo
 }
 
 func (d *Javdb) getStars() []model.EmbyFileObj {
-	films := virtual_file.GetStorageFilms("javdb", "个人收藏", true)
+	films := virtual_file.GetStorageFilms(DriverName, "个人收藏", true)
 
 	if d.RefreshNfo {
 		var filmNames []string
 		for _, film := range films {
 			filmNames = append(filmNames, film.Name)
 		}
-		virtual_file.ClearUnUsedFiles("javdb", "个人收藏", filmNames)
+		virtual_file.ClearUnUsedFiles(DriverName, "个人收藏", filmNames)
 	}
 
 	return films
@@ -167,12 +167,12 @@ func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 	}
 	cachingFilm.Actors = actorNames
 
-	err = db.CreateFilms("javdb", "个人收藏", "个人收藏", []model.EmbyFileObj{cachingFilm})
+	err = db.CreateFilms(DriverName, "个人收藏", "个人收藏", []model.EmbyFileObj{cachingFilm})
 	cachingFilm.Name = virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(cachingFilm.Name)))
 	cachingFilm.Path = "个人收藏"
 
 	_ = virtual_file.CacheImageAndNfo(virtual_file.MediaInfo{
-		Source:   "javdb",
+		Source:   DriverName,
 		Dir:      "个人收藏",
 		FileName: virtual_file.AppendImageName(cachingFilm.Name),
 		Title:    cachingFilm.Title,
@@ -192,7 +192,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 		return "", errors.New("this film doesn't contains film info")
 	}
 
-	magnetCache := db.QueryMagnetCacheByName("javdb", embyObj.GetName())
+	magnetCache := db.QueryMagnetCacheByName(DriverName, embyObj.GetName())
 	if magnetCache.Magnet != "" {
 		utils.Log.Infof("return the magnet link from the cache:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil
@@ -239,11 +239,12 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 	}
 
 	err = db.CreateMagnetCache(model.MagnetCache{
-		DriverType: "javdb",
+		DriverType: DriverName,
 		Magnet:     magnet,
 		Name:       embyObj.GetName(),
 		Subtitle:   subtitle,
 		Code:       av.GetFilmCode(embyObj.GetName()),
+		ScanAt:     time.Now(),
 	})
 	return magnet, err
 
@@ -274,7 +275,7 @@ func (d *Javdb) updateFilmMeta(javdbMeta av.Meta, embyObj *model.EmbyFileObj) {
 	}
 
 	virtual_file.UpdateNfo(virtual_file.MediaInfo{
-		Source:   "javdb",
+		Source:   DriverName,
 		Dir:      embyObj.Path,
 		FileName: virtual_file.AppendImageName(embyObj.Name),
 		Title:    embyObj.Title,
@@ -718,167 +719,6 @@ func (d *Javdb) getAiravNamingFilms(films []model.EmbyFileObj, dirName string) (
 
 }
 
-func (d *Javdb) reMatchSubtitles() {
-
-	utils.Log.Info("start rematching subtitles for films without subtitles")
-
-	caches, err := db.QueryNoSubtitlesCache("javdb")
-	if err != nil {
-		utils.Log.Warnf("failed to query the films without subtitles")
-		return
-	}
-	if len(caches) != 0 {
-		var savingCaches []model.MagnetCache
-		var unFindCaches []model.MagnetCache
-
-		for _, cache := range caches {
-
-			film, err1 := db.QueryFilmByCode("javdb", cache.Code)
-			if err1 != nil {
-				utils.Log.Warn("failed to query film:", err1.Error())
-			} else {
-				if film.Url != "" {
-					javdbMeta, err2 := av.GetMetaFromJavdb(film.Url)
-					if err2 != nil {
-						utils.Log.Warn("failed to get javdb magnet info:", err2.Error())
-					} else if len(javdbMeta.Magnets) > 0 && javdbMeta.Magnets[0].IsSubTitle() {
-						cache.Subtitle = true
-						cache.Magnet = javdbMeta.Magnets[0].GetMagnet()
-					}
-				}
-			}
-
-			if !cache.Subtitle {
-				sukeMeta, err2 := av.GetMetaFromSuke(cache.Code)
-				if err2 != nil {
-					utils.Log.Warn("failed to get suke magnet info:", err2.Error())
-				} else {
-					if len(sukeMeta.Magnets) > 0 && sukeMeta.Magnets[0].IsSubTitle() {
-						cache.Subtitle = true
-						cache.Magnet = sukeMeta.Magnets[0].GetMagnet()
-					}
-				}
-			}
-
-			if cache.Subtitle {
-				savingCaches = append(savingCaches, cache)
-			} else {
-				unFindCaches = append(unFindCaches, cache)
-			}
-
-		}
-
-		if len(savingCaches) > 0 {
-			err2 := db.BatchCreateMagnetCache(savingCaches)
-			if err2 != nil {
-				utils.Log.Warn("failed to create magnet cache:", err2.Error())
-			}
-			utils.Log.Infof("update films magnet cache:[%v]", savingCaches)
-		}
-
-		if len(unFindCaches) > 0 {
-			var names []string
-			for _, cache := range unFindCaches {
-				names = append(names, cache.Name)
-			}
-			err2 := db.UpdateScanData("javdb", names, time.Now())
-			if err2 != nil {
-				utils.Log.Warn("failed to update scan data:", err2.Error())
-			}
-			utils.Log.Infof("films:[%v] still have not matched with subtitles, update the scan info", names)
-		}
-	}
-
-	noMatchCaches, err2 := db.QueryNoMatchCache("javdb")
-	if err2 != nil {
-		utils.Log.Warn("failed to query film:", err2.Error())
-		return
-	}
-
-	if len(noMatchCaches) > 0 {
-		deletingCache := make(map[string][]string)
-		for _, cache := range noMatchCaches {
-			deletingCache[cache.DriverType] = append(deletingCache[cache.DriverType], cache.Name)
-		}
-
-		for driverType, names := range deletingCache {
-			err3 := db.DeleteCacheByName(driverType, names)
-			if err3 != nil {
-				utils.Log.Warn("failed to delete cache:", err3.Error())
-			}
-		}
-		utils.Log.Infof("Delete the cached films that do not match the subtitles:[%v]", noMatchCaches)
-	}
-
-	utils.Log.Info("rematching completed")
-
-}
-
-func (d *Javdb) refreshNfo() {
-
-	utils.Log.Info("start refresh nfo for javdb")
-
-	var actorNames []string
-	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
-	for _, actor := range actors {
-		actorNames = append(actorNames, actor.Name)
-	}
-	for _, actor := range actorNames {
-
-		films := virtual_file.GetStorageFilms("javdb", actor, false)
-
-		// refresh nfo
-		mappingNameFilms, err := d.mappingNames(actor, films)
-		if err != nil {
-			utils.Log.Warn("failed to get mapping names:", err.Error())
-			continue
-		}
-
-		var filmNames []string
-		for _, film := range mappingNameFilms {
-			virtual_file.UpdateNfo(virtual_file.MediaInfo{
-				Source:   "javdb",
-				Dir:      film.Path,
-				FileName: virtual_file.AppendImageName(film.Name),
-				Release:  film.ReleaseTime,
-				Title:    film.Title,
-			})
-			filmNames = append(filmNames, film.Name)
-		}
-
-		// clear unused files
-		virtual_file.ClearUnUsedFiles("javdb", actor, filmNames)
-
-	}
-
-	utils.Log.Info("finish refresh nfo")
-
-}
-
-func (d *Javdb) filterFilms() {
-
-	utils.Log.Info("start to filter javdb films")
-
-	films, err := db.QueryFilmsByNamePrefix("javdb", strings.Split(d.Filter, ","))
-	if err != nil {
-		utils.Log.Warn("failed to query films:", err.Error())
-		return
-	}
-
-	if len(films) > 0 {
-		utils.Log.Infof("deleting films:[%v]", films)
-		for _, film := range films {
-			err1 := d.deleteFilm(film.Actor, virtual_file.AppendFilmName(virtual_file.CutString(virtual_file.ClearFilmName(film.Name))), film.Url)
-			if err1 != nil {
-				utils.Log.Warn("failed to delete film:", err1.Error())
-			}
-		}
-	}
-
-	utils.Log.Info("finish filter javdb films")
-
-}
-
 func (d *Javdb) deleteFilm(dir, fileName, id string) error {
 	err := db.DeleteAllMagnetCacheByCode(av.GetFilmCode(fileName))
 	if err != nil {
@@ -891,7 +731,7 @@ func (d *Javdb) deleteFilm(dir, fileName, id string) error {
 		return err
 	}
 
-	err = virtual_file.DeleteImageAndNfo("javdb", dir, fileName)
+	err = virtual_file.DeleteImageAndNfo(DriverName, dir, fileName)
 	if err != nil {
 		utils.Log.Infof("failed to delete film nfo:[%s], error message:[%s]", fileName, err)
 		return err

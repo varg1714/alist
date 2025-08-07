@@ -152,7 +152,7 @@ func (d *Javdb) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (
 
 	firstMagnet := ""
 	firstLink, err2 := d.tryAcquireLink(ctx, file, args, func(obj model.Obj) (string, error) {
-		magnet, err := d.getMagnet(obj)
+		magnet, err := d.getMagnet(obj, false)
 		firstMagnet = magnet
 		return magnet, err
 	})

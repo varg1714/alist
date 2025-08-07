@@ -189,7 +189,7 @@ func (d *Javdb) reMatchTags() {
 
 	for _, film := range films {
 		file := virtual_file.ConvertFilmToEmbyFile(film, "")
-		_, err1 := d.getMagnet(&file)
+		_, err1 := d.getMagnet(&file, true)
 		if err1 != nil {
 			utils.Log.Infof("failed to get film: %s tag info: %s", film.Name, err1.Error())
 			return

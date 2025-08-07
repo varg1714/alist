@@ -185,7 +185,7 @@ func (d *Javdb) addStar(code string) (model.EmbyFileObj, error) {
 
 }
 
-func (d *Javdb) getMagnet(file model.Obj) (string, error) {
+func (d *Javdb) getMagnet(file model.Obj, reMatchFilmMeta bool) (string, error) {
 
 	embyObj, ok := file.(*model.EmbyFileObj)
 	if !ok {
@@ -193,7 +193,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 	}
 
 	magnetCache := db.QueryMagnetCacheByName(DriverName, embyObj.GetName())
-	if magnetCache.Magnet != "" {
+	if magnetCache.Magnet != "" && !reMatchFilmMeta {
 		utils.Log.Infof("return the magnet link from the cache:%s", magnetCache.Magnet)
 		return magnetCache.Magnet, nil
 	}
@@ -214,6 +214,16 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 	}
 
 	d.updateFilmMeta(javdbMeta, embyObj)
+
+	if magnetCache.Magnet == "" {
+		return d.cacheMagnet(javdbMeta, embyObj)
+	} else {
+		return magnetCache.Magnet, nil
+	}
+
+}
+
+func (d *Javdb) cacheMagnet(javdbMeta av.Meta, embyObj *model.EmbyFileObj) (string, error) {
 
 	magnet := ""
 	subtitle := false
@@ -238,7 +248,7 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 		subtitle = javdbMeta.Magnets[0].IsSubTitle()
 	}
 
-	err = db.CreateMagnetCache(model.MagnetCache{
+	err := db.CreateMagnetCache(model.MagnetCache{
 		DriverType: DriverName,
 		Magnet:     magnet,
 		Name:       embyObj.GetName(),
@@ -247,7 +257,6 @@ func (d *Javdb) getMagnet(file model.Obj) (string, error) {
 		ScanAt:     time.Now(),
 	})
 	return magnet, err
-
 }
 
 func (d *Javdb) updateFilmMeta(javdbMeta av.Meta, embyObj *model.EmbyFileObj) {

@@ -98,7 +98,7 @@ func (d *QuarkShare) Link(ctx context.Context, file model.Obj, args model.LinkAr
 		return nil, errors.New("文件转存失败")
 	}
 
-	link, err := quarkDriver.Link(ctx, &model.Object{ID: transformFile}, args)
+	link, err := quarkDriver.Link(ctx, &quark.File{Fid: transformFile}, args)
 	if err != nil {
 		utils.Log.Infof("获取转存文件:%s的地址失败:%v", transformFile, err)
 	}

@@ -19,20 +19,120 @@ import (
 
 func (d *Javdb) getFilms(dirName string, urlFunc func(index int) string) ([]model.EmbyFileObj, error) {
 
-	// 1. 获取所有影片
-	javFilms, err := virtual_file.GetFilmsWithStorage(DriverName, dirName, dirName, urlFunc,
-		func(urlFunc func(index int) string, index int, data []model.EmbyFileObj) ([]model.EmbyFileObj, bool, error) {
-			return d.getJavPageInfo(urlFunc, index, data)
-		}, virtual_file.Option{CacheFile: false, MaxPageNum: 20})
+	// 1. fetch films
+	d.fetchFilms(dirName, urlFunc)
 
-	if err != nil && len(javFilms) == 0 {
-		utils.Log.Info("javdb影片获取失败", err)
-		return javFilms, err
+	// 2. mapping film name
+	return d.mappingNames(dirName, virtual_file.ConvertFilms(DriverName, dirName, db.QueryByActor(DriverName, dirName), []model.EmbyFileObj{}, false))
+
+}
+
+func (d *Javdb) fetchFilms(dirName string, urlFunc func(index int) string) {
+
+	existFilmFlag := false
+	nextPage := true
+	var newFilms []model.EmbyFileObj
+
+	for index := 1; index <= 20 && nextPage && !existFilmFlag; index++ {
+
+		films, tempNextPage, err := d.getJavPageInfo(urlFunc, index, newFilms)
+		if err != nil {
+			utils.Log.Warnf("failed to query javdb films, error message: %s", err.Error())
+			break
+		}
+
+		nextPage = tempNextPage
+
+		var urls []string
+		for _, item := range films {
+			urls = append(urls, item.Url)
+		}
+
+		existFilms := db.QueryByUrls(dirName, urls)
+		existFilmFlag = len(existFilms) > 0
+
+		existFilmMap := utils.Slice2Map(existFilms, func(t string) string {
+			return t
+		}, func(t string) bool {
+			return true
+		})
+
+		for _, film := range films {
+			if !existFilmMap[film.Url] {
+				film.Actors = append(film.Actors, dirName)
+				newFilms = append(newFilms, film)
+			}
+		}
+
 	}
 
-	// 2. 根据影片名字映射名称
-	return d.mappingNames(dirName, javFilms)
+	if len(newFilms) > 0 {
 
+		var newFilmUrls []string
+		for _, film := range newFilms {
+			newFilmUrls = append(newFilmUrls, film.Url)
+		}
+
+		existFilms, err := db.QueryFilmsByUrls(newFilmUrls)
+		if err != nil {
+			utils.Log.Warnf("failed to query exist films, error message: %s", err.Error())
+		} else {
+
+			existFilmMap := utils.Slice2Map(existFilms, func(t model.Film) string {
+				return t.Url
+			}, func(t model.Film) model.Film {
+				return t
+			})
+
+			var savingFilms []model.EmbyFileObj
+			var updatingFilms []model.Film
+
+			for _, film := range newFilms {
+
+				mediaInfo := virtual_file.MediaInfo{
+					Source:   DriverName,
+					Dir:      dirName,
+					FileName: virtual_file.AppendImageName(film.Name),
+					Title:    film.Title,
+					ImgUrl:   film.Thumb(),
+					Actors:   film.Actors,
+					Release:  film.ReleaseTime,
+					Tags:     film.Tags,
+				}
+
+				if existFilm, exist := existFilmMap[film.Url]; exist {
+					if !utils.SliceContains(existFilm.Actors, dirName) {
+						existFilm.Actors = append(existFilm.Actors, dirName)
+						updatingFilms = append(updatingFilms, existFilm)
+						mediaInfo.Actors = existFilm.Actors
+						mediaInfo.Dir = existFilm.Actor
+						virtual_file.UpdateNfo(mediaInfo)
+					}
+				} else {
+					savingFilms = append(savingFilms, film)
+					virtual_file.CacheImageAndNfo(mediaInfo)
+				}
+
+			}
+
+			if len(savingFilms) > 0 {
+				err1 := db.CreateFilms(DriverName, dirName, dirName, savingFilms)
+				if err1 != nil {
+					utils.Log.Warnf("failed to create film, error message: %s", err1.Error())
+				}
+			}
+			if len(updatingFilms) > 0 {
+				for _, film := range updatingFilms {
+					err1 := db.UpdateFilm(film)
+					if err1 != nil {
+						utils.Log.Warnf("failed to update film, error message: %s", err1.Error())
+					}
+				}
+			}
+
+		}
+
+	}
 }
 
 func (d *Javdb) mappingNames(dirName string, javFilms []model.EmbyFileObj) ([]model.EmbyFileObj, error) {

@@ -46,7 +46,7 @@ func GetFilmsWithStorage(source, dirName, actorId string, urlFunc func(index int
 
 	films, nextPage, err := pageFunc(urlFunc, 1, films)
 	if err != nil {
-		return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), err
+		return ConvertFilms(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), err
 	}
 
 	var urls []string
@@ -61,7 +61,7 @@ func GetFilmsWithStorage(source, dirName, actorId string, urlFunc func(index int
 
 		films, nextPage, err = pageFunc(urlFunc, index, films)
 		if err != nil {
-			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), err
+			return ConvertFilms(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), err
 		}
 		clear(urls)
 		for _, item := range films {
@@ -86,19 +86,19 @@ func GetFilmsWithStorage(source, dirName, actorId string, urlFunc func(index int
 	if len(films) != 0 {
 		err = db.CreateFilms(source, dirName, actorId, films)
 		if err != nil {
-			return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), nil
+			return ConvertFilms(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), nil
 		}
 	}
 
-	return convertFilm(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), nil
+	return ConvertFilms(source, dirName, db.QueryByActor(source, dirName), results, option.CacheFile), nil
 
 }
 
 func GetStorageFilms(source, dirName string, cacheFile bool) []model.EmbyFileObj {
-	return convertFilm(source, dirName, db.QueryByActor(source, dirName), []model.EmbyFileObj{}, cacheFile)
+	return ConvertFilms(source, dirName, db.QueryByActor(source, dirName), []model.EmbyFileObj{}, cacheFile)
 }
 
-func convertFilm(source, dirName string, films []model.Film, results []model.EmbyFileObj, cacheFile bool) []model.EmbyFileObj {
+func ConvertFilms(source, dirName string, films []model.Film, results []model.EmbyFileObj, cacheFile bool) []model.EmbyFileObj {
 
 	for _, film := range films {
 

@@ -111,3 +111,14 @@ func GroupByProperty[T any, K comparable](items []T, getProperty func(T) K) map[
 
 	return grouped
 }
+
+func Slice2Map[T any, K any](list []T, keyFunc func(t T) string, valFunc func(t T) K) map[string]K {
+
+	newMap := make(map[string]K, len(list))
+	for _, data := range list {
+		newMap[keyFunc(data)] = valFunc(data)
+	}
+
+	return newMap
+
+}

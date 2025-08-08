@@ -93,6 +93,15 @@ func QueryByUrls(actor string, urls []string) []string {
 
 }
 
+func QueryFilmsByUrls(urls []string) ([]model.Film, error) {
+
+	var res []model.Film
+	tx := db.Where("url IN (?)", urls).Find(&res)
+
+	return res, errors.WithStack(tx.Error)
+
+}
+
 func QueryFilmsByNamePrefix(source string, prefixes []string) ([]model.Film, error) {
 
 	var films []model.Film

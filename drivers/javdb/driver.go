@@ -21,10 +21,11 @@ import (
 type Javdb struct {
 	model.Storage
 	Addition
-	AccessToken string
-	ShareToken  string
-	DriveId     string
-	cron        *cron.Cron
+	AccessToken      string
+	ShareToken       string
+	DriveId          string
+	cron             *cron.Cron
+	matchTopFilmCorn *cron.Cron
 }
 
 func (d *Javdb) Config() driver.Config {
@@ -50,6 +51,17 @@ func (d *Javdb) Init(ctx context.Context) error {
 		}
 		d.filterFilms()
 		d.reMatchTags()
+
+	})
+
+	matchTopFilmsTimer := time.Hour * time.Duration(d.MatchTopFilmsTimer)
+	if matchTopFilmsTimer <= 0 {
+		matchTopFilmsTimer = time.Hour * 24
+	}
+
+	d.matchTopFilmCorn = cron.NewCron(matchTopFilmsTimer)
+	d.matchTopFilmCorn.Do(func() {
+		d.fetchJavTopFilms()
 	})
 
 	return nil

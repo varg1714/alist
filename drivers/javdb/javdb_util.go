@@ -68,7 +68,7 @@ func (d *Javdb) getJavPageInfo(urlFunc func(index int) string, index int, data [
 		nextPage = len(element.Attr("href")) != 0
 	})
 
-	url := d.SpiderServer + urlFunc(index)
+	url := urlFunc(index)
 	err := collector.Visit(url)
 	utils.Log.Debugf("开始爬取javdb页面：%s，错误：%v", url, err)
 

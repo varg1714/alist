@@ -1,6 +1,7 @@
 package javdb
 
 import (
+	"fmt"
 	"github.com/OpenListTeam/OpenList/v4/drivers/virtual_file"
 	"github.com/OpenListTeam/OpenList/v4/internal/av"
 	"github.com/OpenListTeam/OpenList/v4/internal/db"
@@ -194,5 +195,60 @@ func (d *Javdb) reMatchTags() {
 		}
 		time.Sleep(3 * time.Second)
 	}
+
+}
+
+func (d *Javdb) fetchJavTopFilms() {
+
+	utils.Log.Infof("start to fetch javdb top films")
+	defer utils.Log.Infof("finish fetch javdb top films")
+
+	var missedFilms []string
+
+	defer func() {
+		if len(missedFilms) > 0 {
+			err := db.CreateMissedFilms(missedFilms)
+			if err != nil {
+				utils.Log.Warn("failed to create missed films:", err.Error())
+			}
+		}
+	}()
+
+	addFilmFunc := func(codes, tags []string) error {
+
+		unMissedFilms := db.QueryUnMissedFilms(codes)
+
+		for _, code := range unMissedFilms {
+
+			if strings.HasPrefix(code, "FC2-") {
+				continue
+			}
+			_, err := d.addStar(code, tags)
+			if err != nil {
+				if strings.Contains(err.Error(), "未查询到") {
+					missedFilms = append(missedFilms, code)
+				} else {
+					utils.Log.Warnf("failed to add film for code: %s, error: %s", code, err.Error())
+					return err
+				}
+			}
+		}
+
+		return nil
+	}
+
+	// top 250 yearly
+	year := time.Now().Year()
+	for i := d.MatchTopFilmsStarter; i <= year; i++ {
+		codes := av.QueryJavSql(d.SpiderServer, fmt.Sprintf("SELECT SUBSTR(name, 0, 40) FROM ranks WHERE note = 'JavDB %d TOP250'", i), d.SpiderMaxWaitTime)
+		err := addFilmFunc(codes, []string{fmt.Sprintf("JavDB-TOP250-%d", i)})
+		if err != nil {
+			return
+		}
+	}
+
+	// top 250
+	codes := av.QueryJavSql(d.SpiderServer, "SELECT SUBSTR(name, 0, 40) FROM ranks WHERE note = 'JavDB TOP250'", d.SpiderMaxWaitTime)
+	_ = addFilmFunc(codes, []string{"JavDB-TOP250"})
 
 }

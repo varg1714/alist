@@ -8,8 +8,9 @@ import (
 const DriverName = "javdb"
 
 type Addition struct {
-	SpiderServer string `json:"spider_server"`
-	Cookie       string `json:"cookie" required:"true"`
+	SpiderServer      string `json:"spider_server"`
+	SpiderMaxWaitTime int    `json:"spider_max_wait_time" required:"true" type:"number" `
+	Cookie            string `json:"cookie" required:"true"`
 	driver.RootID
 	OrderBy               string `json:"order_by" type:"select" options:"name,size,updated_at,created_at"`
 	OrderDirection        string `json:"order_direction" type:"select" options:"ASC,DESC"`
@@ -26,6 +27,8 @@ type Addition struct {
 	RefreshNfo            bool   `json:"refresh_nfo"`
 	EmbyServers           string `json:"emby_servers" required:"false" type:"text"`
 	MatchFilmTagLimit     int    `json:"match_film_tag_limit" required:"false" type:"number" `
+	MatchTopFilmsStarter  int    `json:"match_top_film_starter" required:"true" type:"number" `
+	MatchTopFilmsTimer    int    `json:"match_top_film_timer" required:"true" type:"number" `
 }
 
 var config = driver.Config{

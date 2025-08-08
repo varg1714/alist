@@ -195,11 +195,34 @@ func (d *Javdb) addStar(code string, tags []string) (model.EmbyFileObj, error) {
 func (d *Javdb) updateExistFilm(existFilm *model.Film, actors, tags []string) {
 
 	embyFile := virtual_file.ConvertFilmToEmbyFile(*existFilm, "")
+
+	updateTagFlag := false
+	updateActorTag := false
+
+	existTagMap := make(map[string]bool)
+	for _, tag := range embyFile.Tags {
+		existTagMap[tag] = true
+	}
 	for _, tag := range tags {
-		embyFile.Tags = append(embyFile.Tags, tag)
+		if !existTagMap[tag] {
+			embyFile.Tags = append(embyFile.Tags, tag)
+			updateTagFlag = true
+		}
+	}
+
+	existActorMap := make(map[string]bool)
+	for _, actor := range embyFile.Actors {
+		existActorMap[actor] = true
 	}
 	for _, actor := range actors {
-		embyFile.Actors = append(embyFile.Actors, actor)
+		if !existActorMap[actor] {
+			embyFile.Actors = append(embyFile.Actors, actor)
+			updateActorTag = true
+		}
+	}
+
+	if !updateTagFlag && !updateActorTag {
+		return
 	}
 
 	virtual_file.UpdateNfo(virtual_file.MediaInfo{

@@ -200,6 +200,11 @@ func (d *Javdb) getMagnet(file model.Obj, reMatchFilmMeta bool) (string, error) 
 
 	javdbMeta, err := av.GetMetaFromJavdb(embyObj.Url)
 	if err != nil || len(javdbMeta.Magnets) == 0 {
+
+		if reMatchFilmMeta {
+			return "", err
+		}
+
 		utils.Log.Warnf("failed to get javdb magnet info: %v,error message: %v, using the suke magnet instead.", javdbMeta, err)
 		sukeMeta, err2 := av.GetMetaFromSuke(embyObj.GetName())
 		if err2 != nil {

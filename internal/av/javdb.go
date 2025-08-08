@@ -121,9 +121,16 @@ func GetMetaFromJavdb(filmUrl string) (Meta, error) {
 		})
 	})
 
+	var respErr error
+	collector.OnError(func(_ *colly.Response, err error) {
+		respErr = err
+	})
+
 	err := collector.Visit(filmUrl)
 	if err != nil {
 		return meta, err
+	} else if respErr != nil {
+		return meta, respErr
 	}
 
 	sortMagnet(&meta)

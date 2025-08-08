@@ -14,6 +14,7 @@ import (
 func (d *Javdb) reMatchSubtitles() {
 
 	utils.Log.Info("start rematching subtitles for films without subtitles")
+	defer utils.Log.Info("rematching completed")
 
 	caches, err := db.QueryNoSubtitlesCache(DriverName)
 	if err != nil {
@@ -104,13 +105,12 @@ func (d *Javdb) reMatchSubtitles() {
 		utils.Log.Infof("Delete the cached films that do not match the subtitles:[%v]", noMatchCaches)
 	}
 
-	utils.Log.Info("rematching completed")
-
 }
 
 func (d *Javdb) refreshNfo() {
 
 	utils.Log.Info("start refresh nfo for javdb")
+	defer utils.Log.Info("finish refresh nfo")
 
 	var actorNames []string
 	actors := db.QueryActor(strconv.Itoa(int(d.ID)))
@@ -145,13 +145,12 @@ func (d *Javdb) refreshNfo() {
 
 	}
 
-	utils.Log.Info("finish refresh nfo")
-
 }
 
 func (d *Javdb) filterFilms() {
 
 	utils.Log.Info("start to filter javdb films")
+	defer utils.Log.Info("finish filter javdb films")
 
 	films, err := db.QueryFilmsByNamePrefix(DriverName, strings.Split(d.Filter, ","))
 	if err != nil {
@@ -169,8 +168,6 @@ func (d *Javdb) filterFilms() {
 		}
 	}
 
-	utils.Log.Info("finish filter javdb films")
-
 }
 
 func (d *Javdb) reMatchTags() {
@@ -180,6 +177,7 @@ func (d *Javdb) reMatchTags() {
 	}
 
 	utils.Log.Info("start to match javdb tags")
+	defer utils.Log.Info("finish match javdb tags")
 
 	films, err := db.QueryNoTagFilms(DriverName, d.MatchFilmTagLimit)
 	if err != nil {
@@ -191,12 +189,10 @@ func (d *Javdb) reMatchTags() {
 		file := virtual_file.ConvertFilmToEmbyFile(film, "")
 		_, err1 := d.getMagnet(&file, true)
 		if err1 != nil {
-			utils.Log.Infof("failed to get film: %s tag info: %s", film.Name, err1.Error())
+			utils.Log.Infof("failed to get film: %s tag info, error message: %s", film.Name, err1.Error())
 			return
 		}
 		time.Sleep(3 * time.Second)
 	}
-
-	utils.Log.Info("finish match javdb tags")
 
 }

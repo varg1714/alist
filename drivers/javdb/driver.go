@@ -213,7 +213,7 @@ func (d *Javdb) MakeDir(ctx context.Context, parentDir model.Obj, dirName string
 }
 
 func (d *Javdb) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) (model.Obj, error) {
-	star, err := d.addStar(stream.GetName())
+	star, err := d.addStar(stream.GetName(), []string{})
 	if err == nil && d.EmbyServers != "" {
 		emby.Refresh(d.EmbyServers)
 	}

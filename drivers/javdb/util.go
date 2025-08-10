@@ -153,7 +153,7 @@ func (d *Javdb) mappingNames(dirName string, javFilms []model.EmbyFileObj) ([]mo
 	// 2.1 获取所有映射名称
 	namingFilms, err := d.getAiravNamingFilms(noTitleFilms, dirName)
 	if err != nil || len(namingFilms) == 0 {
-		utils.Log.Info("中文影片名称获取失败", err)
+		utils.Log.Infof("failed to get name mappings, error message: %v", err)
 		return javFilms, nil
 	}
 

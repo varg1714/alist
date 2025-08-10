@@ -24,6 +24,7 @@ type Addition struct {
 	CloudPlayDownloadPath string `json:"cloud_play_download_path" required:"false" help:"If empty then use global setting."`
 	Filter                string `json:"filter" required:"false" help:"Multi values must separated by commas."`
 	SubtitleScanTime      uint64 `json:"subtitle_scan_time" required:"true" type:"number" `
+	SubtitlesScanLimit    int    `json:"subtitles_scan_limit" required:"true" type:"number" `
 	RefreshNfo            bool   `json:"refresh_nfo"`
 	EmbyServers           string `json:"emby_servers" required:"false" type:"text"`
 	MatchFilmTagLimit     int    `json:"match_film_tag_limit" required:"false" type:"number" `

@@ -17,7 +17,7 @@ func (d *Javdb) reMatchSubtitles() {
 	utils.Log.Info("start rematching subtitles for films without subtitles")
 	defer utils.Log.Info("rematching completed")
 
-	caches, err := db.QueryNoSubtitlesCache(DriverName)
+	caches, err := db.QueryNoSubtitlesCache(DriverName, d.SubtitlesScanLimit)
 	if err != nil {
 		utils.Log.Warnf("failed to query the films without subtitles")
 		return

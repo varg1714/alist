@@ -57,7 +57,7 @@ func QueryMagnetCacheByCode(code string) model.MagnetCache {
 
 }
 
-func QueryNoSubtitlesCache(driverType string) ([]model.MagnetCache, error) {
+func QueryNoSubtitlesCache(driverType string, limit int) ([]model.MagnetCache, error) {
 
 	var caches []model.MagnetCache
 
@@ -66,6 +66,7 @@ func QueryNoSubtitlesCache(driverType string) ([]model.MagnetCache, error) {
 			Where("(scan_count is null or scan_count < 10)").
 			Where("(subtitle is null or subtitle = 0)").
 			Where("driver_type = ?", driverType).
+			Limit(limit).
 			Find(&caches).Error)
 
 	return caches, err

@@ -337,7 +337,7 @@ func UpdateNfo(mediaInfo MediaInfo) {
 	}
 
 	if mediaInfo.Title != "" {
-		media.Title.Inner = mediaInfo.Title
+		media.Title.Inner = fmt.Sprintf("<![CDATA[%s]]>", mediaInfo.Title)
 		media.Plot.Inner = fmt.Sprintf("<![CDATA[%s]]>", mediaInfo.Title)
 	}
 
@@ -436,7 +436,7 @@ func cacheActorNfo(mediaInfo MediaInfo) int {
 	releaseTime := mediaInfo.Release.Format(time.DateOnly)
 	media := Media{
 		Plot:      Inner{Inner: fmt.Sprintf("<![CDATA[%s]]>", mediaInfo.Title)},
-		Title:     Inner{Inner: mediaInfo.Title},
+		Title:     Inner{Inner: fmt.Sprintf("<![CDATA[%s]]>", mediaInfo.Title)},
 		Actor:     actorInfos,
 		Release:   releaseTime,
 		Premiered: releaseTime,

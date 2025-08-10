@@ -137,6 +137,8 @@ func (d *Javdb) refreshNfo() {
 				FileName: virtual_file.AppendImageName(film.Name),
 				Release:  film.ReleaseTime,
 				Title:    film.Title,
+				Actors:   film.Actors,
+				Tags:     film.Tags,
 			})
 			filmNames = append(filmNames, film.Name)
 		}

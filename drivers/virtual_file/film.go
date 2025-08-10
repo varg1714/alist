@@ -317,6 +317,15 @@ func UpdateNfo(mediaInfo MediaInfo) {
 	err = xml.Unmarshal(file, &media)
 	if err != nil {
 		utils.Log.Warnf("failed to parse file[%s], error message:%s", filePath, err.Error())
+
+		utils.Log.Infof("try to delete the old nfo file: %s, and regenerate a new one", filePath)
+		err1 := os.Remove(filePath)
+		if err1 != nil {
+			utils.Log.Warnf("failed to delete the file:[%s], error message:%s", filePath, err.Error())
+		} else {
+			cacheActorNfo(mediaInfo)
+		}
+
 		return
 	}
 	if len(mediaInfo.Actors) > 0 {

@@ -225,7 +225,7 @@ func QueryNoTagFilms(source string, limit int) ([]model.Film, error) {
 
 	var result []model.Film
 
-	tx := db.Where("source = ?", source).Where("tags is null").Limit(limit).Find(&result)
+	tx := db.Where("source = ?", source).Where("tags is null").Where("name not like 'FC2-%'").Limit(limit).Find(&result)
 
 	return result, errors.WithStack(tx.Error)
 

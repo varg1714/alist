@@ -110,7 +110,6 @@ func (d *Javdb) fetchFilms(dirName string, urlFunc func(index int) string) {
 					}
 				} else {
 					savingFilms = append(savingFilms, film)
-					virtual_file.CacheImageAndNfo(mediaInfo)
 				}
 
 			}
@@ -362,6 +361,11 @@ func (d *Javdb) getMagnet(file model.Obj, reMatchFilmMeta bool) (string, error) 
 	if err != nil || len(javdbMeta.Magnets) == 0 {
 
 		if reMatchFilmMeta {
+			errMsg := ""
+			if err != nil {
+				errMsg = err.Error()
+			}
+			utils.Log.Infof("the magnets in the film:%s are empty: %v, error message: %s", file.GetName(), javdbMeta, errMsg)
 			return "", err
 		}
 

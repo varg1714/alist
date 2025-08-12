@@ -31,6 +31,7 @@ func (d *Javdb) reMatchSubtitles() {
 			film, err1 := db.QueryFilmByCode(DriverName, cache.Code)
 			if err1 != nil {
 				utils.Log.Warn("failed to query film:", err1.Error())
+				continue
 			} else {
 				if film.Url != "" {
 					javdbMeta, err2 := av.GetMetaFromJavdb(film.Url)
@@ -58,6 +59,32 @@ func (d *Javdb) reMatchSubtitles() {
 			if cache.Subtitle {
 				cache.ScanAt = time.Now()
 				savingCaches = append(savingCaches, cache)
+
+				subtitleTag := false
+				for _, tag := range film.Tags {
+					if tag == "字幕" {
+						subtitleTag = true
+						break
+					}
+				}
+
+				if !subtitleTag {
+					film.Tags = append(film.Tags, "字幕")
+					err2 := db.UpdateFilm(film)
+					if err2 != nil {
+						utils.Log.Warn("failed to update film:", err2.Error())
+					}
+					virtual_file.UpdateNfo(virtual_file.MediaInfo{
+						Source:   DriverName,
+						Dir:      film.Actor,
+						FileName: virtual_file.AppendImageName(film.Name),
+						Release:  film.Date,
+						Title:    film.Title,
+						Actors:   film.Actors,
+						Tags:     film.Tags,
+					})
+				}
+
 			} else {
 				unFindCaches = append(unFindCaches, cache)
 			}

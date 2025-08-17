@@ -329,8 +329,17 @@ func UpdateNfo(mediaInfo MediaInfo) {
 		return
 	}
 	if len(mediaInfo.Actors) > 0 {
-		var actorInfos []Actor
+
+		actorSet := make(map[string]bool)
 		for _, actor := range mediaInfo.Actors {
+			actorSet[actor] = true
+		}
+		for _, actor := range media.Actor {
+			actorSet[actor.Name] = true
+		}
+
+		var actorInfos []Actor
+		for actor := range actorSet {
 			actorInfos = append(actorInfos, Actor{
 				Name: actor,
 			})
@@ -525,4 +534,75 @@ func AppendFilmName(name string) string {
 
 func AppendImageName(name string) string {
 	return ClearFilmName(name) + ".jpg"
+}
+
+func BatchSaveFilms(driverName, dirName string, savingFilms []model.EmbyFileObj,
+	filmUpdateFunc func(newFilm model.EmbyFileObj, existFilm *model.Film, mediaInfo *MediaInfo) bool,
+	filmCreateFunc func(newFilm model.EmbyFileObj, mediaInfo *MediaInfo)) {
+
+	if len(savingFilms) == 0 {
+		return
+	}
+
+	var newFilmUrls []string
+	for _, film := range savingFilms {
+		newFilmUrls = append(newFilmUrls, film.Url)
+	}
+
+	existFilms, err := db.QueryFilmsByUrls(newFilmUrls)
+	if err != nil {
+		utils.Log.Warnf("failed to query exist films, error message: %s", err.Error())
+	} else {
+
+		existFilmMap := utils.Slice2Map(existFilms, func(t model.Film) string {
+			return t.Url
+		}, func(t model.Film) model.Film {
+			return t
+		})
+
+		var creatingFilms []model.EmbyFileObj
+		var updatingFilms []model.Film
+
+		for _, film := range savingFilms {
+
+			mediaInfo := MediaInfo{
+				Source:   driverName,
+				Dir:      dirName,
+				FileName: AppendImageName(film.Name),
+				Title:    film.Title,
+				ImgUrl:   film.Thumb(),
+				Actors:   film.Actors,
+				Release:  film.ReleaseTime,
+				Tags:     film.Tags,
+			}
+
+			if existFilm, exist := existFilmMap[film.Url]; exist {
+				updateFlag := filmUpdateFunc(film, &existFilm, &mediaInfo)
+				if updateFlag {
+					UpdateNfo(mediaInfo)
+					updatingFilms = append(updatingFilms, existFilm)
+				}
+			} else {
+				creatingFilms = append(creatingFilms, film)
+				filmCreateFunc(film, &mediaInfo)
+			}
+
+		}
+
+		if len(creatingFilms) > 0 {
+			err1 := db.CreateFilms(driverName, dirName, dirName, creatingFilms)
+			if err1 != nil {
+				utils.Log.Warnf("failed to create film, error message: %s", err1.Error())
+			}
+		}
+		if len(updatingFilms) > 0 {
+			for _, film := range updatingFilms {
+				err1 := db.UpdateFilm(film)
+				if err1 != nil {
+					utils.Log.Warnf("failed to update film, error message: %s", err1.Error())
+				}
+			}
+		}
+
+	}
 }

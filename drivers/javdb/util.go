@@ -66,72 +66,20 @@ func (d *Javdb) fetchFilms(dirName string, urlFunc func(index int) string) {
 
 	}
 
-	if len(newFilms) > 0 {
-
-		var newFilmUrls []string
-		for _, film := range newFilms {
-			newFilmUrls = append(newFilmUrls, film.Url)
-		}
-
-		existFilms, err := db.QueryFilmsByUrls(newFilmUrls)
-		if err != nil {
-			utils.Log.Warnf("failed to query exist films, error message: %s", err.Error())
+	virtual_file.BatchSaveFilms(DriverName, dirName, newFilms, func(newFilm model.EmbyFileObj, existFilm *model.Film, mediaInfo *virtual_file.MediaInfo) bool {
+		if !utils.SliceContains(existFilm.Actors, dirName) {
+			existFilm.Actors = append(existFilm.Actors, dirName)
+			mediaInfo.Actors = existFilm.Actors
+			mediaInfo.Dir = existFilm.Actor
+			mediaInfo.FileName = virtual_file.AppendImageName(existFilm.Name)
+			return true
 		} else {
-
-			existFilmMap := utils.Slice2Map(existFilms, func(t model.Film) string {
-				return t.Url
-			}, func(t model.Film) model.Film {
-				return t
-			})
-
-			var savingFilms []model.EmbyFileObj
-			var updatingFilms []model.Film
-
-			for _, film := range newFilms {
-
-				mediaInfo := virtual_file.MediaInfo{
-					Source:   DriverName,
-					Dir:      dirName,
-					FileName: virtual_file.AppendImageName(film.Name),
-					Title:    film.Title,
-					ImgUrl:   film.Thumb(),
-					Actors:   film.Actors,
-					Release:  film.ReleaseTime,
-					Tags:     film.Tags,
-				}
-
-				if existFilm, exist := existFilmMap[film.Url]; exist {
-					if !utils.SliceContains(existFilm.Actors, dirName) {
-						existFilm.Actors = append(existFilm.Actors, dirName)
-						updatingFilms = append(updatingFilms, existFilm)
-						mediaInfo.Actors = existFilm.Actors
-						mediaInfo.Dir = existFilm.Actor
-						virtual_file.UpdateNfo(mediaInfo)
-					}
-				} else {
-					savingFilms = append(savingFilms, film)
-				}
-
-			}
-
-			if len(savingFilms) > 0 {
-				err1 := db.CreateFilms(DriverName, dirName, dirName, savingFilms)
-				if err1 != nil {
-					utils.Log.Warnf("failed to create film, error message: %s", err1.Error())
-				}
-			}
-			if len(updatingFilms) > 0 {
-				for _, film := range updatingFilms {
-					err1 := db.UpdateFilm(film)
-					if err1 != nil {
-						utils.Log.Warnf("failed to update film, error message: %s", err1.Error())
-					}
-				}
-			}
-
+			return false
 		}
+	}, func(newFilm model.EmbyFileObj, mediaInfo *virtual_file.MediaInfo) {
 
-	}
+	})
+
 }
 
 func (d *Javdb) mappingNames(dirName string, javFilms []model.EmbyFileObj) ([]model.EmbyFileObj, error) {

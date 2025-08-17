@@ -30,20 +30,20 @@ func (d *Pornhub) getFilms(dirName, pageKey string) ([]model.EmbyFileObj, error)
 		key = strings.ReplaceAll(pageKey, "/playlist/", "")
 		playListFilms, err := d.getPlayListFilms(key, dirName)
 		if err != nil {
-			return virtual_file.GetStorageFilms("pornhub", dirName, false), nil
+			return virtual_file.GetStorageFilms(DriverName, dirName, false), nil
 		}
 		films = playListFilms
 	} else {
 		key = strings.ReplaceAll(pageKey, "/model/", "")
 		actorFilms, err := d.getActorFilms(dirName, key)
 		if err != nil {
-			return virtual_file.GetStorageFilms("pornhub", dirName, false), nil
+			return virtual_file.GetStorageFilms(DriverName, dirName, false), nil
 		}
 		films = actorFilms
 	}
 
 	if len(films) == 0 {
-		return virtual_file.GetStorageFilms("pornhub", dirName, false), nil
+		return virtual_file.GetStorageFilms(DriverName, dirName, false), nil
 	}
 
 	for _, film := range films {
@@ -52,7 +52,7 @@ func (d *Pornhub) getFilms(dirName, pageKey string) ([]model.EmbyFileObj, error)
 
 	unSaveFilmIds := db.QueryUnSaveFilms(filmIds, dirName)
 	if len(unSaveFilmIds) == 0 {
-		return virtual_file.GetStorageFilms("pornhub", dirName, false), nil
+		return virtual_file.GetStorageFilms(DriverName, dirName, false), nil
 	}
 
 	unSaveFilmMap := make(map[string]bool)
@@ -61,30 +61,56 @@ func (d *Pornhub) getFilms(dirName, pageKey string) ([]model.EmbyFileObj, error)
 	}
 
 	utils.Log.Infof("saving porn films：%v", unSaveFilmIds)
-	var notExitedFilms []model.EmbyFileObj
+
+	var savingFilms []model.EmbyFileObj
 
 	for _, film := range films {
-		if _, exist := unSaveFilmMap[film.Url]; exist {
-			virtual_file.CacheImageAndNfo(virtual_file.MediaInfo{
-				Source:   "pornhub",
-				Dir:      dirName,
-				FileName: virtual_file.AppendImageName(film.Url),
-				Title:    film.Title,
-				ImgUrl:   film.Thumb(),
-				Actors:   film.Actors,
-				Release:  film.ReleaseTime,
-				Tags:     film.Tags,
-			})
-			notExitedFilms = append(notExitedFilms, film)
+		if _, unSaveFilm := unSaveFilmMap[film.Url]; unSaveFilm {
+			savingFilms = append(savingFilms, film)
 		}
 	}
 
-	err := db.CreateFilms("pornhub", dirName, dirName, notExitedFilms)
-	if err != nil {
-		return nil, err
-	}
+	virtual_file.BatchSaveFilms(DriverName, dirName, savingFilms, func(newFilm model.EmbyFileObj, existFilm *model.Film, mediaInfo *virtual_file.MediaInfo) bool {
+		if len(newFilm.Tags) != len(existFilm.Tags) || len(newFilm.Actors) != len(existFilm.Actors) {
 
-	return virtual_file.GetStorageFilms("pornhub", dirName, false), nil
+			actorFlag := false
+			actorMap := make(map[string]bool)
+			for _, actor := range existFilm.Actors {
+				actorMap[actor] = true
+			}
+			if !actorMap[newFilm.Actors[0]] {
+				existFilm.Actors = append(existFilm.Actors, newFilm.Actors[0])
+				actorFlag = true
+			}
+
+			tagFlag := false
+			tagMap := make(map[string]bool)
+			for _, tag := range existFilm.Tags {
+				tagMap[tag] = true
+			}
+			for _, tag := range newFilm.Tags {
+				if !tagMap[tag] {
+					existFilm.Tags = append(existFilm.Tags, tag)
+					tagFlag = true
+				}
+			}
+
+			if !actorFlag && !tagFlag {
+				return false
+			}
+
+			mediaInfo.Actors = existFilm.Actors
+			mediaInfo.Tags = existFilm.Tags
+			mediaInfo.Dir = existFilm.Actor
+			return true
+		} else {
+			return false
+		}
+	}, func(newFilm model.EmbyFileObj, mediaInfo *virtual_file.MediaInfo) {
+		virtual_file.CacheImageAndNfo(*mediaInfo)
+	})
+
+	return virtual_file.GetStorageFilms(DriverName, dirName, false), nil
 
 }
 
@@ -287,7 +313,7 @@ func (d *Pornhub) getActorFilms(dirName, actor string) ([]model.EmbyFileObj, err
 		return nil, err
 	}
 
-	return convertFilms(actor, films)
+	return convertFilms(dirName, films)
 
 }
 

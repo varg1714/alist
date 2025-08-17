@@ -5,6 +5,8 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
+const DriverName = "pornhub"
+
 type Addition struct {
 	driver.RootID
 	OrderBy           string `json:"order_by" type:"select" options:"name,size,updated_at,created_at"`

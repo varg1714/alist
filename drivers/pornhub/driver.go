@@ -120,7 +120,7 @@ func (d *Pornhub) Remove(ctx context.Context, obj model.Obj) error {
 		return err
 	}
 
-	return db.DeleteFilmsByActor("pornhub", obj.GetName())
+	return db.DeleteFilmsByActor(DriverName, obj.GetName())
 
 }
 

@@ -10,7 +10,7 @@ import (
 func Visit(spiderServer, url string, maxWaitTime time.Duration, pageFunc func(wd selenium.WebDriver)) error {
 
 	caps := selenium.Capabilities{
-		"browserName": "chrome", "browserVersion": "135.0", "se:noVncPort": 7900, "se:vncEnabled": true,
+		"browserName": "chrome",
 	}
 
 	chromeCaps := chrome.Capabilities{
@@ -20,7 +20,6 @@ func Visit(spiderServer, url string, maxWaitTime time.Duration, pageFunc func(wd
 			"--disable-dev-shm-usage",
 			"--disable-gpu",
 			"--start-maximized",
-			"--user-data-dir=/tmp/chrome-data",
 		},
 		W3C: true,
 	}

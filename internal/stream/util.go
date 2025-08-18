@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync"
 
 	"github.com/OpenListTeam/OpenList/v4/internal/conf"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
 	"github.com/OpenListTeam/OpenList/v4/internal/net"
 	"github.com/OpenListTeam/OpenList/v4/pkg/http_range"
+	"github.com/OpenListTeam/OpenList/v4/pkg/pool"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
+	"github.com/rclone/rclone/lib/mmap"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -141,81 +142,61 @@ func (r *ReaderWithCtx) Close() error {
 	return nil
 }
 
-func CacheFullInTempFileAndWriter(stream model.FileStreamer, up model.UpdateProgress, w io.Writer) (model.File, error) {
-	if cache := stream.GetFile(); cache != nil {
-		if w != nil {
-			_, err := cache.Seek(0, io.SeekStart)
-			if err == nil {
-				var reader io.Reader = stream
-				if up != nil {
-					reader = &ReaderUpdatingProgress{
-						Reader:         stream,
-						UpdateProgress: up,
-					}
-				}
-				_, err = utils.CopyWithBuffer(w, reader)
-				if err == nil {
-					_, err = cache.Seek(0, io.SeekStart)
-				}
-			}
-			return cache, err
-		}
-		if up != nil {
-			up(100)
-		}
-		return cache, nil
-	}
-
-	var reader io.Reader = stream
-	if up != nil {
-		reader = &ReaderUpdatingProgress{
-			Reader:         stream,
-			UpdateProgress: up,
-		}
-	}
-
-	if w != nil {
-		reader = io.TeeReader(reader, w)
-	}
-	tmpF, err := utils.CreateTempFile(reader, stream.GetSize())
-	if err == nil {
-		stream.SetTmpFile(tmpF)
-	}
-	return tmpF, err
-}
-
-func CacheFullInTempFileAndHash(stream model.FileStreamer, up model.UpdateProgress, hashType *utils.HashType, hashParams ...any) (model.File, string, error) {
+func CacheFullAndHash(stream model.FileStreamer, up *model.UpdateProgress, hashType *utils.HashType, hashParams ...any) (model.File, string, error) {
 	h := hashType.NewFunc(hashParams...)
-	tmpF, err := CacheFullInTempFileAndWriter(stream, up, h)
+	tmpF, err := stream.CacheFullAndWriter(up, h)
 	if err != nil {
 		return nil, "", err
 	}
-	return tmpF, hex.EncodeToString(h.Sum(nil)), err
+	return tmpF, hex.EncodeToString(h.Sum(nil)), nil
 }
 
 type StreamSectionReader struct {
 	file    model.FileStreamer
 	off     int64
-	bufPool *sync.Pool
+	bufPool *pool.Pool[[]byte]
 }
 
-func NewStreamSectionReader(file model.FileStreamer, maxBufferSize int) (*StreamSectionReader, error) {
+func NewStreamSectionReader(file model.FileStreamer, maxBufferSize int, up *model.UpdateProgress) (*StreamSectionReader, error) {
 	ss := &StreamSectionReader{file: file}
-	if file.GetFile() == nil {
-		maxBufferSize = min(maxBufferSize, int(file.GetSize()))
-		if maxBufferSize > conf.MaxBufferLimit {
-			_, err := file.CacheFullInTempFile()
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			ss.bufPool = &sync.Pool{
-				New: func() any {
-					return make([]byte, maxBufferSize)
-				},
-			}
+	if file.GetFile() != nil {
+		return ss, nil
+	}
+
+	maxBufferSize = min(maxBufferSize, int(file.GetSize()))
+	if maxBufferSize > conf.MaxBufferLimit {
+		_, err := file.CacheFullAndWriter(up, nil)
+		if err != nil {
+			return nil, err
+		}
+		return ss, nil
+	}
+	if conf.MmapThreshold > 0 && maxBufferSize >= conf.MmapThreshold {
+		ss.bufPool = &pool.Pool[[]byte]{
+			New: func() []byte {
+				buf, err := mmap.Alloc(maxBufferSize)
+				if err == nil {
+					file.Add(utils.CloseFunc(func() error {
+						return mmap.Free(buf)
+					}))
+				} else {
+					buf = make([]byte, maxBufferSize)
+				}
+				return buf
+			},
+		}
+	} else {
+		ss.bufPool = &pool.Pool[[]byte]{
+			New: func() []byte {
+				return make([]byte, maxBufferSize)
+			},
 		}
 	}
+
+	file.Add(utils.CloseFunc(func() error {
+		ss.bufPool.Reset()
+		return nil
+	}))
 	return ss, nil
 }
 
@@ -227,7 +208,7 @@ func (ss *StreamSectionReader) GetSectionReader(off, length int64) (*SectionRead
 		if off != ss.off {
 			return nil, fmt.Errorf("stream not cached: request offset %d != current offset %d", off, ss.off)
 		}
-		tempBuf := ss.bufPool.Get().([]byte)
+		tempBuf := ss.bufPool.Get()
 		buf = tempBuf[:length]
 		n, err := io.ReadFull(ss.file, buf)
 		if int64(n) != length {
@@ -240,7 +221,7 @@ func (ss *StreamSectionReader) GetSectionReader(off, length int64) (*SectionRead
 	return &SectionReader{io.NewSectionReader(cache, off, length), buf}, nil
 }
 
-func (ss *StreamSectionReader) RecycleSectionReader(sr *SectionReader) {
+func (ss *StreamSectionReader) FreeSectionReader(sr *SectionReader) {
 	if sr != nil {
 		if sr.buf != nil {
 			ss.bufPool.Put(sr.buf[0:cap(sr.buf)])

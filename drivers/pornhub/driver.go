@@ -49,6 +49,9 @@ func (d *Pornhub) Init(ctx context.Context) error {
 }
 
 func (d *Pornhub) Drop(ctx context.Context) error {
+	if d.cron != nil {
+		d.cron.Stop()
+	}
 	return nil
 }
 

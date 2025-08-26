@@ -71,6 +71,9 @@ func (d *Javdb) Drop(ctx context.Context) error {
 	if d.cron != nil {
 		d.cron.Stop()
 	}
+	if d.matchTopFilmCorn != nil {
+		d.matchTopFilmCorn.Stop()
+	}
 	return nil
 }
 

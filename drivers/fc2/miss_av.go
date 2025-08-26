@@ -110,7 +110,7 @@ func (d *FC2) getMissAvFilms(dirName string, urlFunc func(index int) string) ([]
 	// 4. update tag
 	if len(cachedFilmMap) > 0 {
 		for tag, ids := range cachedFilmMap {
-			notMatchTagFilms, err := db.QueryNotMatchTagFilms(ids, tag)
+			notMatchTagFilms, err := db.QueryNotMatchTagFilms("fc2", ids, tag, 0)
 			if err != nil {
 				utils.Log.Warnf("failed to query notMatchTagFilms: %s", err.Error())
 			} else {

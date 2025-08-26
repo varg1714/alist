@@ -9,6 +9,7 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/internal/db"
 	"github.com/OpenListTeam/OpenList/v4/internal/driver"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/pkg/cron"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"strconv"
 	"strings"
@@ -21,6 +22,7 @@ type Pornhub struct {
 	AccessToken string
 	ShareToken  string
 	DriveId     string
+	cron        *cron.Cron
 }
 
 func (d *Pornhub) Config() driver.Config {
@@ -32,6 +34,17 @@ func (d *Pornhub) GetAddition() driver.Additional {
 }
 
 func (d *Pornhub) Init(ctx context.Context) error {
+
+	duration := time.Minute * time.Duration(d.MatchFilmTagScanTime)
+	if duration <= 0 {
+		duration = time.Minute * 60
+	}
+
+	d.cron = cron.NewCron(duration)
+	d.cron.Do(func() {
+		d.reMatchTags()
+	})
+
 	return nil
 }
 

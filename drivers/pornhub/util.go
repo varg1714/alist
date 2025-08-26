@@ -413,7 +413,7 @@ func convertFilms(actor string, films []PornFilm) ([]model.EmbyFileObj, error) {
 				return []string{actor}
 			}(),
 			Title: src.Title,
-			Tags:  []string{"pornhub"},
+			Tags:  []string{},
 		}, nil
 	})
 }

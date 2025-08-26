@@ -207,13 +207,16 @@ where temp.id not in (%s);`, strings.Join(placeHolders, ","), sql)
 	return result
 }
 
-func QueryNotMatchTagFilms(url []string, tag string) ([]model.Film, error) {
+func QueryNotMatchTagFilms(source string, url []string, tag string, limit int) ([]model.Film, error) {
 
 	var result []model.Film
 
-	tx := db.Where("tags is null or tags not like ?", fmt.Sprintf("%%%s%%", tag))
+	tx := db.Where("source = ?", source).Where("tags is null or tags not like ?", fmt.Sprintf("%%%s%%", tag))
 	if len(url) > 0 {
 		tx = tx.Where("url in ?", url)
+	}
+	if limit > 0 {
+		tx = tx.Limit(limit)
 	}
 
 	find := tx.Find(&result)

@@ -312,6 +312,14 @@ func Move(storageId uint, srcObj model.Obj, targetDir model.Obj) error {
 func Rename(storageId uint, dir, oldName, newName string) error {
 
 	virtualFile := GetVirtualFile(storageId, dir)
+	if fmt.Sprintf("%d", virtualFile.ID) == oldName {
+		virtualFile.Name = newName
+		err := db.UpdateVirtualFile(virtualFile)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 
 	return db.Rename(storageId, virtualFile.ShareID, oldName, newName)
 }

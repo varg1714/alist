@@ -14,6 +14,7 @@ import (
 	"golang.org/x/time/rate"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -270,4 +271,19 @@ func (d *QuarkShare) transformFile(virtualFile model.VirtualFile, obj FileObj) (
 	}
 
 	return transformResult.Data.SaveAs.SaveAsTopFids[0], nil
+}
+
+var regExpirationTime = regexp.MustCompile(`Expires=(\d+)`)
+
+func GetExpirationTime(url string) (etime time.Duration) {
+	exps := regExpirationTime.FindStringSubmatch(url)
+	if len(exps) < 2 {
+		return
+	}
+	timestamp, err := strconv.ParseInt(exps[1], 10, 64)
+	if err != nil {
+		return
+	}
+	etime = time.Duration(timestamp-time.Now().Unix()) * time.Second
+	return
 }

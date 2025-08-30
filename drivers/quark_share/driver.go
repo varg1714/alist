@@ -103,6 +103,11 @@ func (d *QuarkShare) Link(ctx context.Context, file model.Obj, args model.LinkAr
 		utils.Log.Infof("获取转存文件:%s的地址失败:%v", transformFile, err)
 	}
 
+	if link.URL != "" {
+		expirationTime := GetExpirationTime(link.URL)
+		link.Expiration = &expirationTime
+	}
+
 	go func() {
 		err2 := quarkDriver.Remove(ctx, &model.Object{ID: transformFile})
 		if err2 != nil {

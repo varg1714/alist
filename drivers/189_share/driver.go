@@ -13,7 +13,6 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"path/filepath"
-	"time"
 )
 
 type Cloud189Share struct {
@@ -89,9 +88,9 @@ func (d *Cloud189Share) Link(ctx context.Context, file model.Obj, args model.Lin
 	}
 
 	transfer, err := cloud189PC.Transfer(ctx, shareInfo.ShareId, fileObject.ID, fileObject.oldName)
-	hour := time.Hour
 	if transfer != nil && transfer.URL != "" {
-		transfer.Expiration = &hour
+		expirationTime := GetExpirationTime(transfer.URL)
+		transfer.Expiration = &expirationTime
 	}
 
 	return transfer, err

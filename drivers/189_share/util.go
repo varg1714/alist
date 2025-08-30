@@ -9,6 +9,7 @@ import (
 	"github.com/Xhofe/go-cache"
 	"golang.org/x/time/rate"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"time"
 )
@@ -152,4 +153,19 @@ func (d *Cloud189Share) getShareFiles(ctx context.Context, virtualFile model.Vir
 	}
 	return res, nil
 
+}
+
+var regExpirationTime = regexp.MustCompile(`Expires=(\d+)`)
+
+func GetExpirationTime(url string) (etime time.Duration) {
+	exps := regExpirationTime.FindStringSubmatch(url)
+	if len(exps) < 2 {
+		return
+	}
+	timestamp, err := strconv.ParseInt(exps[1], 10, 64)
+	if err != nil {
+		return
+	}
+	etime = time.Duration(timestamp-time.Now().Unix()) * time.Second
+	return
 }
